@@ -29,7 +29,7 @@ export default function Reading({ reading, onWrite, onStop }: ReadingProps) {
           <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
         </div>
       )}
-      {state === 'writing' && !text && <p className="reading-status">Thinking…</p>}
+      {state === 'writing' && <p className="reading-status">{text ? 'Writing' : 'Thinking'}… This carries on if you go back and cast another.</p>}
       {state === 'failed' && <p className="reading-status error">{error ?? 'The reading failed.'}</p>}
       {state === 'none' && <p className="reading-status">No reading yet.</p>}
     </section>

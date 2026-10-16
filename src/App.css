@@ -130,6 +130,25 @@ input, select { font: inherit; }
 .recent-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .recent-state { font-size: 12px; color: var(--paper-dim); }
 
+/* ====== Home: readings still being written, above the shortcuts ====== */
+.writing-now { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.writing-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--gold) 8%, var(--bg-raised));
+  color: var(--paper); text-align: left;
+}
+.writing-row:active { background: color-mix(in srgb, var(--gold) 16%, var(--bg-raised)); }
+.writing-row svg { color: var(--paper-dim); flex: 0 0 auto; }
+.writing-text { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.writing-text b { color: var(--moss); font-weight: 600; }
+.writing-state { flex: 0 0 auto; font-size: 12px; color: var(--paper-dim); }
+.pulse { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
 /* ====== A casting ====== */
 .casting-head h2 { margin: 0; font-size: 20px; }
 .casting-sub { margin: 2px 0 10px; font-size: 12px; color: var(--paper-dim); }

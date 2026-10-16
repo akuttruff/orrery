@@ -21,7 +21,10 @@ the transit tables), copied rather than shared.
   `/api/v1/chat` with a short brief (`server/prompt.ts`); the reading streams
   to the page and is stored with the casting (`server/readings.ts`). The
   model writes on the server, so a phone that locks mid-reading loses
-  nothing.
+  nothing, and Back during a reading leaves it writing: the home screen
+  lists what is in progress above the shortcuts, and another cast can be
+  started meanwhile. A casting is `#/c/<id>` in the address, so the
+  browser's Back and a reload both land where expected.
 - **One cast per period.** Today's chart is cast once a day and reopened
   from the store; `Recast` throws it away and casts again.
 - **Ask about it.** Under every reading is a box for follow-up questions.
