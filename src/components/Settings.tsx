@@ -8,6 +8,7 @@ interface SettingsProps {
   config: Config
   onSaved: (profile: Profile, config: Config) => void
   onClose: () => void
+  onMemories: () => void
 }
 
 const REASONING = [
@@ -20,9 +21,9 @@ const REASONING = [
 ]
 
 /** Whose chart, and which model writes about it. */
-export default function Settings({ profile, config, onSaved, onClose }: SettingsProps) {
+export default function Settings({ profile, config, onSaved, onClose, onMemories }: SettingsProps) {
   const [p, setP] = useState(profile)
-  const [c, setC] = useState({ lmStudioUrl: config.lmStudioUrl, model: config.model, reasoning: config.reasoning })
+  const [c, setC] = useState({ lmStudioUrl: config.lmStudioUrl, model: config.model, reasoning: config.reasoning, memoryDefault: config.memoryDefault })
   const [token, setToken] = useState('')
   const [models, setModels] = useState<{ models: string[]; loaded: string[]; error: string | null } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -89,6 +90,16 @@ export default function Settings({ profile, config, onSaved, onClose }: Settings
             {REASONING.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </label>
+
+        <h3 className="section-title">Memory</h3>
+        <label className="toggle">
+          <input type="checkbox" checked={c.memoryDefault === 'on'} onChange={(e) => setC({ ...c, memoryDefault: e.target.checked ? 'on' : 'off' })} />
+          <span>
+            <span className="toggle-label">Read with memories by default</span>
+            <span className="toggle-hint">What the model knows about you, shared with lm-chat, goes into readings and answers where the chart touches it. Each casting can switch this on or off for itself.</span>
+          </span>
+        </label>
+        <button type="button" className="chip" onClick={onMemories}>Manage memories</button>
         {error && <p className="reading-status error">{error}</p>}
       </div>
       <footer className="sheet-foot">

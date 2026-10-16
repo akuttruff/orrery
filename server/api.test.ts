@@ -9,7 +9,7 @@ import { Readings } from './readings.ts'
 import { Store } from './store.ts'
 import type { ApiState } from './api.ts'
 import type { WriteRequest } from './model.ts'
-import type { Casting, FollowUp } from '../src/types.ts'
+import type { Casting, FollowUp, Memory } from '../src/types.ts'
 
 /** The API on a real socket, with fake tools and a fake model, in a scratch data dir. */
 function serve(write: (req: WriteRequest, onDelta: (t: string) => void) => Promise<string>) {
@@ -17,7 +17,8 @@ function serve(write: (req: WriteRequest, onDelta: (t: string) => void) => Promi
   const store = new Store(dir, '/nonexistent/lm-chat.sqlite')
   const call = vi.fn(async (name: string, args: Record<string, unknown>) => JSON.stringify({ tool: name, args }))
   const readings = new Readings(store, (_config, req, onDelta) => write(req, onDelta))
-  const state: ApiState = createApiState({ store, call, readings })
+  // The memory pool lives in the scratch dir too, never in ~/.lm-memory.
+  const state: ApiState = createApiState({ store, call, readings, memoryDb: path.join(dir, 'memory.sqlite'), write: (_config, req, onDelta) => write(req, onDelta) })
   const server = http.createServer((req, res) => createMiddleware(state)(req, res, () => { res.writeHead(404); res.end() }))
   return new Promise<{ base: string; call: typeof call; close: () => void }>((resolve) => {
     server.listen(0, '127.0.0.1', () => {
@@ -187,5 +188,84 @@ describe('questions under a reading', () => {
 
     await fetch(`${ctx.base}/api/followups/${f.id}`, { method: 'DELETE' })
     expect(await (await fetch(`${ctx.base}/api/castings/${c.id}/followups`)).json()).toEqual([])
+  })
+})
+
+describe('memories', () => {
+  const send = (method: 'PUT' | 'PATCH', url: string, body: unknown) => fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const readAll = async (url: string) => (await (await fetch(url)).text()).split('\n\n').filter(Boolean)
+
+  it('keeps, corrects and forgets memories, refusing a duplicate quietly', async () => {
+    expect(await (await fetch(`${ctx.base}/api/memories`)).json()).toEqual([])
+    const a = await post(`${ctx.base}/api/memories`, { text: 'The user is moving house on 2026-10-20.' })
+    expect(a.status).toBe(201)
+    const saved = await a.json() as Memory
+    expect((await post(`${ctx.base}/api/memories`, { text: 'the user is moving house on 2026-10-20' })).status).toBe(200)
+    expect((await post(`${ctx.base}/api/memories`, { text: '  ' })).status).toBe(400)
+    const edited = await (await send('PATCH', `${ctx.base}/api/memories/${saved.id}`, { text: 'The user moved house on 2026-10-20.' })).json() as Memory
+    expect(edited.text).toBe('The user moved house on 2026-10-20.')
+    expect((await fetch(`${ctx.base}/api/memories/${saved.id}`, { method: 'DELETE' })).status).toBe(200)
+    expect((await fetch(`${ctx.base}/api/memories/${saved.id}`, { method: 'DELETE' })).status).toBe(404)
+  })
+
+  it('is off by default: a reading is written from the chart alone and a question teaches nothing', async () => {
+    const seen: WriteRequest[] = []
+    writer = async (req, onDelta) => { seen.push(req); onDelta('Plain.'); return 'Plain.' }
+    await post(`${ctx.base}/api/memories`, { text: 'The user works nights.' })
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'today' })).json() as Casting
+    expect(c.memory).toBeNull()
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await readAll(`${ctx.base}/api/castings/${c.id}/events`)
+    expect(seen[0]!.system).not.toContain('WHAT YOU KNOW')
+    const kept = await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json() as Casting
+    expect(kept.memoriesUsed).toEqual([])
+    const f = await (await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'My sister visits Tuesday, good day?' })).json() as FollowUp
+    await readAll(`${ctx.base}/api/followups/${f.id}/events`)
+    expect(seen).toHaveLength(2)
+    expect(((await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json()) as FollowUp).remembered).toEqual([])
+    expect(await (await fetch(`${ctx.base}/api/memories`)).json()).toHaveLength(1)
+  })
+
+  it('with memory on, the reading and answers know the person, and a question adds what it reveals', async () => {
+    const seen: WriteRequest[] = []
+    writer = async (req, onDelta) => {
+      seen.push(req)
+      if (req.system.startsWith('You keep notes')) return '["The user\'s sister visits on Tuesday.", "The user works nights."]'
+      onDelta('Known.'); return 'Known.'
+    }
+    const known = await (await post(`${ctx.base}/api/memories`, { text: 'The user works nights.' })).json() as Memory
+    await send('PUT', `${ctx.base}/api/config`, { memoryDefault: 'on' })
+    expect(((await (await fetch(`${ctx.base}/api/config`)).json()) as { memoryDefault: string }).memoryDefault).toBe('on')
+
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'week' })).json() as Casting
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await readAll(`${ctx.base}/api/castings/${c.id}/events`)
+    expect(seen[0]!.system).toContain('WHAT YOU KNOW ABOUT SAM')
+    expect(seen[0]!.system).toContain('- The user works nights.')
+    expect(((await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json()) as Casting).memoriesUsed).toEqual([known.id])
+
+    const f = await (await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'My sister visits Tuesday, good day?' })).json() as FollowUp
+    await readAll(`${ctx.base}/api/followups/${f.id}/events`)
+    // The answer and the note-taking ran side by side; the note-taking already knew about nights.
+    const answer = seen.find((r) => r.system.includes('same astrologer'))!
+    const notes = seen.find((r) => r.system.startsWith('You keep notes'))!
+    expect(answer.system).toContain('- The user works nights.')
+    expect(notes.system).toContain('Already known (do not repeat):\n- The user works nights.')
+    expect(notes.input).toContain('My sister visits Tuesday')
+    let kept = await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json() as FollowUp
+    for (let i = 0; i < 20 && kept.remembered === null; i++) { await tick(); kept = await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json() as FollowUp }
+    expect(kept.remembered?.map((m) => m.text)).toEqual(["The user's sister visits on Tuesday."])
+    const all = await (await fetch(`${ctx.base}/api/memories`)).json() as Memory[]
+    expect(all.map((m) => m.text)).toEqual(["The user's sister visits on Tuesday.", 'The user works nights.'])
+
+    // The casting's own switch overrides Settings: off here, and the next reading is written plain.
+    const off = await (await send('PATCH', `${ctx.base}/api/castings/${c.id}`, { memory: false })).json() as Casting
+    expect(off.memory).toBe(false)
+    expect((await send('PATCH', `${ctx.base}/api/castings/${c.id}`, { memory: 'yes' })).status).toBe(400)
+    await post(`${ctx.base}/api/castings/${c.id}/reading?again=1`)
+    await readAll(`${ctx.base}/api/castings/${c.id}/events`)
+    expect(seen.at(-1)!.system).not.toContain('WHAT YOU KNOW')
+    expect(((await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json()) as Casting).memoriesUsed).toEqual([])
+    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return 'ok' }
   })
 })

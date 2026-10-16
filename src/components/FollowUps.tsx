@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
+import { Brain, RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
 import { useAnswer } from '../hooks/useReading.ts'
 import { api } from '../lib/api.ts'
 import type { FollowUp, ReadingState } from '../types.ts'
@@ -34,7 +34,18 @@ export default function FollowUps({ castingId, readingState, readingText }: Foll
 
   const replace = useCallback((f: FollowUp) => setItems((cur) => cur.map((x) => (x.id === f.id ? f : x))), [])
   // Answered (or failed) on the server: fetch the kept copy, so a reopen shows it without the stream.
-  const settled = useCallback((id: string) => { api.followUp(id).then(replace).catch(() => { /* next open */ }) }, [replace])
+  // What the question revealed is worked out beside the answer; if that is not in yet, look once more shortly.
+  const settled = useCallback((id: string) => {
+    api.followUp(id).then((f) => {
+      replace(f)
+      if (f.remembered === null) setTimeout(() => { api.followUp(id).then(replace).catch(() => { /* next open */ }) }, 4000)
+    }).catch(() => { /* next open */ })
+  }, [replace])
+
+  const forget = async (f: FollowUp, memoryId: string): Promise<void> => {
+    await api.forget(memoryId).catch(() => { /* already gone */ })
+    replace({ ...f, remembered: (f.remembered ?? []).filter((m) => m.id !== memoryId) })
+  }
 
   const answering = items.some((f) => f.state === 'writing')
   const ready = readingState === 'done' || (readingState === 'failed' && readingText.length > 0)
@@ -74,7 +85,7 @@ export default function FollowUps({ castingId, readingState, readingText }: Foll
       {items.length > 0 && <h3 className="section-title">Questions</h3>}
       <ol className="followup-list">
         {items.map((f) => (
-          <FollowUpItem key={f.id} followUp={f} onSettled={settled} onAgain={() => void again(f)} onStop={() => void stop(f)} onRemove={() => void remove(f)} />
+          <FollowUpItem key={f.id} followUp={f} onSettled={settled} onAgain={() => void again(f)} onStop={() => void stop(f)} onRemove={() => void remove(f)} onForget={(id) => void forget(f, id)} />
         ))}
       </ol>
       <form
@@ -111,9 +122,10 @@ interface FollowUpItemProps {
   onAgain: () => void
   onStop: () => void
   onRemove: () => void
+  onForget: (memoryId: string) => void
 }
 
-function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove }: FollowUpItemProps) {
+function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget }: FollowUpItemProps) {
   const { text, state, error } = useAnswer(followUp, onSettled)
   return (
     <li className="followup">
@@ -135,6 +147,17 @@ function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove }: Follow
           {state === 'writing' && <button type="button" className="chip" onClick={onStop}><Square size={13} aria-hidden="true" /> Stop</button>}
           {state === 'failed' && <button type="button" className="chip" onClick={onAgain}><RefreshCw size={13} aria-hidden="true" /> Try again</button>}
         </div>
+        {followUp.remembered && followUp.remembered.length > 0 && (
+          <ul className="remembered" aria-label="Remembered from this question">
+            {followUp.remembered.map((m) => (
+              <li key={m.id}>
+                <Brain size={13} aria-hidden="true" />
+                <span>{m.text}</span>
+                <button type="button" className="link" onClick={() => onForget(m.id)}>Forget</button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </li>
   )

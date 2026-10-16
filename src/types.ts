@@ -20,7 +20,20 @@ export interface Config {
   /** LM Studio's reasoning level ('low', 'medium', 'off', ...); '' leaves it to the model. */
   reasoning: string
   hasToken: boolean
+  /** Whether a casting with no memory setting of its own is read with the saved memories. */
+  memoryDefault: 'on' | 'off'
 }
+
+/** One saved memory, as the memory MCP server stores it (see server/memory.ts). */
+export interface Memory {
+  id: string
+  text: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** A memory as noted on a follow-up: what was saved from that question. */
+export type Remembered = Pick<Memory, 'id' | 'text'>
 
 export type ReadingState = 'none' | 'writing' | 'done' | 'failed'
 
@@ -41,6 +54,10 @@ export interface Casting {
   readingState: ReadingState
   readingError: string | null
   createdAt: number
+  /** Per-casting memory switch; null inherits Settings' default (Config.memoryDefault). */
+  memory: boolean | null
+  /** The saved memories the reading was written with, by id; empty when written without. */
+  memoriesUsed: string[]
 }
 
 /** A casting in the recent list: everything but the bodies. */
@@ -59,6 +76,8 @@ export interface FollowUp {
   state: ReadingState
   error: string | null
   createdAt: number
+  /** What was saved to memory from this question; null while that is still being worked out, or when memory was off. */
+  remembered: Remembered[] | null
 }
 
 /** What the reading stream sends. */

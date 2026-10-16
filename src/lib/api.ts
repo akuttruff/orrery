@@ -1,4 +1,4 @@
-import type { Casting, CastingSummary, Config, FollowUp, Kind, Profile } from '../types.ts'
+import type { Casting, CastingSummary, Config, FollowUp, Kind, Memory, Profile } from '../types.ts'
 
 /** The server, from the page. Every call throws with the server's message on failure. */
 
@@ -22,6 +22,7 @@ export const api = {
   castings: () => request<CastingSummary[]>('/api/castings'),
   cast: (kind: Kind, fresh = false) => request<Casting>('/api/castings', jsonInit('POST', { kind, fresh })),
   casting: (id: string) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`),
+  setCastingMemory: (id: string, memory: boolean | null) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`, jsonInit('PATCH', { memory })),
   startReading: (id: string, again = false) => request<Casting>(`/api/castings/${encodeURIComponent(id)}/reading${again ? '?again=1' : ''}`, { method: 'POST' }),
   stopReading: (id: string) => request<{ stopped: boolean }>(`/api/castings/${encodeURIComponent(id)}/reading`, { method: 'DELETE' }),
   remove: (id: string) => request<{ ok: boolean }>(`/api/castings/${encodeURIComponent(id)}`, { method: 'DELETE' }),
@@ -35,4 +36,10 @@ export const api = {
   stopAnswer: (id: string) => request<{ stopped: boolean }>(`/api/followups/${encodeURIComponent(id)}/answer`, { method: 'DELETE' }),
   removeFollowUp: (id: string) => request<{ ok: boolean }>(`/api/followups/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   followUpEventsUrl: (id: string) => `/api/followups/${encodeURIComponent(id)}/events`,
+
+  // The memory pool shared with lm-chat.
+  memories: () => request<Memory[]>('/api/memories'),
+  remember: (text: string) => request<Memory>('/api/memories', jsonInit('POST', { text })),
+  updateMemory: (id: string, text: string) => request<Memory>(`/api/memories/${encodeURIComponent(id)}`, jsonInit('PATCH', { text })),
+  forget: (id: string) => request<{ ok: boolean }>(`/api/memories/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }

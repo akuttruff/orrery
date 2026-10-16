@@ -2,11 +2,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import type { Plugin } from 'vite'
 import { KINDS } from '../src/types.ts'
-import type { Kind, Profile } from '../src/types.ts'
+import type { Casting, FollowUp, Kind, Profile, Remembered } from '../src/types.ts'
 import { Astro, AstroToolError } from './astro.ts'
 import type { ToolCaller } from './astro.ts'
 import { castResult, periodFor, titleFor } from './cast.ts'
-import { listModels } from './model.ts'
+import { listModels, writeWithModel } from './model.ts'
+import { Memories, MemoryInputError } from './memory.ts'
+import { parseFacts, rememberRequest } from './remember.ts'
 import { followUpRequest, readingRequest } from './prompt.ts'
 import { Readings, answerOf } from './readings.ts'
 import { Store } from './store.ts'
@@ -18,12 +20,18 @@ export interface ApiOptions {
   call?: ToolCaller
   readings?: Readings
   store?: Store
+  /** The shared memory file; defaults to MEMORY_DB or ~/.lm-memory/memory.sqlite. */
+  memoryDb?: string
+  /** The model, for the short calls that are not streamed to a page (what a question reveals). */
+  write?: typeof writeWithModel
 }
 
 export interface ApiState {
   store: Store
   call: ToolCaller
   readings: Readings
+  memories: Memories
+  write: typeof writeWithModel
   /** Casts in flight by kind+period, so two taps run the tools once. */
   casting: Map<string, Promise<unknown>>
 }
@@ -71,11 +79,45 @@ export function createApiState(options: ApiOptions = {}): ApiState {
   const astro = options.call ? null : new Astro()
   const call: ToolCaller = options.call ?? ((name, args) => astro!.call(name, args))
   const readings = options.readings ?? new Readings(store)
-  return { store, call, readings, casting: new Map() }
+  return { store, call, readings, memories: new Memories(options.memoryDb), write: options.write ?? writeWithModel, casting: new Map() }
 }
 
 export function createMiddleware(state: ApiState): Handler {
-  const { store, call, readings } = state
+  const { store, call, readings, memories } = state
+
+  /** Whether a casting is read with memories: its own switch, else Settings'. */
+  const memoryOn = (casting: Casting): boolean => casting.memory ?? store.getConfig().memoryDefault === 'on'
+
+  /** The memory lines for a casting's reading or answer, and the ids they came from; none when memory is off. */
+  const memoryFor = (casting: Casting): { lines: string[]; ids: string[] } => {
+    if (!memoryOn(casting)) return { lines: [], ids: [] }
+    const { lines, used } = memories.context()
+    return { lines, ids: used.map((m) => m.id) }
+  }
+
+  /**
+   * What a question reveals, saved to the pool and noted on the follow-up.
+   * Runs beside the answer, not after it: the facts are in the question.
+   * Nothing a failure here can do to the answer; it is logged and the note
+   * stays empty.
+   */
+  const rememberFrom = async (followUp: FollowUp): Promise<void> => {
+    try {
+      const known = memories.list()
+      const text = await state.write(store.getConfig(), rememberRequest(followUp.question, known, store.getProfile()), () => {})
+      const kept: Remembered[] = []
+      for (const fact of parseFacts(text)) {
+        try {
+          const { memory, duplicate } = memories.remember(fact)
+          if (!duplicate) kept.push({ id: memory.id, text: memory.text })
+        } catch (err) { console.log(`[orrery] not remembered: ${(err as Error).message}`) }
+      }
+      if (store.getFollowUp(followUp.id)) store.setRemembered(followUp.id, kept)
+    } catch (err) {
+      console.log(`[orrery] could not work out what to remember: ${(err as Error).message}`)
+      if (store.getFollowUp(followUp.id)) store.setRemembered(followUp.id, [])
+    }
+  }
 
   const cast = async (kind: Kind, fresh: boolean): Promise<unknown> => {
     const profile = store.getProfile()
@@ -106,6 +148,7 @@ export function createMiddleware(state: ApiState): Handler {
 
     const fail = (err: unknown): void => {
       const status = err instanceof AstroToolError ? 422 : 400
+      if (!(err instanceof AstroToolError) && !(err instanceof MemoryInputError) && !(err instanceof SyntaxError) && !/^(Unknown kind|Ask something|Keep the question|Wait for the reading|One answer|Birth date|A birth city|Expected a JSON)/.test((err as Error).message)) console.log(`[orrery] ${(err as Error).message}`)
       json(res, status, { error: (err as Error).message || String(err) })
     }
 
@@ -131,6 +174,7 @@ export function createMiddleware(state: ApiState): Handler {
           const v = str(body[key])
           if (v !== undefined) patch[key] = v.trim()
         }
+        if (body.memoryDefault !== undefined) patch.memoryDefault = body.memoryDefault === 'on' ? 'on' : 'off'
         json(res, 200, store.setConfig(patch))
       }).catch(fail)
       return undefined
@@ -138,6 +182,28 @@ export function createMiddleware(state: ApiState): Handler {
     if (url === '/api/models' && method === 'GET') {
       void listModels(store.getConfig()).then((r) => json(res, 200, r))
       return undefined
+    }
+
+    // --- memories -------------------------------------------------------
+    if (url === '/api/memories' && method === 'GET') return json(res, 200, memories.list())
+    if (url === '/api/memories' && method === 'POST') {
+      void readBody(req).then((body) => {
+        const { memory, duplicate } = memories.remember(body.text)
+        json(res, duplicate ? 200 : 201, memory)
+      }).catch(fail)
+      return undefined
+    }
+    const mem = /^\/api\/memories\/([^/]+)$/.exec(url)
+    if (mem) {
+      const id = decodeURIComponent(mem[1]!)
+      if (method === 'DELETE') return memories.forget(id) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'No such memory' })
+      if (method === 'PATCH') {
+        void readBody(req).then((body) => {
+          const updated = memories.update(id, body.text)
+          return updated ? json(res, 200, updated) : json(res, 404, { error: 'No such memory' })
+        }).catch(fail)
+        return undefined
+      }
     }
 
     // --- castings -------------------------------------------------------
@@ -156,6 +222,15 @@ export function createMiddleware(state: ApiState): Handler {
       const casting = store.getCasting(id)
       if (!casting) return json(res, 404, { error: 'No such casting' })
       if (!sub && method === 'GET') return json(res, 200, casting)
+      if (!sub && method === 'PATCH') {
+        void readBody(req).then((body) => {
+          if (!('memory' in body)) throw new Error('Nothing to change')
+          const memory = body.memory
+          if (memory !== null && typeof memory !== 'boolean') throw new Error('memory must be true, false or null')
+          json(res, 200, store.setCastingMemory(id, memory))
+        }).catch(fail)
+        return undefined
+      }
       if (!sub && method === 'DELETE') {
         readings.stop(id)
         for (const f of store.listFollowUps(id)) readings.stop(f.id)
@@ -165,7 +240,11 @@ export function createMiddleware(state: ApiState): Handler {
       if (sub === 'reading' && method === 'POST') {
         const again = query.get('again') === '1'
         if (casting.readingState === 'done' && !again) return json(res, 200, casting)
-        readings.start(id, readingRequest(casting, store.getProfile()))
+        if (!readings.writing(id)) {
+          const memory = memoryFor(casting)
+          store.setMemoriesUsed(id, memory.ids)
+          readings.start(id, readingRequest(casting, store.getProfile(), new Date(), memory.lines))
+        }
         return json(res, 202, store.getCasting(id))
       }
       if (sub === 'reading' && method === 'DELETE') return json(res, 200, { stopped: readings.stop(id) })
@@ -181,7 +260,10 @@ export function createMiddleware(state: ApiState): Handler {
           const earlier = store.listFollowUps(id)
           if (earlier.some((f) => f.state === 'writing')) throw new Error('One answer at a time')
           const followUp = store.addFollowUp(id, question)
-          readings.start(followUp.id, followUpRequest(current, earlier, question, store.getProfile()), answerOf(store, followUp.id))
+          const memory = memoryFor(current)
+          readings.start(followUp.id, followUpRequest(current, earlier, question, store.getProfile(), new Date(), memory.lines), answerOf(store, followUp.id))
+          if (memoryOn(current)) void rememberFrom(followUp)
+          else store.setRemembered(followUp.id, [])
           json(res, 202, store.getFollowUp(followUp.id))
         }).catch(fail)
         return undefined
@@ -203,7 +285,7 @@ export function createMiddleware(state: ApiState): Handler {
         const casting = store.getCasting(followUp.castingId)
         if (!casting) return json(res, 404, { error: 'No such casting' })
         const earlier = store.listFollowUps(casting.id).filter((x) => x.createdAt < followUp.createdAt || (x.createdAt === followUp.createdAt && x.id !== followUp.id && x.id < followUp.id))
-        readings.start(id, followUpRequest(casting, earlier, followUp.question, store.getProfile()), answerOf(store, id))
+        readings.start(id, followUpRequest(casting, earlier, followUp.question, store.getProfile(), new Date(), memoryFor(casting).lines), answerOf(store, id))
         return json(res, 202, store.getFollowUp(id))
       }
       if (sub === 'answer' && method === 'DELETE') return json(res, 200, { stopped: readings.stop(id) })

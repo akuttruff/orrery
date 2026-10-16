@@ -2,16 +2,16 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState } from '../src/types.ts'
+import type { Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered } from '../src/types.ts'
 
 export interface ServerConfig extends Omit<Config, 'hasToken'> {
   apiToken: string
 }
 
-// Reasoning off: a reasoning model given a year of data thinks for minutes
-// before its first word, and the page shows nothing meanwhile. Settings can
-// turn it back on.
-const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', apiToken: '', model: '', reasoning: 'low' }
+// Reasoning low: the model thinks a little before a reading, which the token
+// caps in prompt.ts leave room for; 'off' in Settings is faster. Memory off
+// until asked for: a reading then draws on nothing but the chart.
+const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', apiToken: '', model: '', reasoning: 'low', memoryDefault: 'off' }
 
 /** The first chart the app opens with, until Settings says otherwise. */
 const DEFAULT_PROFILE: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
@@ -62,20 +62,36 @@ CREATE INDEX IF NOT EXISTS follow_ups_casting ON follow_ups (casting_id, created
 interface CastingRow {
   id: string; kind: string; period: string; title: string; result: string; reading: string
   reading_state: string; reading_error: string | null; created_at: number
+  memory: number | null; memories_used: string | null
+}
+
+const parseIds = (text: string | null): string[] => {
+  if (!text) return []
+  try { const v = JSON.parse(text) as unknown; return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [] } catch { return [] }
 }
 
 const fromRow = (r: CastingRow): Casting => ({
   id: r.id, kind: r.kind as Kind, period: r.period, title: r.title, result: r.result, reading: r.reading,
   readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at,
+  memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used),
 })
 
 interface FollowUpRow {
   id: string; casting_id: string; question: string; answer: string; state: string; error: string | null; created_at: number
+  remembered: string | null
+}
+
+const parseRemembered = (text: string | null): Remembered[] | null => {
+  if (text == null) return null
+  try {
+    const v = JSON.parse(text) as unknown
+    return Array.isArray(v) ? v.filter((x): x is Remembered => !!x && typeof x === 'object' && typeof (x as Remembered).id === 'string' && typeof (x as Remembered).text === 'string') : []
+  } catch { return [] }
 }
 
 const followUpFromRow = (r: FollowUpRow): FollowUp => ({
   id: r.id, castingId: r.casting_id, question: r.question, answer: r.answer,
-  state: r.state as ReadingState, error: r.error, createdAt: r.created_at,
+  state: r.state as ReadingState, error: r.error, createdAt: r.created_at, remembered: parseRemembered(r.remembered),
 })
 
 export const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -89,7 +105,18 @@ export class Store {
     this.db.exec('PRAGMA journal_mode = WAL')
     this.db.exec('PRAGMA foreign_keys = ON')
     this.db.exec(SCHEMA)
+    this.migrate()
     this.seed(seedFrom)
+  }
+
+  /** Columns added since the first release, for a database made before them. */
+  private migrate(): void {
+    const has = (table: string, column: string): boolean =>
+      (this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    if (!has('config', 'memory_default')) this.db.exec("ALTER TABLE config ADD COLUMN memory_default TEXT NOT NULL DEFAULT 'off'")
+    if (!has('castings', 'memory')) this.db.exec('ALTER TABLE castings ADD COLUMN memory INTEGER')
+    if (!has('castings', 'memories_used')) this.db.exec('ALTER TABLE castings ADD COLUMN memories_used TEXT')
+    if (!has('follow_ups', 'remembered')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN remembered TEXT')
   }
 
   private seed(seedFrom: string): void {
@@ -100,13 +127,13 @@ export class Store {
     }
     if (this.db.prepare('SELECT 1 FROM config WHERE id = 1').get()) return
     const c = { ...DEFAULT_CONFIG, ...seedConfig(seedFrom) }
-    this.db.prepare('INSERT INTO config (id, lm_studio_url, api_token, model, reasoning) VALUES (1, ?, ?, ?, ?)')
-      .run(c.lmStudioUrl, c.apiToken, c.model, c.reasoning)
+    this.db.prepare('INSERT INTO config (id, lm_studio_url, api_token, model, reasoning, memory_default) VALUES (1, ?, ?, ?, ?, ?)')
+      .run(c.lmStudioUrl, c.apiToken, c.model, c.reasoning, c.memoryDefault)
   }
 
   getConfig(): ServerConfig {
     const r = this.db.prepare('SELECT * FROM config WHERE id = 1').get() as Record<string, string>
-    return { lmStudioUrl: r.lm_studio_url!, apiToken: r.api_token!, model: r.model!, reasoning: r.reasoning! }
+    return { lmStudioUrl: r.lm_studio_url!, apiToken: r.api_token!, model: r.model!, reasoning: r.reasoning!, memoryDefault: r.memory_default === 'on' ? 'on' : 'off' }
   }
 
   getPublicConfig(): Config {
@@ -116,8 +143,8 @@ export class Store {
 
   setConfig(patch: Partial<ServerConfig>): Config {
     const next = { ...this.getConfig(), ...patch }
-    this.db.prepare('UPDATE config SET lm_studio_url = ?, api_token = ?, model = ?, reasoning = ? WHERE id = 1')
-      .run(next.lmStudioUrl, next.apiToken, next.model, next.reasoning)
+    this.db.prepare('UPDATE config SET lm_studio_url = ?, api_token = ?, model = ?, reasoning = ?, memory_default = ? WHERE id = 1')
+      .run(next.lmStudioUrl, next.apiToken, next.model, next.reasoning, next.memoryDefault)
     return this.getPublicConfig()
   }
 
@@ -135,11 +162,12 @@ export class Store {
 
   listCastings(limit = 40): CastingSummary[] {
     const rows = this.db.prepare(
-      'SELECT id, kind, period, title, reading_state, reading_error, created_at FROM castings ORDER BY created_at DESC LIMIT ?',
-    ).all(limit) as Omit<CastingRow, 'result' | 'reading'>[]
+      'SELECT id, kind, period, title, reading_state, reading_error, created_at, memory, memories_used FROM castings ORDER BY created_at DESC LIMIT ?',
+    ).all(limit) as unknown as Omit<CastingRow, 'result' | 'reading'>[]
     return rows.map((r) => ({
       id: r.id, kind: r.kind as Kind, period: r.period, title: r.title,
       readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at,
+      memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used),
     }))
   }
 
@@ -157,7 +185,7 @@ export class Store {
 
   addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'>): Casting {
     const casting: Casting = {
-      id: newId(), ...input, reading: '', readingState: 'none', readingError: null, createdAt: Date.now(),
+      id: newId(), ...input, reading: '', readingState: 'none', readingError: null, createdAt: Date.now(), memory: null, memoriesUsed: [],
     }
     this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, casting.createdAt)
@@ -166,6 +194,17 @@ export class Store {
 
   setReading(id: string, reading: string, state: ReadingState, error: string | null = null): void {
     this.db.prepare('UPDATE castings SET reading = ?, reading_state = ?, reading_error = ? WHERE id = ?').run(reading, state, error, id)
+  }
+
+  /** The casting's own memory switch: on, off, or null to follow Settings. */
+  setCastingMemory(id: string, memory: boolean | null): Casting | undefined {
+    this.db.prepare('UPDATE castings SET memory = ? WHERE id = ?').run(memory == null ? null : memory ? 1 : 0, id)
+    return this.getCasting(id)
+  }
+
+  /** Which memories the reading now being written draws on. */
+  setMemoriesUsed(id: string, ids: string[]): void {
+    this.db.prepare('UPDATE castings SET memories_used = ? WHERE id = ?').run(JSON.stringify(ids), id)
   }
 
   removeCasting(id: string): boolean {
@@ -185,7 +224,7 @@ export class Store {
   }
 
   addFollowUp(castingId: string, question: string): FollowUp {
-    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now() }
+    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now(), remembered: null }
     this.db.prepare('INSERT INTO follow_ups (id, casting_id, question, answer, state, error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(f.id, f.castingId, f.question, '', 'none', null, f.createdAt)
     return f
@@ -193,6 +232,10 @@ export class Store {
 
   setAnswer(id: string, answer: string, state: ReadingState, error: string | null = null): void {
     this.db.prepare('UPDATE follow_ups SET answer = ?, state = ?, error = ? WHERE id = ?').run(answer, state, error, id)
+  }
+
+  setRemembered(id: string, remembered: Remembered[]): void {
+    this.db.prepare('UPDATE follow_ups SET remembered = ? WHERE id = ?').run(JSON.stringify(remembered), id)
   }
 
   removeFollowUp(id: string): boolean {

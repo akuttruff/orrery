@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, CalendarDays, CalendarRange, Moon, Orbit, Settings as SettingsIcon, Sun, Sunrise } from 'lucide-react'
 import CastingView from './components/CastingView'
 import Settings from './components/Settings'
+import MemoriesSheet from './components/MemoriesSheet'
 import { api } from './lib/api.ts'
 import type { Casting, CastingSummary, Config, Kind, Profile } from './types.ts'
 
@@ -23,6 +24,7 @@ export default function App() {
   const [recent, setRecent] = useState<CastingSummary[]>([])
   const [current, setCurrent] = useState<Casting | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [memoriesOpen, setMemoriesOpen] = useState(false)
   const [busy, setBusy] = useState<Kind | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -66,6 +68,11 @@ export default function App() {
     refreshRecent()
   }
 
+  const setMemory = async (memory: boolean | null): Promise<void> => {
+    if (!current) return
+    try { setCurrent(await api.setCastingMemory(current.id, memory)) } catch (e) { setError((e as Error).message) }
+  }
+
   const remove = async (): Promise<void> => {
     if (!current) return
     await api.remove(current.id).catch(() => { /* already gone */ })
@@ -96,6 +103,9 @@ export default function App() {
         {current ? (
           <CastingView
             casting={current}
+            memoryDefault={config?.memoryDefault === 'on'}
+            onMemory={(m) => void setMemory(m)}
+            onMemories={() => setMemoriesOpen(true)}
             onWrite={(again) => void write(again)}
             onStop={() => void stop()}
             onRecast={() => void cast(current.kind, true)}
@@ -142,8 +152,10 @@ export default function App() {
           config={config}
           onSaved={(p, c) => { setProfile(p); setConfig(c); setSettingsOpen(false) }}
           onClose={() => setSettingsOpen(false)}
+          onMemories={() => setMemoriesOpen(true)}
         />
       )}
+      {memoriesOpen && <MemoriesSheet onClose={() => setMemoriesOpen(false)} />}
     </div>
   )
 }

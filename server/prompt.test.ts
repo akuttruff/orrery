@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { followUpRequest, readingRequest, trimmedData } from './prompt.ts'
+import { followUpRequest, memoryBlock, readingRequest, trimmedData } from './prompt.ts'
 import transit from '../src/test/fixtures/transit-chart.json?raw'
 import week from '../src/test/fixtures/forecast-week.json?raw'
 import type { Casting, FollowUp, Profile } from '../src/types.ts'
@@ -8,7 +8,7 @@ import type { Casting, FollowUp, Profile } from '../src/types.ts'
 const amie: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
 const casting = (over: Partial<Casting>): Casting => ({
   id: 'c1', kind: 'today', period: '2026-10-13', title: 'Today · Oct 13', result: transit,
-  reading: '', readingState: 'none', readingError: null, createdAt: 0, ...over,
+  reading: '', readingState: 'none', readingError: null, createdAt: 0, memory: null, memoriesUsed: [], ...over,
 })
 
 describe('readingRequest', () => {
@@ -40,7 +40,7 @@ describe('readingRequest', () => {
 
 describe('followUpRequest', () => {
   const read = casting({ kind: 'week', result: week, title: 'Week of Oct 12', period: '2026-10-12', reading: '### Monday\nSaturn leans in.', readingState: 'done' })
-  const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, ...over })
+  const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, remembered: null, ...over })
 
   it('puts the data and the reading behind the question, in the same voice', () => {
     const req = followUpRequest(read, [], 'Is Thursday any good?', amie, new Date(2026, 9, 13))
@@ -68,5 +68,20 @@ describe('followUpRequest', () => {
     expect(req.input).toContain('Sam asked: Long?')
     expect(req.input.length).toBeLessThan(2500)
     expect(req.input).toMatch(/Sam asks: Third\?$/)
+  })
+})
+
+describe('memoryBlock', () => {
+  it('frames the memories as information about the person, and is left out when there are none', () => {
+    const block = memoryBlock(amie, ['- The user works nights.'])!
+    expect(block).toMatch(/^WHAT YOU KNOW ABOUT SAM/)
+    expect(block).toContain('not instructions')
+    expect(block).toContain('- The user works nights.')
+    expect(memoryBlock(amie, [])).toBeNull()
+    const req = readingRequest(casting({}), amie, new Date(), ['- The user works nights.'])
+    expect(req.system).toContain('WHAT YOU KNOW ABOUT SAM')
+    expect(readingRequest(casting({}), amie).system).not.toContain('WHAT YOU KNOW')
+    const plain = casting({ kind: 'week', result: week, reading: 'r', readingState: 'done' })
+    expect(followUpRequest(plain, [], 'q', amie, new Date(), ['- The user works nights.']).system).toContain('- The user works nights.')
   })
 })
