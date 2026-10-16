@@ -34,7 +34,6 @@
 .tt-soft { color: #8FBCE6; }
 .tt-minor { color: #9FB592; }
 .wheel-glyph { display: inline-block; min-width: 1.1em; margin-right: 4px; font-size: 1.05em; line-height: 1; color: var(--paper-dim); }
-.wheel-save { flex: 0 0 auto; }
 /* The wheel in the card is a button: a tap opens it full screen to pinch into. */
 .wheel-open { display: block; width: 100%; padding: 0; margin: 0; border: none; background: none; cursor: zoom-in; }
 

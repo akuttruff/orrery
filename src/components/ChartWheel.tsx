@@ -1,6 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { createPortal } from 'react-dom'
-import { Download } from 'lucide-react'
 import WheelViewer from './WheelViewer'
 import {
   aspectDetail, aspectFamily, aspectSentence, aspectsOfPoint, describePoint, elementOf, fromLongitude, natalLongitude,
@@ -483,15 +482,6 @@ function ChartWheel({ wheel, readings }: { wheel: Wheel; readings?: Record<strin
           <i style={{ background: ASPECT_COLOR.conjunction }} /> {aspectGlyph('conjunction')} conjunction
           {hasRetrograde(wheel) && <><b style={{ color: PALETTE.hard }}>℞</b> retrograde</>}
         </span>
-        <button
-          type="button"
-          className="copy-btn wheel-save"
-          aria-label={`Save wheel as ${fileName}`}
-          title={`Save as ${fileName}`}
-          onClick={save}
-        >
-          <Download size={14} aria-hidden="true" />
-        </button>
       </figcaption>
     </figure>
   )
