@@ -6,6 +6,10 @@ import { useAnswer } from '../hooks/useReading.ts'
 import { api } from '../lib/api.ts'
 import type { FollowUp, ReadingState } from '../types.ts'
 
+/** The note-taking beside an answer is a model call of its own; look for its result this often, this many times. */
+const REMEMBER_POLL_MS = 5000
+const REMEMBER_POLLS = 24
+
 interface FollowUpsProps {
   castingId: string
   /** The reading's state: questions wait until it is written. */
@@ -34,12 +38,15 @@ export default function FollowUps({ castingId, readingState, readingText }: Foll
 
   const replace = useCallback((f: FollowUp) => setItems((cur) => cur.map((x) => (x.id === f.id ? f : x))), [])
   // Answered (or failed) on the server: fetch the kept copy, so a reopen shows it without the stream.
-  // What the question revealed is worked out beside the answer; if that is not in yet, look once more shortly.
+  // What the question revealed is worked out beside the answer and can take a while longer; keep looking until it is in.
   const settled = useCallback((id: string) => {
-    api.followUp(id).then((f) => {
-      replace(f)
-      if (f.remembered === null) setTimeout(() => { api.followUp(id).then(replace).catch(() => { /* next open */ }) }, 4000)
-    }).catch(() => { /* next open */ })
+    const look = (left: number): void => {
+      api.followUp(id).then((f) => {
+        replace(f)
+        if (f.remembered === null && left > 0) setTimeout(() => look(left - 1), REMEMBER_POLL_MS)
+      }).catch(() => { /* next open */ })
+    }
+    look(REMEMBER_POLLS)
   }, [replace])
 
   const forget = async (f: FollowUp, memoryId: string): Promise<void> => {
@@ -147,6 +154,15 @@ function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget
           {state === 'writing' && <button type="button" className="chip" onClick={onStop}><Square size={13} aria-hidden="true" /> Stop</button>}
           {state === 'failed' && <button type="button" className="chip" onClick={onAgain}><RefreshCw size={13} aria-hidden="true" /> Try again</button>}
         </div>
+        {(state === 'done' || state === 'failed') && (
+          <p className="followup-memory">
+            {followUp.memoriesUsed.length
+              ? `Answered with ${followUp.memoriesUsed.length} ${followUp.memoriesUsed.length === 1 ? 'memory' : 'memories'}`
+              : 'Answered without memories'}
+            {followUp.remembered === null && ' · noting what this reveals…'}
+            {followUp.remembered?.length === 0 && followUp.memoriesUsed.length > 0 && ' · nothing new to remember'}
+          </p>
+        )}
         {followUp.remembered && followUp.remembered.length > 0 && (
           <ul className="remembered" aria-label="Remembered from this question">
             {followUp.remembered.map((m) => (

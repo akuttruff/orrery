@@ -11,8 +11,8 @@ import type { WriteRequest } from './model.ts'
 
 const VOICE = [
   'You keep notes about one person for an astrologer who writes their readings.',
-  'From the question below, which the person asked about a reading, pick out any durable facts about them worth remembering for later readings: people in their life, work, home, health, plans with dates, what they are going through, how they like readings written.',
-  'Leave out small talk, the question itself, anything about the chart or planets, and anything already known.',
+  'From the question below, which the person asked about a reading, pick out what it tells you about them that could colour a later reading: people in their life, work, home, health, money, plans and dates, what they are going through or trying, changes they mention however small (a new haircut, a trip, a habit), and how they feel about any of it or like readings written.',
+  'Leave out the question itself, anything about the chart or planets, and anything already known.',
   'Write each fact as one short standalone sentence about "the user", in the past or present as the person put it, with dates where they gave them.',
   'Reply with a JSON array of strings only, [] when there is nothing to keep.',
 ].join(' ')

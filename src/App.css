@@ -201,6 +201,17 @@ input, select { font: inherit; }
 .memory-switch { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 14px 0 0; }
 .chip.on { border-color: var(--moss); color: var(--moss); }
 .memory-note { font-size: 13px; color: var(--paper-dim); line-height: 1.4; }
+/* Which memories go to the model for this casting. */
+.memory-picker { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-raised); }
+.memory-picker-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 6px; font-size: 13px; color: var(--paper-dim); line-height: 1.4; }
+.memory-picker-head span { flex: 1 1 100%; }
+.memory-picker-head .link:disabled { opacity: 0.4; text-decoration: none; }
+.memory-picks { list-style: none; margin: 0; padding: 0; }
+.memory-pick { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.4; }
+.memory-pick input { margin-top: 2px; width: 18px; height: 18px; accent-color: var(--moss); flex: 0 0 auto; }
+.memory-pick-text { flex: 1 1 auto; overflow-wrap: anywhere; }
+.memory-pick-used { flex: 0 0 auto; font-size: 11px; color: var(--moss); white-space: nowrap; margin-top: 2px; }
+.followup-memory { margin: 6px 0 0; font-size: 12px; color: var(--paper-dim); line-height: 1.4; }
 .remembered { list-style: none; margin: 6px 0 0; padding: 0; }
 .remembered li {
   display: flex; align-items: baseline; gap: 6px;

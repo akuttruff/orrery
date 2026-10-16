@@ -8,7 +8,7 @@ import type { Casting, FollowUp, Profile } from '../src/types.ts'
 const amie: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
 const casting = (over: Partial<Casting>): Casting => ({
   id: 'c1', kind: 'today', period: '2026-10-13', title: 'Today · Oct 13', result: transit,
-  reading: '', readingState: 'none', readingError: null, createdAt: 0, memory: null, memoriesUsed: [], ...over,
+  reading: '', readingState: 'none', readingError: null, createdAt: 0, memory: null, memoriesUsed: [], memoryExcluded: [], ...over,
 })
 
 describe('readingRequest', () => {
@@ -40,7 +40,7 @@ describe('readingRequest', () => {
 
 describe('followUpRequest', () => {
   const read = casting({ kind: 'week', result: week, title: 'Week of Oct 12', period: '2026-10-12', reading: '### Monday\nSaturn leans in.', readingState: 'done' })
-  const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, remembered: null, ...over })
+  const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], ...over })
 
   it('puts the data and the reading behind the question, in the same voice', () => {
     const req = followUpRequest(read, [], 'Is Thursday any good?', amie, new Date(2026, 9, 13))

@@ -22,7 +22,8 @@ export const api = {
   castings: () => request<CastingSummary[]>('/api/castings'),
   cast: (kind: Kind, fresh = false) => request<Casting>('/api/castings', jsonInit('POST', { kind, fresh })),
   casting: (id: string) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`),
-  setCastingMemory: (id: string, memory: boolean | null) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`, jsonInit('PATCH', { memory })),
+  /** The casting's memory switch (true, false, or null to follow Settings) and the memories it leaves out. */
+  updateCasting: (id: string, patch: { memory?: boolean | null; memoryExcluded?: string[] }) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`, jsonInit('PATCH', patch)),
   startReading: (id: string, again = false) => request<Casting>(`/api/castings/${encodeURIComponent(id)}/reading${again ? '?again=1' : ''}`, { method: 'POST' }),
   stopReading: (id: string) => request<{ stopped: boolean }>(`/api/castings/${encodeURIComponent(id)}/reading`, { method: 'DELETE' }),
   remove: (id: string) => request<{ ok: boolean }>(`/api/castings/${encodeURIComponent(id)}`, { method: 'DELETE' }),

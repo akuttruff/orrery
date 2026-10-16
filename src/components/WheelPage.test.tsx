@@ -9,7 +9,7 @@ describe('WheelPage', () => {
   it('draws the casting\'s wheel and nothing else, and lets the page zoom', async () => {
     document.head.innerHTML = '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">'
     vi.stubGlobal('fetch', vi.fn(async (url: string) => (url === '/api/castings/c1'
-      ? reply(200, { id: 'c1', kind: 'natal', period: 'natal', title: 'Birth chart', result: natal, reading: '', readingState: 'done', readingError: null, createdAt: 1, memory: null, memoriesUsed: [] })
+      ? reply(200, { id: 'c1', kind: 'natal', period: 'natal', title: 'Birth chart', result: natal, reading: '', readingState: 'done', readingError: null, createdAt: 1, memory: null, memoriesUsed: [], memoryExcluded: [] })
       : reply(404, { error: 'No such casting' }))))
     render(<WheelPage id="c1" />)
     expect(await screen.findByRole('img', { name: /Chart wheel for/ })).toBeInTheDocument()

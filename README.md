@@ -42,13 +42,15 @@ database (`.data/` for the real instance, `.data-dev/` for `npm run dev`),
 separate from lm-chat's pool. A casting read **with memory on** gets what is
 known about the person in its prompt, framed as information to use only
 where the chart touches it, and the page says how many memories the reading
-drew on. Memory is off by default; Settings sets the default and each
-casting has its own switch. Orrery's model has no tools, so the server does
-the remembering: with memory on, each question asked under a reading is also
-sent to the model for the durable facts it reveals (`server/remember.ts`),
-which are saved and shown under the answer with a Forget button. The
-Memories screen (from Settings or the reading) lists, corrects, adds and
-deletes.
+and each answer drew on. Memory is off by default; Settings sets the default
+and each casting has its own switch, plus a **Choose** list to untick
+memories that should stay out of that casting's reading and answers
+(`castings.memory_excluded`). Orrery's model has no tools, so the server
+does the remembering: with memory on, each question asked under a reading is
+also sent to the model for what it reveals about the person, small changes
+included (`server/remember.ts`); what is kept is shown under the answer with
+a Forget button, and the answer says when nothing new was. The Memories
+screen (from Settings or the reading) lists, corrects, adds and deletes.
 
 ## Running
 

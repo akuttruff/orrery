@@ -92,7 +92,7 @@ export function createMiddleware(state: ApiState): Handler {
   /** The memory lines for a casting's reading or answer, and the ids they came from; none when memory is off. */
   const memoryFor = (casting: Casting): { lines: string[]; ids: string[] } => {
     if (!memoryOn(casting)) return { lines: [], ids: [] }
-    const { lines, used } = memories.context()
+    const { lines, used } = memories.context(undefined, casting.memoryExcluded)
     return { lines, ids: used.map((m) => m.id) }
   }
 
@@ -149,7 +149,7 @@ export function createMiddleware(state: ApiState): Handler {
 
     const fail = (err: unknown): void => {
       const status = err instanceof AstroToolError ? 422 : 400
-      if (!(err instanceof AstroToolError) && !(err instanceof MemoryInputError) && !(err instanceof SyntaxError) && !/^(Unknown kind|Ask something|Keep the question|Wait for the reading|One answer|Birth date|A birth city|Expected a JSON)/.test((err as Error).message)) console.log(`[orrery] ${(err as Error).message}`)
+      if (!(err instanceof AstroToolError) && !(err instanceof MemoryInputError) && !(err instanceof SyntaxError) && !/^(Unknown kind|Ask something|Keep the question|Wait for the reading|One answer|Birth date|A birth city|Expected a JSON|Nothing to change|memory)/.test((err as Error).message)) console.log(`[orrery] ${(err as Error).message}`)
       json(res, status, { error: (err as Error).message || String(err) })
     }
 
@@ -225,10 +225,18 @@ export function createMiddleware(state: ApiState): Handler {
       if (!sub && method === 'GET') return json(res, 200, casting)
       if (!sub && method === 'PATCH') {
         void readBody(req).then((body) => {
-          if (!('memory' in body)) throw new Error('Nothing to change')
-          const memory = body.memory
-          if (memory !== null && typeof memory !== 'boolean') throw new Error('memory must be true, false or null')
-          json(res, 200, store.setCastingMemory(id, memory))
+          if (!('memory' in body) && !('memoryExcluded' in body)) throw new Error('Nothing to change')
+          if ('memory' in body) {
+            const memory = body.memory
+            if (memory !== null && typeof memory !== 'boolean') throw new Error('memory must be true, false or null')
+            store.setCastingMemory(id, memory)
+          }
+          if ('memoryExcluded' in body) {
+            const ids = body.memoryExcluded
+            if (!Array.isArray(ids) || !ids.every((x) => typeof x === 'string')) throw new Error('memoryExcluded must be a list of memory ids')
+            store.setMemoryExcluded(id, [...new Set(ids as string[])])
+          }
+          json(res, 200, store.getCasting(id))
         }).catch(fail)
         return undefined
       }
@@ -260,8 +268,8 @@ export function createMiddleware(state: ApiState): Handler {
           if (current.readingState === 'writing' || !current.reading) throw new Error('Wait for the reading to be written, then ask')
           const earlier = store.listFollowUps(id)
           if (earlier.some((f) => f.state === 'writing')) throw new Error('One answer at a time')
-          const followUp = store.addFollowUp(id, question)
           const memory = memoryFor(current)
+          const followUp = store.addFollowUp(id, question, memory.ids)
           readings.start(followUp.id, followUpRequest(current, earlier, question, store.getProfile(), new Date(), memory.lines), answerOf(store, followUp.id))
           if (memoryOn(current)) void rememberFrom(followUp)
           else store.setRemembered(followUp.id, [])
@@ -286,7 +294,9 @@ export function createMiddleware(state: ApiState): Handler {
         const casting = store.getCasting(followUp.castingId)
         if (!casting) return json(res, 404, { error: 'No such casting' })
         const earlier = store.listFollowUps(casting.id).filter((x) => x.createdAt < followUp.createdAt || (x.createdAt === followUp.createdAt && x.id !== followUp.id && x.id < followUp.id))
-        readings.start(id, followUpRequest(casting, earlier, followUp.question, store.getProfile(), new Date(), memoryFor(casting).lines), answerOf(store, id))
+        const memory = memoryFor(casting)
+        store.setAnswerMemoriesUsed(id, memory.ids)
+        readings.start(id, followUpRequest(casting, earlier, followUp.question, store.getProfile(), new Date(), memory.lines), answerOf(store, id))
         return json(res, 202, store.getFollowUp(id))
       }
       if (sub === 'answer' && method === 'DELETE') return json(res, 200, { stopped: readings.stop(id) })

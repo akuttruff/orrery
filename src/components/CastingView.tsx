@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
-import { Brain, RotateCw, Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Brain, ListChecks, RotateCw, Trash2 } from 'lucide-react'
+import MemoryPicker from './MemoryPicker'
 import ChartWheel from './ChartWheel'
 import { ActiveTransits, ForecastTransits } from './TransitTable'
 import MoonView from './MoonView'
@@ -16,6 +17,8 @@ interface CastingViewProps {
   memoryDefault: boolean
   /** This casting's memory switch: on, off, or null to follow Settings. */
   onMemory: (memory: boolean | null) => void
+  /** Which memories this casting leaves out, by id. */
+  onExclude: (ids: string[]) => void
   onMemories: () => void
   onWrite: (again: boolean) => void
   onStop: () => void
@@ -29,8 +32,9 @@ interface CastingViewProps {
 const NO_READINGS: Record<string, string> = {}
 
 /** One casting: its chart or tables, the reading, then the questions asked about it. */
-export default function CastingView({ casting, memoryDefault, onMemory, onMemories, onWrite, onStop, onRecast, onDelete, onSettled }: CastingViewProps) {
+export default function CastingView({ casting, memoryDefault, onMemory, onExclude, onMemories, onWrite, onStop, onRecast, onDelete, onSettled }: CastingViewProps) {
   const memoryOn = casting.memory ?? memoryDefault
+  const [picking, setPicking] = useState(false)
   const reading = useReading(casting, onSettled)
   const wheel = useMemo(() => (casting.kind === 'today' || casting.kind === 'natal' ? parseWheel(casting.result) : null), [casting])
   const forecast = useMemo(() => (casting.kind === 'week' || casting.kind === 'month' || casting.kind === 'year' ? parseForecast(casting.result) : null), [casting])
@@ -58,14 +62,20 @@ export default function CastingView({ casting, memoryDefault, onMemory, onMemori
         >
           <Brain size={13} aria-hidden="true" /> Memory {memoryOn ? 'on' : 'off'}
         </button>
+        {memoryOn && (
+          <button type="button" className={`chip${picking ? ' on' : ''}`} aria-expanded={picking} onClick={() => setPicking((p) => !p)}>
+            <ListChecks size={13} aria-hidden="true" /> Choose{casting.memoryExcluded.length ? ` · ${casting.memoryExcluded.length} out` : ''}
+          </button>
+        )}
         <span className="memory-note">
           {reading.state === 'none'
             ? memoryOn ? 'The reading will draw on what the model knows about you.' : 'The reading will be written from the chart alone.'
             : casting.memoriesUsed.length
-              ? <>Written with <button type="button" className="link" onClick={onMemories}>{casting.memoriesUsed.length} {casting.memoriesUsed.length === 1 ? 'memory' : 'memories'}</button>{memoryOn ? '' : '. Write again to leave them out.'}</>
+              ? <>Written with <button type="button" className="link" onClick={() => setPicking(true)}>{casting.memoriesUsed.length} {casting.memoriesUsed.length === 1 ? 'memory' : 'memories'}</button>{memoryOn ? '' : '. Write again to leave them out.'}</>
               : <>Written from the chart alone{memoryOn ? '. Write again to bring memories in.' : ''}</>}
         </span>
       </div>
+      {memoryOn && picking && <MemoryPicker excluded={casting.memoryExcluded} used={casting.memoriesUsed} onChange={onExclude} onManage={onMemories} />}
       <Reading reading={reading} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
       <FollowUps key={casting.id} castingId={casting.id} readingState={reading.state} readingText={reading.text} />
       <div className="casting-actions">

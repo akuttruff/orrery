@@ -268,4 +268,44 @@ describe('memories', () => {
     expect(((await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json()) as Casting).memoriesUsed).toEqual([])
     writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return 'ok' }
   })
+
+  it('leaves the memories a casting unticks out of its reading and answers, and notes which went in', async () => {
+    const seen: WriteRequest[] = []
+    writer = async (req, onDelta) => {
+      seen.push(req)
+      if (req.system.startsWith('You keep notes')) return '[]'
+      onDelta('Known.'); return 'Known.'
+    }
+    const nights = await (await post(`${ctx.base}/api/memories`, { text: 'The user works nights.' })).json() as Memory
+    const cat = await (await post(`${ctx.base}/api/memories`, { text: 'The user has a cat.' })).json() as Memory
+    await send('PUT', `${ctx.base}/api/config`, { memoryDefault: 'on' })
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'month' })).json() as Casting
+    expect(c.memoryExcluded).toEqual([])
+    expect((await send('PATCH', `${ctx.base}/api/castings/${c.id}`, { memoryExcluded: 'cat' })).status).toBe(400)
+    const chosen = await (await send('PATCH', `${ctx.base}/api/castings/${c.id}`, { memoryExcluded: [cat.id, cat.id] })).json() as Casting
+    expect(chosen.memoryExcluded).toEqual([cat.id])
+
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await readAll(`${ctx.base}/api/castings/${c.id}/events`)
+    expect(seen[0]!.system).toContain('- The user works nights.')
+    expect(seen[0]!.system).not.toContain('cat')
+    expect(((await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json()) as Casting).memoriesUsed).toEqual([nights.id])
+
+    const f = await (await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'Any good days?' })).json() as FollowUp
+    expect(f.memoriesUsed).toEqual([nights.id])
+    await readAll(`${ctx.base}/api/followups/${f.id}/events`)
+    const answer = seen.find((r) => r.system.includes('same astrologer'))!
+    expect(answer.system).not.toContain('cat')
+    let kept = await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json() as FollowUp
+    for (let i = 0; i < 20 && kept.remembered === null; i++) { await tick(); kept = await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json() as FollowUp }
+    expect(kept.remembered).toEqual([])
+
+    // Ticked back in, the next answer has it.
+    await send('PATCH', `${ctx.base}/api/castings/${c.id}`, { memoryExcluded: [] })
+    await post(`${ctx.base}/api/followups/${f.id}/answer`)
+    await readAll(`${ctx.base}/api/followups/${f.id}/events`)
+    expect(seen.at(-1)!.system).toContain('- The user has a cat.')
+    expect(((await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json()) as FollowUp).memoriesUsed.sort()).toEqual([cat.id, nights.id].sort())
+    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return 'ok' }
+  })
 })

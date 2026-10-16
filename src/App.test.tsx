@@ -6,7 +6,7 @@ import type { Casting, CastingSummary } from './types.ts'
 
 const casting = (id: string, over: Partial<Casting> = {}): Casting => ({
   id, kind: 'today', period: '2026-10-16', title: `Casting ${id}`, result: '{}', reading: '', readingState: 'writing', readingError: null,
-  createdAt: 1, memory: null, memoriesUsed: [], ...over,
+  createdAt: 1, memory: null, memoriesUsed: [], memoryExcluded: [], ...over,
 })
 const summary = ({ result: _r, reading: _g, ...rest }: Casting): CastingSummary => rest
 

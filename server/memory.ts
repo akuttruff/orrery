@@ -115,14 +115,17 @@ export class Memories {
 
   /**
    * The memories that fit `budget` characters, newest first, with the lines
-   * the model is given. Framed as information about the person, not
-   * instructions: a memory can echo something a model read on the web.
+   * the model is given; those in `leaveOut` are skipped. Framed as
+   * information about the person, not instructions: a memory can echo
+   * something a model read on the web.
    */
-  context(budget = 4000): { lines: string[]; used: Memory[] } {
+  context(budget = 4000, leaveOut: Iterable<string> = []): { lines: string[]; used: Memory[] } {
     const lines: string[] = []
     const used: Memory[] = []
+    const skip = new Set(leaveOut)
     let chars = 0
     for (const m of this.list()) {
+      if (skip.has(m.id)) continue
       const line = `- ${m.text}`
       if (chars + line.length > budget) continue
       lines.push(line)

@@ -58,6 +58,8 @@ export interface Casting {
   memory: boolean | null
   /** The saved memories the reading was written with, by id; empty when written without. */
   memoriesUsed: string[]
+  /** Memories this casting leaves out of its reading and answers, by id, chosen by the person. */
+  memoryExcluded: string[]
 }
 
 /** A casting in the recent list: everything but the bodies. */
@@ -76,8 +78,10 @@ export interface FollowUp {
   state: ReadingState
   error: string | null
   createdAt: number
-  /** What was saved to memory from this question; null while that is still being worked out, or when memory was off. */
+  /** What was saved to memory from this question: null while that is still being worked out, [] when nothing was (or memory was off). */
   remembered: Remembered[] | null
+  /** The saved memories the answer was written with, by id; empty when written without. */
+  memoriesUsed: string[]
 }
 
 /** What the reading stream sends. */

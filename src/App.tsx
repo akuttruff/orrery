@@ -118,9 +118,9 @@ export default function App() {
     refreshRecent()
   }
 
-  const setMemory = async (memory: boolean | null): Promise<void> => {
+  const updateCasting = async (patch: { memory?: boolean | null; memoryExcluded?: string[] }): Promise<void> => {
     if (!current) return
-    try { setCurrent(await api.setCastingMemory(current.id, memory)) } catch (e) { setError((e as Error).message) }
+    try { setCurrent(await api.updateCasting(current.id, patch)) } catch (e) { setError((e as Error).message) }
   }
 
   const remove = async (): Promise<void> => {
@@ -153,7 +153,8 @@ export default function App() {
           <CastingView
             casting={current}
             memoryDefault={config?.memoryDefault === 'on'}
-            onMemory={(m) => void setMemory(m)}
+            onMemory={(m) => void updateCasting({ memory: m })}
+            onExclude={(ids) => void updateCasting({ memoryExcluded: ids })}
             onMemories={() => setMemoriesOpen(true)}
             onWrite={(again) => void write(again)}
             onStop={() => void stop()}

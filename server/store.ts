@@ -62,7 +62,7 @@ CREATE INDEX IF NOT EXISTS follow_ups_casting ON follow_ups (casting_id, created
 interface CastingRow {
   id: string; kind: string; period: string; title: string; result: string; reading: string
   reading_state: string; reading_error: string | null; created_at: number
-  memory: number | null; memories_used: string | null
+  memory: number | null; memories_used: string | null; memory_excluded: string | null
 }
 
 const parseIds = (text: string | null): string[] => {
@@ -73,12 +73,12 @@ const parseIds = (text: string | null): string[] => {
 const fromRow = (r: CastingRow): Casting => ({
   id: r.id, kind: r.kind as Kind, period: r.period, title: r.title, result: r.result, reading: r.reading,
   readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at,
-  memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used),
+  memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
 })
 
 interface FollowUpRow {
   id: string; casting_id: string; question: string; answer: string; state: string; error: string | null; created_at: number
-  remembered: string | null
+  remembered: string | null; memories_used: string | null
 }
 
 const parseRemembered = (text: string | null): Remembered[] | null => {
@@ -92,6 +92,7 @@ const parseRemembered = (text: string | null): Remembered[] | null => {
 const followUpFromRow = (r: FollowUpRow): FollowUp => ({
   id: r.id, castingId: r.casting_id, question: r.question, answer: r.answer,
   state: r.state as ReadingState, error: r.error, createdAt: r.created_at, remembered: parseRemembered(r.remembered),
+  memoriesUsed: parseIds(r.memories_used),
 })
 
 export const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -117,6 +118,8 @@ export class Store {
     if (!has('castings', 'memory')) this.db.exec('ALTER TABLE castings ADD COLUMN memory INTEGER')
     if (!has('castings', 'memories_used')) this.db.exec('ALTER TABLE castings ADD COLUMN memories_used TEXT')
     if (!has('follow_ups', 'remembered')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN remembered TEXT')
+    if (!has('castings', 'memory_excluded')) this.db.exec('ALTER TABLE castings ADD COLUMN memory_excluded TEXT')
+    if (!has('follow_ups', 'memories_used')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN memories_used TEXT')
   }
 
   private seed(seedFrom: string): void {
@@ -162,12 +165,12 @@ export class Store {
 
   listCastings(limit = 40): CastingSummary[] {
     const rows = this.db.prepare(
-      'SELECT id, kind, period, title, reading_state, reading_error, created_at, memory, memories_used FROM castings ORDER BY created_at DESC LIMIT ?',
+      'SELECT id, kind, period, title, reading_state, reading_error, created_at, memory, memories_used, memory_excluded FROM castings ORDER BY created_at DESC LIMIT ?',
     ).all(limit) as unknown as Omit<CastingRow, 'result' | 'reading'>[]
     return rows.map((r) => ({
       id: r.id, kind: r.kind as Kind, period: r.period, title: r.title,
       readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at,
-      memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used),
+      memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
     }))
   }
 
@@ -185,7 +188,7 @@ export class Store {
 
   addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'>): Casting {
     const casting: Casting = {
-      id: newId(), ...input, reading: '', readingState: 'none', readingError: null, createdAt: Date.now(), memory: null, memoriesUsed: [],
+      id: newId(), ...input, reading: '', readingState: 'none', readingError: null, createdAt: Date.now(), memory: null, memoriesUsed: [], memoryExcluded: [],
     }
     this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, casting.createdAt)
@@ -207,6 +210,12 @@ export class Store {
     this.db.prepare('UPDATE castings SET memories_used = ? WHERE id = ?').run(JSON.stringify(ids), id)
   }
 
+  /** The memories this casting leaves out of its reading and answers, by id. */
+  setMemoryExcluded(id: string, ids: string[]): Casting | undefined {
+    this.db.prepare('UPDATE castings SET memory_excluded = ? WHERE id = ?').run(JSON.stringify(ids), id)
+    return this.getCasting(id)
+  }
+
   removeCasting(id: string): boolean {
     return this.db.prepare('DELETE FROM castings WHERE id = ?').run(id).changes > 0
   }
@@ -223,11 +232,16 @@ export class Store {
     return r ? followUpFromRow(r) : undefined
   }
 
-  addFollowUp(castingId: string, question: string): FollowUp {
-    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now(), remembered: null }
-    this.db.prepare('INSERT INTO follow_ups (id, casting_id, question, answer, state, error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(f.id, f.castingId, f.question, '', 'none', null, f.createdAt)
+  addFollowUp(castingId: string, question: string, memoriesUsed: string[] = []): FollowUp {
+    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now(), remembered: null, memoriesUsed }
+    this.db.prepare('INSERT INTO follow_ups (id, casting_id, question, answer, state, error, created_at, memories_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(f.id, f.castingId, f.question, '', 'none', null, f.createdAt, JSON.stringify(memoriesUsed))
     return f
+  }
+
+  /** Which memories the answer now being written draws on (asked again, it may differ). */
+  setAnswerMemoriesUsed(id: string, ids: string[]): void {
+    this.db.prepare('UPDATE follow_ups SET memories_used = ? WHERE id = ?').run(JSON.stringify(ids), id)
   }
 
   setAnswer(id: string, answer: string, state: ReadingState, error: string | null = null): void {
