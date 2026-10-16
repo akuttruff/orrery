@@ -1,4 +1,4 @@
-import type { Casting, CastingSummary, Config, Kind, Profile } from '../types.ts'
+import type { Casting, CastingSummary, Config, FollowUp, Kind, Profile } from '../types.ts'
 
 /** The server, from the page. Every call throws with the server's message on failure. */
 
@@ -26,4 +26,13 @@ export const api = {
   stopReading: (id: string) => request<{ stopped: boolean }>(`/api/castings/${encodeURIComponent(id)}/reading`, { method: 'DELETE' }),
   remove: (id: string) => request<{ ok: boolean }>(`/api/castings/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   eventsUrl: (id: string) => `/api/castings/${encodeURIComponent(id)}/events`,
+
+  // Questions asked under a reading, answered on the server the same way.
+  followUps: (castingId: string) => request<FollowUp[]>(`/api/castings/${encodeURIComponent(castingId)}/followups`),
+  ask: (castingId: string, question: string) => request<FollowUp>(`/api/castings/${encodeURIComponent(castingId)}/followups`, jsonInit('POST', { question })),
+  followUp: (id: string) => request<FollowUp>(`/api/followups/${encodeURIComponent(id)}`),
+  askAgain: (id: string) => request<FollowUp>(`/api/followups/${encodeURIComponent(id)}/answer`, { method: 'POST' }),
+  stopAnswer: (id: string) => request<{ stopped: boolean }>(`/api/followups/${encodeURIComponent(id)}/answer`, { method: 'DELETE' }),
+  removeFollowUp: (id: string) => request<{ ok: boolean }>(`/api/followups/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  followUpEventsUrl: (id: string) => `/api/followups/${encodeURIComponent(id)}/events`,
 }

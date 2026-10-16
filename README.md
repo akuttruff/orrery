@@ -24,6 +24,13 @@ the transit tables), copied rather than shared.
   nothing.
 - **One cast per period.** Today's chart is cast once a day and reopened
   from the store; `Recast` throws it away and casts again.
+- **Ask about it.** Under every reading is a box for follow-up questions.
+  Each answer is written on the server like the reading (`server/readings.ts`
+  writes both) and kept with the casting (`follow_ups` table). LM Studio's
+  chat endpoint takes a single turn, so the data, the reading and the
+  questions answered so far are replayed in the prompt each time
+  (`followUpRequest` in `server/prompt.ts`). One answer at a time per
+  casting; deleting the casting deletes its questions.
 
 ## Running
 

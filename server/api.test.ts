@@ -9,7 +9,7 @@ import { Readings } from './readings.ts'
 import { Store } from './store.ts'
 import type { ApiState } from './api.ts'
 import type { WriteRequest } from './model.ts'
-import type { Casting } from '../src/types.ts'
+import type { Casting, FollowUp } from '../src/types.ts'
 
 /** The API on a real socket, with fake tools and a fake model, in a scratch data dir. */
 function serve(write: (req: WriteRequest, onDelta: (t: string) => void) => Promise<string>) {
@@ -95,6 +95,7 @@ describe('castings', () => {
     // Done: asking again is a no-op unless asked for again.
     expect((await post(`${ctx.base}/api/castings/${c.id}/reading`)).status).toBe(200)
     expect((await post(`${ctx.base}/api/castings/${c.id}/reading?again=1`)).status).toBe(202)
+    await (await fetch(`${ctx.base}/api/castings/${c.id}/events`)).text()
   })
 
   it('keeps the failure reason when the model cannot write', async () => {
@@ -106,5 +107,85 @@ describe('castings', () => {
     expect(kept.readingState).toBe('failed')
     expect(kept.readingError).toContain('boom')
     writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return 'ok' }
+  })
+})
+
+describe('questions under a reading', () => {
+  const readAll = async (url: string) => {
+    const events = await (await fetch(url)).text()
+    return events.split('\n\n').filter(Boolean).map((f) => JSON.parse(f.slice(5)) as { type: string; reading?: string })
+  }
+  const castAndRead = async (): Promise<Casting> => {
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'month' })).json() as Casting
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await readAll(`${ctx.base}/api/castings/${c.id}/events`)
+    return (await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json()) as Casting
+  }
+
+  it('waits for the reading before taking a question', async () => {
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'today' })).json() as Casting
+    const r = await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'Why?' })
+    expect(r.status).toBe(400)
+    expect(((await r.json()) as { error: string }).error).toMatch(/reading/)
+    expect((await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: '   ' })).status).toBe(400)
+  })
+
+  it('answers on the server with the reading and the thread so far in the prompt, streams it and keeps it', async () => {
+    const seen: WriteRequest[] = []
+    writer = async (req, onDelta) => { seen.push(req); await tick(); onDelta('Because '); await tick(); onDelta('Saturn.'); return 'Because Saturn.' }
+    const c = await castAndRead()
+    expect(c.reading).toBe('Because Saturn.')
+
+    const started = await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'Which day is best for the move?' })
+    expect(started.status).toBe(202)
+    const f1 = await started.json() as FollowUp
+    expect(f1).toMatchObject({ castingId: c.id, question: 'Which day is best for the move?', state: 'writing' })
+    // A second question while the first is being answered waits its turn.
+    expect((await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'And the second?' })).status).toBe(400)
+
+    const types = (await readAll(`${ctx.base}/api/followups/${f1.id}/events`)).map((e) => e.type)
+    expect(types[0]).toBe('snapshot')
+    expect(types.at(-1)).toBe('done')
+    const kept = await (await fetch(`${ctx.base}/api/followups/${f1.id}`)).json() as FollowUp
+    expect(kept).toMatchObject({ state: 'done', answer: 'Because Saturn.' })
+
+    const askReq = seen[1]!
+    expect(askReq.system).toContain('THE READING YOU WROTE:\nBecause Saturn.')
+    expect(askReq.system).toContain('THE CASTING: October 2026.\nDATA:\n{"tool":"forecast_month"')
+    expect(askReq.input).toBe('Sam asks: Which day is best for the move?')
+
+    // The next question sees the first exchange.
+    const f2 = await (await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'And the second?' })).json() as FollowUp
+    await readAll(`${ctx.base}/api/followups/${f2.id}/events`)
+    expect(seen[2]!.input).toContain('THE CONVERSATION SO FAR:')
+    expect(seen[2]!.input).toContain('Sam asked: Which day is best for the move?\n\nYou answered: Because Saturn.')
+    expect(seen[2]!.input).toMatch(/Sam asks: And the second\?$/)
+
+    const list = await (await fetch(`${ctx.base}/api/castings/${c.id}/followups`)).json() as FollowUp[]
+    expect(list.map((f) => f.id)).toEqual([f1.id, f2.id])
+
+    // Removing the casting takes its questions with it.
+    await fetch(`${ctx.base}/api/castings/${c.id}`, { method: 'DELETE' })
+    expect((await fetch(`${ctx.base}/api/followups/${f1.id}`)).status).toBe(404)
+    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return 'ok' }
+  })
+
+  it('keeps a failed answer with its reason and can ask again', async () => {
+    const c = await castAndRead()
+    writer = async () => { throw new Error('offline') }
+    const f = await (await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'Hm?' })).json() as FollowUp
+    await readAll(`${ctx.base}/api/followups/${f.id}/events`)
+    let kept = await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json() as FollowUp
+    expect(kept.state).toBe('failed')
+    expect(kept.error).toContain('offline')
+
+    writer = async (_r, onDelta) => { await tick(); onDelta('Better.'); return 'Better.' }
+    expect((await post(`${ctx.base}/api/followups/${f.id}/answer`)).status).toBe(202)
+    await readAll(`${ctx.base}/api/followups/${f.id}/events`)
+    kept = await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json() as FollowUp
+    expect(kept).toMatchObject({ state: 'done', answer: 'Better.' })
+
+    await fetch(`${ctx.base}/api/followups/${f.id}`, { method: 'DELETE' })
+    expect(await (await fetch(`${ctx.base}/api/castings/${c.id}/followups`)).json()).toEqual([])
   })
 })

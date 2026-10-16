@@ -46,6 +46,21 @@ export interface Casting {
 /** A casting in the recent list: everything but the bodies. */
 export type CastingSummary = Omit<Casting, 'result' | 'reading'>
 
+/**
+ * A question asked under a reading and the model's answer, written on the
+ * server like the reading itself. The whole thread so far goes back to the
+ * model with each new question, so an answer can refer to an earlier one.
+ */
+export interface FollowUp {
+  id: string
+  castingId: string
+  question: string
+  answer: string
+  state: ReadingState
+  error: string | null
+  createdAt: number
+}
+
 /** What the reading stream sends. */
 export type ReadingEvent =
   | { type: 'snapshot'; reading: string; state: ReadingState; error: string | null }

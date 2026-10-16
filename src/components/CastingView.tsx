@@ -4,6 +4,7 @@ import ChartWheel from './ChartWheel'
 import { ActiveTransits, ForecastTransits } from './TransitTable'
 import MoonView from './MoonView'
 import Reading from './Reading'
+import FollowUps from './FollowUps'
 import { useReading } from '../hooks/useReading.ts'
 import { parseWheel } from '../lib/chartWheel.ts'
 import { parseForecast } from '../lib/forecastTable.ts'
@@ -22,7 +23,7 @@ interface CastingViewProps {
 /** No per-aspect readings here (the reading below covers the day), so the popups show the aspect alone. */
 const NO_READINGS: Record<string, string> = {}
 
-/** One casting: its chart or tables, then the reading. */
+/** One casting: its chart or tables, the reading, then the questions asked about it. */
 export default function CastingView({ casting, onWrite, onStop, onRecast, onDelete, onSettled }: CastingViewProps) {
   const reading = useReading(casting, onSettled)
   const wheel = useMemo(() => (casting.kind === 'today' || casting.kind === 'natal' ? parseWheel(casting.result) : null), [casting])
@@ -41,6 +42,7 @@ export default function CastingView({ casting, onWrite, onStop, onRecast, onDele
       {casting.kind === 'moon' && <MoonView result={casting.result} />}
       {!wheel && !forecast && casting.kind !== 'moon' && <p className="reading-status error">The tool's result could not be drawn.</p>}
       <Reading reading={reading} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
+      <FollowUps key={casting.id} castingId={casting.id} readingState={reading.state} readingText={reading.text} />
       <div className="casting-actions">
         <button type="button" className="chip" onClick={onRecast}><RotateCw size={13} aria-hidden="true" /> Recast</button>
         <button type="button" className="chip danger" onClick={onDelete}><Trash2 size={13} aria-hidden="true" /> Delete</button>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
-import type { Casting, ReadingEvent, ReadingState } from '../types.ts'
+import type { Casting, FollowUp, ReadingEvent, ReadingState } from '../types.ts'
 
 export interface LiveReading {
   text: string
@@ -8,24 +8,23 @@ export interface LiveReading {
   error: string | null
 }
 
+const NOTHING: LiveReading = { text: '', state: 'none', error: null }
+
 /**
- * A casting's reading as it is written. The server owns the writing; this
- * follows it over the event stream whenever it is in progress, and shows
- * the stored reading otherwise. A reconnect gets the whole text so far, so
- * nothing is missed while the phone was asleep.
+ * Text the server is writing, as it is written: a reading, or the answer
+ * to a question under one. The server owns the writing; this follows it
+ * over the event stream whenever it is in progress, and shows the stored
+ * text otherwise. A reconnect gets the whole text so far, so nothing is
+ * missed while the phone was asleep.
  */
-export function useReading(casting: Casting | null, onSettled?: (id: string) => void): LiveReading {
-  const id = casting?.id ?? null
-  const stored: LiveReading = casting
-    ? { text: casting.reading, state: casting.readingState, error: casting.readingError }
-    : { text: '', state: 'none', error: null }
+export function useLiveText(id: string | null, stored: LiveReading, eventsUrl: (id: string) => string, onSettled?: (id: string) => void): LiveReading {
   const [live, setLive] = useState<{ id: string; reading: LiveReading } | null>(null)
 
   useEffect(() => {
-    if (!id || casting?.readingState !== 'writing') return undefined
-    const source = new EventSource(api.eventsUrl(id))
+    if (!id || stored.state !== 'writing') return undefined
+    const source = new EventSource(eventsUrl(id))
     let text = ''
-    // Written or failed: the stream is over, and whoever holds the casting can fetch the kept copy.
+    // Written or failed: the stream is over, and whoever holds the record can fetch the kept copy.
     const settle = (): void => { source.close(); onSettled?.(id) }
     source.onmessage = (e: MessageEvent<string>) => {
       const event = JSON.parse(e.data) as ReadingEvent
@@ -51,8 +50,20 @@ export function useReading(casting: Casting | null, onSettled?: (id: string) => 
     }
     // EventSource reconnects by itself; the snapshot on reconnect resets `text`.
     return () => source.close()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onSettled is a stable callback from App
-  }, [id, casting?.readingState])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onSettled and eventsUrl are stable
+  }, [id, stored.state])
 
-  return live && live.id === id && (casting?.readingState === 'writing' || live.reading.state !== 'writing') ? live.reading : stored
+  return live && live.id === id && (stored.state === 'writing' || live.reading.state !== 'writing') ? live.reading : stored
+}
+
+/** A casting's reading as it is written. */
+export function useReading(casting: Casting | null, onSettled?: (id: string) => void): LiveReading {
+  const stored: LiveReading = casting ? { text: casting.reading, state: casting.readingState, error: casting.readingError } : NOTHING
+  return useLiveText(casting?.id ?? null, stored, api.eventsUrl, onSettled)
+}
+
+/** A follow-up's answer as it is written. */
+export function useAnswer(followUp: FollowUp, onSettled?: (id: string) => void): LiveReading {
+  const stored: LiveReading = { text: followUp.answer, state: followUp.state, error: followUp.error }
+  return useLiveText(followUp.id, stored, api.followUpEventsUrl, onSettled)
 }

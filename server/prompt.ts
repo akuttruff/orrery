@@ -1,4 +1,4 @@
-import type { Casting, Profile } from '../src/types.ts'
+import type { Casting, FollowUp, Profile } from '../src/types.ts'
 import { parseWheel } from '../src/lib/chartWheel.ts'
 import { readingsInput } from '../src/lib/readings.ts'
 import type { WriteRequest } from './model.ts'
@@ -63,8 +63,51 @@ function ask(casting: Casting): { task: string; data: string } {
   }
 }
 
+const person = (profile: Profile, now: Date): string =>
+  `The person: ${profile.name}, born ${profile.dateTime} in ${[profile.city, profile.state, profile.country].filter(Boolean).join(', ')}. Today is ${now.toDateString()}.`
+
+/**
+ * Ceilings on a reply, in tokens. LM Studio counts the model's reasoning
+ * against max_output_tokens, and a reasoning model given a year of data
+ * can think for a few thousand tokens before its first word, so these are
+ * far above the reading's own length: a stop for a runaway, not a budget.
+ */
+const READING_MAX_TOKENS = 8000
+const ANSWER_MAX_TOKENS = 4000
+
 export function readingRequest(casting: Casting, profile: Profile, now = new Date()): WriteRequest {
   const { task, data } = ask(casting)
-  const system = `${VOICE}\n\nThe person: ${profile.name}, born ${profile.dateTime} in ${[profile.city, profile.state, profile.country].filter(Boolean).join(', ')}. Today is ${now.toDateString()}.`
-  return { system, input: `${task}\n\nDATA:\n${data}`, maxTokens: 2400 }
+  return { system: `${VOICE}\n\n${person(profile, now)}`, input: `${task}\n\nDATA:\n${data}`, maxTokens: READING_MAX_TOKENS }
 }
+
+const ANSWER_VOICE = [
+  'You are the same astrologer, now answering a question the person asks about a reading you wrote for them.',
+  'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown. Short: a paragraph or two, a list if the question wants one. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
+  'Draw only on the chart data and the reading below. Never add a transit or position the data does not list, and never work out positions yourself. If the data cannot answer, say what it would take.',
+].join(' ')
+
+/** How much of a long reply the next question still sees. */
+const REPLAY_CHARS = 2000
+
+/**
+ * What the model is asked when a question is put to a reading: the data
+ * and the reading it wrote, the questions and answers so far, then the new
+ * question. LM Studio's chat endpoint takes a single turn, so the thread
+ * is replayed in the prompt each time.
+ */
+export function followUpRequest(casting: Casting, earlier: FollowUp[], question: string, profile: Profile, now = new Date()): WriteRequest {
+  const { data } = ask(casting)
+  const system = [
+    ANSWER_VOICE,
+    person(profile, now),
+    `THE CASTING: ${casting.title}.\nDATA:\n${data}`,
+    `THE READING YOU WROTE:\n${casting.reading}`,
+  ].join('\n\n')
+  const thread = earlier
+    .filter((f) => f.state === 'done' && f.answer)
+    .map((f) => `${profile.name} asked: ${f.question}\n\nYou answered: ${clip(f.answer, REPLAY_CHARS)}`)
+  const input = [...(thread.length ? ['THE CONVERSATION SO FAR:', ...thread] : []), `${profile.name} asks: ${question}`].join('\n\n')
+  return { system, input, maxTokens: ANSWER_MAX_TOKENS }
+}
+
+const clip = (text: string, max: number): string => (text.length <= max ? text : `${text.slice(0, max)}…`)

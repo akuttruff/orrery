@@ -2,13 +2,16 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Casting, CastingSummary, Config, Kind, Profile, ReadingState } from '../src/types.ts'
+import type { Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState } from '../src/types.ts'
 
 export interface ServerConfig extends Omit<Config, 'hasToken'> {
   apiToken: string
 }
 
-const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', apiToken: '', model: '', reasoning: 'low' }
+// Reasoning off: a reasoning model given a year of data thinks for minutes
+// before its first word, and the page shows nothing meanwhile. Settings can
+// turn it back on.
+const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', apiToken: '', model: '', reasoning: 'off' }
 
 /** The first chart the app opens with, until Settings says otherwise. */
 const DEFAULT_PROFILE: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
@@ -44,6 +47,16 @@ CREATE TABLE IF NOT EXISTS castings (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS castings_period ON castings (kind, period);
+CREATE TABLE IF NOT EXISTS follow_ups (
+  id TEXT PRIMARY KEY,
+  casting_id TEXT NOT NULL REFERENCES castings (id) ON DELETE CASCADE,
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL DEFAULT 'none',
+  error TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS follow_ups_casting ON follow_ups (casting_id, created_at);
 `
 
 interface CastingRow {
@@ -56,6 +69,15 @@ const fromRow = (r: CastingRow): Casting => ({
   readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at,
 })
 
+interface FollowUpRow {
+  id: string; casting_id: string; question: string; answer: string; state: string; error: string | null; created_at: number
+}
+
+const followUpFromRow = (r: FollowUpRow): FollowUp => ({
+  id: r.id, castingId: r.casting_id, question: r.question, answer: r.answer,
+  state: r.state as ReadingState, error: r.error, createdAt: r.created_at,
+})
+
 export const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 export class Store {
@@ -65,6 +87,7 @@ export class Store {
     fs.mkdirSync(dataDir, { recursive: true })
     this.db = new DatabaseSync(path.join(dataDir, 'orrery.sqlite'))
     this.db.exec('PRAGMA journal_mode = WAL')
+    this.db.exec('PRAGMA foreign_keys = ON')
     this.db.exec(SCHEMA)
     this.seed(seedFrom)
   }
@@ -149,9 +172,39 @@ export class Store {
     return this.db.prepare('DELETE FROM castings WHERE id = ?').run(id).changes > 0
   }
 
-  /** A reading left 'writing' by a server that stopped mid-sentence is failed, not forever pending. */
+  // --- follow-up questions under a reading ------------------------------
+
+  listFollowUps(castingId: string): FollowUp[] {
+    const rows = this.db.prepare('SELECT * FROM follow_ups WHERE casting_id = ? ORDER BY created_at, rowid').all(castingId) as unknown as FollowUpRow[]
+    return rows.map(followUpFromRow)
+  }
+
+  getFollowUp(id: string): FollowUp | undefined {
+    const r = this.db.prepare('SELECT * FROM follow_ups WHERE id = ?').get(id) as FollowUpRow | undefined
+    return r ? followUpFromRow(r) : undefined
+  }
+
+  addFollowUp(castingId: string, question: string): FollowUp {
+    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now() }
+    this.db.prepare('INSERT INTO follow_ups (id, casting_id, question, answer, state, error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(f.id, f.castingId, f.question, '', 'none', null, f.createdAt)
+    return f
+  }
+
+  setAnswer(id: string, answer: string, state: ReadingState, error: string | null = null): void {
+    this.db.prepare('UPDATE follow_ups SET answer = ?, state = ?, error = ? WHERE id = ?').run(answer, state, error, id)
+  }
+
+  removeFollowUp(id: string): boolean {
+    return this.db.prepare('DELETE FROM follow_ups WHERE id = ?').run(id).changes > 0
+  }
+
+  /** A reading or answer left 'writing' by a server that stopped mid-sentence is failed, not forever pending. */
   settleInterrupted(): number {
-    return Number(this.db.prepare("UPDATE castings SET reading_state = 'failed', reading_error = 'The server restarted while this was being written.' WHERE reading_state = 'writing'").run().changes)
+    const why = 'The server restarted while this was being written.'
+    const readings = this.db.prepare("UPDATE castings SET reading_state = 'failed', reading_error = ? WHERE reading_state = 'writing'").run(why).changes
+    const answers = this.db.prepare("UPDATE follow_ups SET state = 'failed', error = ? WHERE state = 'writing'").run(why).changes
+    return Number(readings) + Number(answers)
   }
 
   close(): void { this.db.close() }

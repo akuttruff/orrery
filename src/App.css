@@ -178,6 +178,56 @@ input, select { font: inherit; }
 .reading-status { margin: 6px 0; font-size: 14px; color: var(--paper-dim); }
 .reading-status.error { color: var(--rust); }
 
+/* ====== Questions under the reading ====== */
+.followups { margin-top: 10px; }
+.followup-list { list-style: none; margin: 0; padding: 0; }
+.followup { margin: 0 0 14px; }
+.followup-q {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 6px;
+  margin: 0 0 8px 24px;
+  padding: 10px 6px 10px 14px;
+  border-radius: 14px 14px 4px 14px;
+  background: color-mix(in srgb, var(--moss) 18%, var(--bg-raised));
+  font-size: 15px;
+  line-height: 1.45;
+}
+.followup-q p { margin: 0; padding-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.icon-btn.small { width: 28px; height: 28px; flex: 0 0 auto; border-radius: 8px; }
+.followup-a { padding: 0 0 0 2px; }
+.followup-a .reading-body { font-size: 15px; }
+.followup-a .reading-body > :last-child { margin-bottom: 4px; }
+.followup-actions { display: flex; gap: 8px; }
+.followup-actions:empty { display: none; }
+
+.ask { margin: 8px 0 0; }
+.ask-label { display: block; margin: 0 0 6px; font-size: 13px; color: var(--paper-dim); }
+.ask-row { display: flex; align-items: flex-end; gap: 8px; }
+.ask-box {
+  flex: 1 1 auto;
+  min-width: 0;
+  resize: none;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--paper);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.ask-box:focus { outline: none; border-color: var(--moss); }
+.ask-box:disabled { opacity: 0.6; }
+.ask-send {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+  width: 44px; height: 44px;
+  border-radius: 999px;
+  border: none;
+  background: var(--moss);
+  color: var(--bg);
+}
+.ask-send:disabled { background: var(--moss-dim); opacity: 0.6; }
+
 /* ====== Moon ====== */
 .moon-now { margin: 0 0 4px; padding: 12px 14px; border-radius: var(--radius); background: var(--bg-raised); font-size: 15px; }
 .moon-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }

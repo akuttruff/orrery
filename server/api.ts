@@ -7,8 +7,8 @@ import { Astro, AstroToolError } from './astro.ts'
 import type { ToolCaller } from './astro.ts'
 import { castResult, periodFor, titleFor } from './cast.ts'
 import { listModels } from './model.ts'
-import { readingRequest } from './prompt.ts'
-import { Readings } from './readings.ts'
+import { followUpRequest, readingRequest } from './prompt.ts'
+import { Readings, answerOf } from './readings.ts'
 import { Store } from './store.ts'
 import type { ServerConfig } from './store.ts'
 
@@ -149,14 +149,19 @@ export function createMiddleware(state: ApiState): Handler {
       }).catch(fail)
       return undefined
     }
-    const m = /^\/api\/castings\/([^/]+)(?:\/(reading|events))?$/.exec(url)
+    const m = /^\/api\/castings\/([^/]+)(?:\/(reading|events|followups))?$/.exec(url)
     if (m) {
       const id = decodeURIComponent(m[1]!)
       const sub = m[2]
       const casting = store.getCasting(id)
       if (!casting) return json(res, 404, { error: 'No such casting' })
       if (!sub && method === 'GET') return json(res, 200, casting)
-      if (!sub && method === 'DELETE') { readings.stop(id); store.removeCasting(id); return json(res, 200, { ok: true }) }
+      if (!sub && method === 'DELETE') {
+        readings.stop(id)
+        for (const f of store.listFollowUps(id)) readings.stop(f.id)
+        store.removeCasting(id)
+        return json(res, 200, { ok: true })
+      }
       if (sub === 'reading' && method === 'POST') {
         const again = query.get('again') === '1'
         if (casting.readingState === 'done' && !again) return json(res, 200, casting)
@@ -165,6 +170,44 @@ export function createMiddleware(state: ApiState): Handler {
       }
       if (sub === 'reading' && method === 'DELETE') return json(res, 200, { stopped: readings.stop(id) })
       if (sub === 'events' && method === 'GET') { readings.subscribe(id, res); return undefined }
+      if (sub === 'followups' && method === 'GET') return json(res, 200, store.listFollowUps(id))
+      if (sub === 'followups' && method === 'POST') {
+        void readBody(req).then((body) => {
+          const question = (str(body.question) ?? '').trim()
+          if (!question) throw new Error('Ask something first')
+          if (question.length > 2000) throw new Error('Keep the question under 2000 characters')
+          const current = store.getCasting(id)!
+          if (current.readingState === 'writing' || !current.reading) throw new Error('Wait for the reading to be written, then ask')
+          const earlier = store.listFollowUps(id)
+          if (earlier.some((f) => f.state === 'writing')) throw new Error('One answer at a time')
+          const followUp = store.addFollowUp(id, question)
+          readings.start(followUp.id, followUpRequest(current, earlier, question, store.getProfile()), answerOf(store, followUp.id))
+          json(res, 202, store.getFollowUp(followUp.id))
+        }).catch(fail)
+        return undefined
+      }
+    }
+
+    // --- follow-up questions ---------------------------------------------
+    const f = /^\/api\/followups\/([^/]+)(?:\/(answer|events))?$/.exec(url)
+    if (f) {
+      const id = decodeURIComponent(f[1]!)
+      const sub = f[2]
+      const followUp = store.getFollowUp(id)
+      if (!followUp) return json(res, 404, { error: 'No such question' })
+      if (!sub && method === 'GET') return json(res, 200, followUp)
+      if (!sub && method === 'DELETE') { readings.stop(id); store.removeFollowUp(id); return json(res, 200, { ok: true }) }
+      if (sub === 'answer' && method === 'POST') {
+        // Ask again: a failed answer, or one cut off, is written afresh with the thread as it was before this question.
+        if (followUp.state === 'writing') return json(res, 202, followUp)
+        const casting = store.getCasting(followUp.castingId)
+        if (!casting) return json(res, 404, { error: 'No such casting' })
+        const earlier = store.listFollowUps(casting.id).filter((x) => x.createdAt < followUp.createdAt || (x.createdAt === followUp.createdAt && x.id !== followUp.id && x.id < followUp.id))
+        readings.start(id, followUpRequest(casting, earlier, followUp.question, store.getProfile()), answerOf(store, id))
+        return json(res, 202, store.getFollowUp(id))
+      }
+      if (sub === 'answer' && method === 'DELETE') return json(res, 200, { stopped: readings.stop(id) })
+      if (sub === 'events' && method === 'GET') { readings.subscribe(id, res, answerOf(store, id)); return undefined }
     }
     return json(res, 404, { error: 'Not found' })
   }
