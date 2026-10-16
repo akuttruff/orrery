@@ -7,7 +7,7 @@ import { Astro, AstroToolError } from './astro.ts'
 import type { ToolCaller } from './astro.ts'
 import { castResult, periodFor, titleFor } from './cast.ts'
 import { listModels, writeWithModel } from './model.ts'
-import { Memories, MemoryInputError } from './memory.ts'
+import { Memories, MemoryInputError, memoryPath } from './memory.ts'
 import { parseFacts, rememberRequest } from './remember.ts'
 import { followUpRequest, readingRequest } from './prompt.ts'
 import { Readings, answerOf } from './readings.ts'
@@ -20,7 +20,7 @@ export interface ApiOptions {
   call?: ToolCaller
   readings?: Readings
   store?: Store
-  /** The shared memory file; defaults to MEMORY_DB or ~/.lm-memory/memory.sqlite. */
+  /** Orrery's memory file; defaults to memory.sqlite in the data dir. */
   memoryDb?: string
   /** The model, for the short calls that are not streamed to a page (what a question reveals). */
   write?: typeof writeWithModel
@@ -79,7 +79,8 @@ export function createApiState(options: ApiOptions = {}): ApiState {
   const astro = options.call ? null : new Astro()
   const call: ToolCaller = options.call ?? ((name, args) => astro!.call(name, args))
   const readings = options.readings ?? new Readings(store)
-  return { store, call, readings, memories: new Memories(options.memoryDb), write: options.write ?? writeWithModel, casting: new Map() }
+  const memories = new Memories(options.memoryDb ?? memoryPath(path.resolve(options.dir ?? '.data')))
+  return { store, call, readings, memories, write: options.write ?? writeWithModel, casting: new Map() }
 }
 
 export function createMiddleware(state: ApiState): Handler {

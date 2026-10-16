@@ -8,9 +8,9 @@ interface MemoriesSheetProps {
 }
 
 /**
- * Everything remembered about you, shared with lm-chat: to read, correct,
- * add to or delete, so a wrong memory gets fixed instead of shaping every
- * reading. Readings use these only for castings with memory on.
+ * Everything Orrery remembers about you: to read, correct, add to or
+ * delete, so a wrong memory gets fixed instead of shaping every reading.
+ * Readings use these only for castings with memory on.
  */
 export default function MemoriesSheet({ onClose }: MemoriesSheetProps) {
   const [items, setItems] = useState<Memory[] | null>(null)
@@ -58,7 +58,7 @@ export default function MemoriesSheet({ onClose }: MemoriesSheetProps) {
       </header>
       <div className="sheet-body">
         <p className="memory-hint">
-          What the model knows about you, shared with lm-chat. A reading with memory on draws on these where the chart touches them. Questions you ask here add to them.
+          What Orrery knows about you, kept here and nowhere else. A reading with memory on draws on these where the chart touches them. Questions you ask with memory on add to them.
         </p>
         <form className="memory-add" onSubmit={(e) => { e.preventDefault(); void add() }}>
           <input value={adding} placeholder="Add something worth remembering" aria-label="New memory" maxLength={1000} onChange={(e) => setAdding(e.target.value)} />

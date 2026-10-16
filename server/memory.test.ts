@@ -12,7 +12,7 @@ beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orrery-mem-')); 
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }))
 
 describe('the shared pool', () => {
-  it('reads as empty until something is saved, then makes the file with the MCP server\'s schema and a private mode', () => {
+  it('reads as empty until something is saved, then makes the file with a private mode', () => {
     const m = new Memories(file)
     expect(m.list()).toEqual([])
     expect(fs.existsSync(file)).toBe(false)

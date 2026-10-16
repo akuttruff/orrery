@@ -34,17 +34,18 @@ the transit tables), copied rather than shared.
 
 ## Memory
 
-Orrery shares the memory pool lm-chat and LM Studio's memory tools keep
-(`MEMORY_DB`, else `~/.lm-memory/memory.sqlite`; `server/memory.ts` writes
-the same table). A casting read **with memory on** gets what is known about
-the person in its prompt, framed as information to use only where the chart
-touches it, and the page says how many memories the reading drew on. Memory
-is off by default; Settings sets the default and each casting has its own
-switch. Orrery's model has no tools, so the server does the remembering: with
-memory on, each question asked under a reading is also sent to the model for
-the durable facts it reveals (`server/remember.ts`), which are saved to the
-pool and shown under the answer with a Forget button. The Memories screen
-(from Settings or the reading) lists, corrects, adds and deletes.
+Orrery keeps its own memories, in `memory.sqlite` beside the castings
+database (`.data/` for the real instance, `.data-dev/` for `npm run dev`),
+separate from lm-chat's pool. A casting read **with memory on** gets what is
+known about the person in its prompt, framed as information to use only
+where the chart touches it, and the page says how many memories the reading
+drew on. Memory is off by default; Settings sets the default and each
+casting has its own switch. Orrery's model has no tools, so the server does
+the remembering: with memory on, each question asked under a reading is also
+sent to the model for the durable facts it reveals (`server/remember.ts`),
+which are saved and shown under the answer with a Forget button. The
+Memories screen (from Settings or the reading) lists, corrects, adds and
+deletes.
 
 ## Running
 

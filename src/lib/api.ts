@@ -37,7 +37,7 @@ export const api = {
   removeFollowUp: (id: string) => request<{ ok: boolean }>(`/api/followups/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   followUpEventsUrl: (id: string) => `/api/followups/${encodeURIComponent(id)}/events`,
 
-  // The memory pool shared with lm-chat.
+  // Orrery's own memories.
   memories: () => request<Memory[]>('/api/memories'),
   remember: (text: string) => request<Memory>('/api/memories', jsonInit('POST', { text })),
   updateMemory: (id: string, text: string) => request<Memory>(`/api/memories/${encodeURIComponent(id)}`, jsonInit('PATCH', { text })),

@@ -24,7 +24,7 @@ export interface Config {
   memoryDefault: 'on' | 'off'
 }
 
-/** One saved memory, as the memory MCP server stores it (see server/memory.ts). */
+/** One thing Orrery remembers about the person (see server/memory.ts). */
 export interface Memory {
   id: string
   text: string

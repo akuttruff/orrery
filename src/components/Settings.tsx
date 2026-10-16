@@ -96,7 +96,7 @@ export default function Settings({ profile, config, onSaved, onClose, onMemories
           <input type="checkbox" checked={c.memoryDefault === 'on'} onChange={(e) => setC({ ...c, memoryDefault: e.target.checked ? 'on' : 'off' })} />
           <span>
             <span className="toggle-label">Read with memories by default</span>
-            <span className="toggle-hint">What the model knows about you, shared with lm-chat, goes into readings and answers where the chart touches it. Each casting can switch this on or off for itself.</span>
+            <span className="toggle-hint">What Orrery has learned about you from your questions goes into readings and answers where the chart touches it. Each casting can switch this on or off for itself.</span>
           </span>
         </label>
         <button type="button" className="chip" onClick={onMemories}>Manage memories</button>

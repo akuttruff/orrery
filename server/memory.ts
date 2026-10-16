@@ -1,17 +1,16 @@
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import type { Memory } from '../src/types.ts'
 
 /**
- * The memory pool shared with lm-chat and LM Studio's memory tools
- * (~/Code/lm-memory-mcp owns the schema; this is the same table). lm-chat's
- * model saves facts through tools; Orrery's model has none, so the server
- * saves what a question reveals (server/remember.ts) and reads the pool into
- * the reading when a casting has memory on. One file, so what is learned in
- * a chat shapes a reading and the other way round.
+ * Orrery's own memory pool: what the readings know about the person, kept
+ * in memory.sqlite beside the castings database and nowhere else. (The
+ * table is the one lm-chat's memory server uses, so the file would read
+ * there too, but the two are deliberately separate.) Orrery's model has no
+ * tools, so the server saves what a question reveals (server/remember.ts)
+ * and reads the pool into the reading when a casting has memory on.
  */
 
 export const MAX_TEXT = 1000
@@ -19,7 +18,8 @@ export const MAX_MEMORIES = 500
 
 export class MemoryInputError extends Error {}
 
-export const memoryPath = (): string => process.env.MEMORY_DB || path.join(os.homedir(), '.lm-memory', 'memory.sqlite')
+/** The pool's file, beside the castings database. */
+export const memoryPath = (dataDir: string): string => path.join(dataDir, 'memory.sqlite')
 
 /** For spotting the same memory worded with different case, spacing or a trailing period. */
 const normalize = (s: string): string => s.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[.!]+$/, '')
@@ -35,13 +35,12 @@ function clean(text: unknown): string {
 }
 
 export class Memories {
-  constructor(private readonly file: string = memoryPath()) {}
+  constructor(private readonly file: string) {}
 
   /**
-   * Opened per call, not held: the MCP server and lm-chat write the same
-   * file from their own processes, and a short-lived connection never sits
-   * on a lock. Reading never creates the file; saving does, with the
-   * server's own schema and a private mode.
+   * Opened per call, not held: a short-lived connection never sits on a
+   * lock and the file can be swapped or removed between calls. Reading
+   * never creates the file; saving does, with a private mode.
    */
   private use<T>(fallback: T, fn: (db: DatabaseSync) => T, create = false): T {
     if (!fs.existsSync(this.file)) {
