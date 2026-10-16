@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Full-bleed opaque ground: iOS masks to its own squircle. -->
+  <rect width="512" height="512" fill="#1B1D1A"/>
+  <!-- An orrery seen from above: the Sun, three orbits, three planets. -->
+  <g fill="none" stroke="#EDE8DC" stroke-width="7">
+    <circle cx="256" cy="256" r="92" opacity="0.55"/>
+    <circle cx="256" cy="256" r="150" opacity="0.7"/>
+    <circle cx="256" cy="256" r="208"/>
+  </g>
+  <circle cx="256" cy="256" r="30" fill="#D9B86A"/>
+  <circle cx="256" cy="164" r="13" fill="#EDE8DC"/>
+  <circle cx="128" cy="334" r="17" fill="#8FA382"/>
+  <circle cx="403" cy="376" r="21" fill="#C9B4EC"/>
+</svg>

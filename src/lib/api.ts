@@ -1,0 +1,29 @@
+import type { Casting, CastingSummary, Config, Kind, Profile } from '../types.ts'
+
+/** The server, from the page. Every call throws with the server's message on failure. */
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(url, init)
+  const body = await r.json().catch(() => ({})) as T & { error?: string }
+  if (!r.ok) throw new Error(body.error || `${r.status} from ${url}`)
+  return body
+}
+
+const jsonInit = (method: string, body: unknown): RequestInit => ({
+  method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+})
+
+export const api = {
+  profile: () => request<Profile>('/api/profile'),
+  saveProfile: (patch: Partial<Profile>) => request<Profile>('/api/profile', jsonInit('PUT', patch)),
+  config: () => request<Config>('/api/config'),
+  saveConfig: (patch: Record<string, string>) => request<Config>('/api/config', jsonInit('PUT', patch)),
+  models: () => request<{ models: string[]; loaded: string[]; error: string | null }>('/api/models'),
+  castings: () => request<CastingSummary[]>('/api/castings'),
+  cast: (kind: Kind, fresh = false) => request<Casting>('/api/castings', jsonInit('POST', { kind, fresh })),
+  casting: (id: string) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`),
+  startReading: (id: string, again = false) => request<Casting>(`/api/castings/${encodeURIComponent(id)}/reading${again ? '?again=1' : ''}`, { method: 'POST' }),
+  stopReading: (id: string) => request<{ stopped: boolean }>(`/api/castings/${encodeURIComponent(id)}/reading`, { method: 'DELETE' }),
+  remove: (id: string) => request<{ ok: boolean }>(`/api/castings/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  eventsUrl: (id: string) => `/api/castings/${encodeURIComponent(id)}/events`,
+}
