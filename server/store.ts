@@ -11,7 +11,7 @@ export interface ServerConfig extends Omit<Config, 'hasToken'> {
 // Reasoning off: a reasoning model given a year of data thinks for minutes
 // before its first word, and the page shows nothing meanwhile. Settings can
 // turn it back on.
-const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', apiToken: '', model: '', reasoning: 'off' }
+const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', apiToken: '', model: '', reasoning: 'low' }
 
 /** The first chart the app opens with, until Settings says otherwise. */
 const DEFAULT_PROFILE: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
