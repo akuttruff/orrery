@@ -22,7 +22,7 @@ function serve(castings: Casting[]) {
       const c = castings.find((x) => x.id === one[1])
       return c ? reply(200, c) : reply(404, { error: 'No such casting' })
     }
-    if (/\/followups$/.test(url)) return reply(200, [])
+    if (url.endsWith('/followups')) return reply(200, [])
     return reply(404, { error: `unexpected ${url}` })
   }))
   // jsdom has no EventSource; the reading in view would follow the stream with one.

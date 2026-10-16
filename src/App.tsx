@@ -54,23 +54,29 @@ export default function App() {
     refreshRecent()
   }, [refreshRecent])
 
-  /** Go where the address says: a casting by id, or home. */
-  const visit = useCallback(() => {
+  /** Open the casting the address names, if any; an address for one that is gone is cleared. */
+  const openAddressed = useCallback(() => {
     const id = castingIdIn(window.location.hash)
-    if (!id) { setCurrent(null); refreshRecent(); return }
+    if (!id) return
     api.casting(id).then(setCurrent).catch(() => {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
       setCurrent(null)
     })
-  }, [refreshRecent])
+  }, [])
 
   useEffect(() => {
     api.profile().then(setProfile).catch((e: Error) => setError(e.message))
     api.config().then(setConfig).catch((e: Error) => setError(e.message))
-    visit()
-    window.addEventListener('popstate', visit)
-    return () => window.removeEventListener('popstate', visit)
-  }, [visit])
+    refreshRecent()
+    openAddressed()
+    // The browser's Back or Forward: go where the address now says.
+    const onPop = () => {
+      if (castingIdIn(window.location.hash)) openAddressed()
+      else { setCurrent(null); refreshRecent() }
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [openAddressed, refreshRecent])
 
   // Readings go on being written on the server after a Back; the home screen keeps their state fresh while any are.
   const writing = recent.filter((c) => c.readingState === 'writing')

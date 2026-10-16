@@ -1,11 +1,10 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react'
+import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import WheelViewer from './WheelViewer'
 import {
   aspectDetail, aspectFamily, aspectSentence, aspectsOfPoint, describePoint, elementOf, fromLongitude, natalLongitude,
   polar, screenAngle, signDegrees, spread, SIGN_GLYPHS, SIGN_NAMES,
-  type AspectFamily, type Element as ZodiacElement, type Ring as RingName, type Wheel, type WheelPoint, aspectGlyph, hasRetrograde} from '../lib/chartWheel.ts'
-import { downloadBlob } from '../lib/download.ts'
+  type AspectFamily, type Element as ZodiacElement, type Ring as RingName, type Wheel, type WheelPoint, aspectGlyph, hasRetrograde, wheelTitle } from '../lib/chartWheel.ts'
+import { wheelHashFor } from '../lib/route.ts'
 import { readingFor } from '../lib/readings.ts'
 import { placeTip, type Placement, type Point, type Subject } from '../lib/tipPlacement.ts'
 
@@ -127,39 +126,6 @@ function Ring({ name, points, band, asc, glyphSize, color, degreeColor, onPoint,
   )
 }
 
-/** Rasterises the wheel on screen into a square PNG and offers it as a download. */
-async function savePng(svg: SVGSVGElement, fileName: string): Promise<void> {
-  const copy = svg.cloneNode(true) as SVGSVGElement
-  const px = 1600
-  copy.setAttribute('width', String(px))
-  copy.setAttribute('height', String(px))
-  copy.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
-  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)], { type: 'image/svg+xml;charset=utf-8' }))
-  try {
-    const img = new Image()
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve()
-      img.onerror = () => reject(new Error('could not draw the wheel'))
-      img.src = url
-    })
-    const canvas = document.createElement('canvas')
-    canvas.width = px
-    canvas.height = px
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.fillStyle = PALETTE.bg
-    ctx.fillRect(0, 0, px, px)
-    ctx.drawImage(img, 0, 0, px, px)
-    const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-    if (png) downloadBlob(fileName, png)
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
-
-/** "2026-10-13 05:58" as a file-name-safe stamp: 2026-10-13-0558. */
-const stamp = (dateTime: string | null): string => (dateTime ?? '').replace(/[^0-9]+/g, '-').replace(/^-|-$/g, '') || 'chart'
-
 /**
  * What is under the pointer: a planet on a ring, or one aspect line. From
  * a finger it is `held`: the popup stays up after the finger lifts, until
@@ -274,18 +240,13 @@ function WheelTip({ wheel, hover, svg, readings }: { wheel: Wheel; hover: Hover;
 }
 
 /** The picture itself; drawn in the card, and again full screen in the viewer. */
-function WheelSvg({ wheel, title, svgRef, readings }: { wheel: Wheel; title: string; svgRef?: Ref<SVGSVGElement>; readings?: Record<string, string> }) {
+export function WheelSvg({ wheel, title, readings }: { wheel: Wheel; title: string; readings?: Record<string, string> }) {
   const asc = wheel.angles.Asc
   const rings = layout(wheel.kind)
   // The element itself, as state: the popup measures against it, and a ref read during render is not allowed.
   const [own, setOwn] = useState<SVGSVGElement | null>(null)
   const [hover, setHover] = useState<Hover | null>(null)
-  const setRef = useCallback((el: SVGSVGElement | null) => {
-    setOwn(el)
-    if (typeof svgRef === 'function') svgRef(el)
-    else if (svgRef) svgRef.current = el
-  }, [svgRef])
-  /** The last press came from a finger: the click that follows must not open the viewer. */
+  /** The last press came from a finger: the click that follows must not open the wheel's own page. */
   const pressedByTouch = useRef(false)
   /** Comes to, leaves or presses something: a mouse hovers, a finger holds. */
   const touch = (next: Hover, e: React.PointerEvent, what: Touch) => {
@@ -301,7 +262,7 @@ function WheelSvg({ wheel, title, svgRef, readings }: { wheel: Wheel; title: str
   const onPoint = (ring: RingName, point: WheelPoint, x: number, y: number, e: React.PointerEvent, what: Touch) =>
     touch({ kind: 'point', ring, point, x, y, held: false }, e, what)
   const onPointClick = (e: React.MouseEvent) => {
-    if (pressedByTouch.current) e.stopPropagation()
+    if (pressedByTouch.current) { e.stopPropagation(); e.preventDefault() }
     pressedByTouch.current = false
   }
   /** A finger on the wheel's empty parts lets a held popup go. */
@@ -333,7 +294,7 @@ function WheelSvg({ wheel, title, svgRef, readings }: { wheel: Wheel; title: str
     <>
       {hover && <WheelTip wheel={wheel} hover={hover} svg={own} readings={readings} />}
       <svg
-        ref={setRef}
+        ref={setOwn}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         role="img"
         aria-label={title}
@@ -449,25 +410,18 @@ function WheelSvg({ wheel, title, svgRef, readings }: { wheel: Wheel; title: str
   )
 }
 
-function ChartWheel({ wheel, readings }: { wheel: Wheel; readings?: Record<string, string> }) {
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [open, setOpen] = useState(false)
-  const title = wheel.kind === 'transit'
-    ? `Transits ${wheel.dateTime ?? ''} over the natal chart of ${wheel.natalDateTime ?? ''}`.trim()
-    : `Chart wheel for ${wheel.dateTime ?? 'the chart'}`
-  const fileName = wheel.kind === 'transit' ? `transits-${stamp(wheel.dateTime)}.png` : `chart-${stamp(wheel.dateTime)}.png`
-  const save = () => { if (svgRef.current) void savePng(svgRef.current, fileName).catch(() => { /* nothing to save */ }) }
+/**
+ * A casting's wheel on its card. A tap opens it on a page of its own in a
+ * new tab (WheelPage), where the browser's own pinch and zoom apply.
+ */
+function ChartWheel({ wheel, castingId, readings }: { wheel: Wheel; castingId: string; readings?: Record<string, string> }) {
+  const title = wheelTitle(wheel)
 
   return (
     <figure className="wheel">
-      <button type="button" className="wheel-open" aria-label="Open the wheel full screen to zoom" title="Tap to zoom" onClick={() => setOpen(true)}>
-        <WheelSvg wheel={wheel} title={title} svgRef={svgRef} readings={readings} />
-      </button>
-      {open && (
-        <WheelViewer title={title} onSave={save} onClose={() => setOpen(false)}>
-          <WheelSvg wheel={wheel} title={title} readings={readings} />
-        </WheelViewer>
-      )}
+      <a className="wheel-open" href={wheelHashFor(castingId)} target="_blank" rel="noopener" aria-label="Open the wheel in a new tab" title="Open in a new tab">
+        <WheelSvg wheel={wheel} title={title} readings={readings} />
+      </a>
       <figcaption className="wheel-caption">
         <span className="wheel-title">{title}</span>
         <span className="wheel-legend" aria-hidden="true">

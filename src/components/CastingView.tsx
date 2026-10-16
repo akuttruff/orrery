@@ -42,7 +42,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onMemori
         <h2>{casting.title}</h2>
         <p className="casting-sub">Cast {castAt.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
       </header>
-      {wheel && <ChartWheel wheel={wheel} readings={NO_READINGS} />}
+      {wheel && <ChartWheel wheel={wheel} castingId={casting.id} readings={NO_READINGS} />}
       {wheel?.kind === 'transit' && <ActiveTransits wheel={wheel} />}
       {forecast && <ForecastTransits table={forecast} />}
       {casting.kind === 'moon' && <MoonView result={casting.result} />}
