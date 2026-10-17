@@ -37,6 +37,12 @@ export type Remembered = Pick<Memory, 'id' | 'text'>
 
 export type ReadingState = 'none' | 'writing' | 'done' | 'failed'
 
+/** One tool the model called while answering: ok is null until the call returns. */
+export interface ToolUse {
+  name: string
+  ok: boolean | null
+}
+
 /**
  * One cast: a tool result (the chart or forecast, as the tool's JSON text)
  * and the reading the model wrote over it. Cast once per period and kept,
@@ -82,11 +88,14 @@ export interface FollowUp {
   remembered: Remembered[] | null
   /** The saved memories the answer was written with, by id; empty when written without. */
   memoriesUsed: string[]
+  /** The astrology tools the model called for this answer, in order. */
+  tools: ToolUse[]
 }
 
 /** What the reading stream sends. */
 export type ReadingEvent =
-  | { type: 'snapshot'; reading: string; state: ReadingState; error: string | null }
+  | { type: 'snapshot'; reading: string; state: ReadingState; error: string | null; tools?: ToolUse[] }
   | { type: 'delta'; text: string }
+  | { type: 'tools'; tools: ToolUse[] }
   | { type: 'done'; reading: string }
   | { type: 'error'; message: string }

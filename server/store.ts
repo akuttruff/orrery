@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered } from '../src/types.ts'
+import type { Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ToolUse } from '../src/types.ts'
 
 export interface ServerConfig extends Omit<Config, 'hasToken'> {
   apiToken: string
@@ -78,7 +78,15 @@ const fromRow = (r: CastingRow): Casting => ({
 
 interface FollowUpRow {
   id: string; casting_id: string; question: string; answer: string; state: string; error: string | null; created_at: number
-  remembered: string | null; memories_used: string | null
+  remembered: string | null; memories_used: string | null; tools: string | null
+}
+
+const parseTools = (text: string | null): ToolUse[] => {
+  if (!text) return []
+  try {
+    const v = JSON.parse(text) as unknown
+    return Array.isArray(v) ? v.filter((x): x is ToolUse => !!x && typeof x === 'object' && typeof (x as ToolUse).name === 'string') : []
+  } catch { return [] }
 }
 
 const parseRemembered = (text: string | null): Remembered[] | null => {
@@ -92,7 +100,7 @@ const parseRemembered = (text: string | null): Remembered[] | null => {
 const followUpFromRow = (r: FollowUpRow): FollowUp => ({
   id: r.id, castingId: r.casting_id, question: r.question, answer: r.answer,
   state: r.state as ReadingState, error: r.error, createdAt: r.created_at, remembered: parseRemembered(r.remembered),
-  memoriesUsed: parseIds(r.memories_used),
+  memoriesUsed: parseIds(r.memories_used), tools: parseTools(r.tools),
 })
 
 export const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -120,6 +128,7 @@ export class Store {
     if (!has('follow_ups', 'remembered')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN remembered TEXT')
     if (!has('castings', 'memory_excluded')) this.db.exec('ALTER TABLE castings ADD COLUMN memory_excluded TEXT')
     if (!has('follow_ups', 'memories_used')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN memories_used TEXT')
+    if (!has('follow_ups', 'tools')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN tools TEXT')
   }
 
   private seed(seedFrom: string): void {
@@ -233,7 +242,7 @@ export class Store {
   }
 
   addFollowUp(castingId: string, question: string, memoriesUsed: string[] = []): FollowUp {
-    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now(), remembered: null, memoriesUsed }
+    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now(), remembered: null, memoriesUsed, tools: [] }
     this.db.prepare('INSERT INTO follow_ups (id, casting_id, question, answer, state, error, created_at, memories_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .run(f.id, f.castingId, f.question, '', 'none', null, f.createdAt, JSON.stringify(memoriesUsed))
     return f
@@ -242,6 +251,11 @@ export class Store {
   /** Which memories the answer now being written draws on (asked again, it may differ). */
   setAnswerMemoriesUsed(id: string, ids: string[]): void {
     this.db.prepare('UPDATE follow_ups SET memories_used = ? WHERE id = ?').run(JSON.stringify(ids), id)
+  }
+
+  /** The tools the model has called for the answer so far. */
+  setAnswerTools(id: string, tools: ToolUse[]): void {
+    this.db.prepare('UPDATE follow_ups SET tools = ? WHERE id = ?').run(JSON.stringify(tools), id)
   }
 
   setAnswer(id: string, answer: string, state: ReadingState, error: string | null = null): void {

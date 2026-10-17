@@ -1,7 +1,7 @@
 import type { ServerResponse } from 'node:http'
-import type { ReadingEvent, ReadingState } from '../src/types.ts'
+import type { ReadingEvent, ReadingState, ToolUse } from '../src/types.ts'
 import type { WriteRequest } from './model.ts'
-import { ModelError, writeWithModel } from './model.ts'
+import { ModelError, stripLeakedThinking, writeWithModel } from './model.ts'
 import type { Store } from './store.ts'
 
 /**
@@ -17,11 +17,15 @@ export interface Kept {
   text: string
   state: ReadingState
   error: string | null
+  /** The tools called while it was written, for a target that keeps them. */
+  tools?: ToolUse[]
 }
 
 export interface Target {
   get(): Kept | undefined
   set(text: string, state: ReadingState, error?: string | null): void
+  /** The tools called so far, each time the list changes; a target with no use for them leaves this out. */
+  tools?(uses: ToolUse[]): void
 }
 
 /** A casting's reading as a target. */
@@ -37,13 +41,15 @@ export const readingOf = (store: Store, id: string): Target => ({
 export const answerOf = (store: Store, id: string): Target => ({
   get: () => {
     const f = store.getFollowUp(id)
-    return f ? { text: f.answer, state: f.state, error: f.error } : undefined
+    return f ? { text: f.answer, state: f.state, error: f.error, tools: f.tools } : undefined
   },
   set: (text, state, error) => store.setAnswer(id, text, state, error),
+  tools: (uses) => store.setAnswerTools(id, uses),
 })
 
 interface Run {
   text: string
+  tools: ToolUse[]
   listeners: Set<ServerResponse>
   controller: AbortController
 }
@@ -60,16 +66,21 @@ export class Readings {
   /** Start writing into a target, unless it is already being written. */
   start(id: string, req: WriteRequest, target: Target = readingOf(this.store, id)): void {
     if (this.runs.has(id)) return
-    const run: Run = { text: '', listeners: new Set(), controller: new AbortController() }
+    const run: Run = { text: '', tools: [], listeners: new Set(), controller: new AbortController() }
     this.runs.set(id, run)
     target.set('', 'writing')
+    target.tools?.([])
     void (async () => {
       try {
         const text = await this.write(this.store.getConfig(), req, (piece) => {
           run.text += piece
           this.broadcast(run, { type: 'delta', text: piece })
-        }, run.controller.signal)
-        const reading = text.trim()
+        }, run.controller.signal, undefined, (uses) => {
+          run.tools = uses
+          target.tools?.(uses)
+          this.broadcast(run, { type: 'tools', tools: uses })
+        })
+        const reading = stripLeakedThinking(text).trim()
         if (!reading) throw new ModelError('The model wrote nothing.')
         target.set(reading, 'done')
         this.broadcast(run, { type: 'done', reading })
@@ -103,8 +114,8 @@ export class Readings {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive' })
     const run = this.runs.get(id)
     const snapshot: ReadingEvent = run
-      ? { type: 'snapshot', reading: run.text, state: 'writing', error: null }
-      : { type: 'snapshot', reading: kept.text, state: kept.state, error: kept.error }
+      ? { type: 'snapshot', reading: run.text, state: 'writing', error: null, tools: run.tools }
+      : { type: 'snapshot', reading: kept.text, state: kept.state, error: kept.error, tools: kept.tools ?? [] }
     res.write(frame(snapshot))
     if (!run) { res.end(); return true }
     run.listeners.add(res)

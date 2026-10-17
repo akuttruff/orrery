@@ -40,10 +40,12 @@ describe('readingRequest', () => {
 
 describe('followUpRequest', () => {
   const read = casting({ kind: 'week', result: week, title: 'Week of Oct 12', period: '2026-10-12', reading: '### Monday\nSaturn leans in.', readingState: 'done' })
-  const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], ...over })
+  const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], tools: [], ...over })
 
   it('puts the data and the reading behind the question, in the same voice', () => {
     const req = followUpRequest(read, [], 'Is Thursday any good?', amie, new Date(2026, 9, 13))
+    expect(req.tools).toEqual(['mcp/astrology-v2'])
+    expect(req.system).toContain('use the astrology tools')
     expect(req.system).toContain('same astrologer')
     expect(req.system).toContain('Sam, born 1990-06-15 14:30')
     expect(req.system).toContain('THE CASTING: Week of Oct 12.\nDATA:\n')

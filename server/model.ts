@@ -1,15 +1,22 @@
+import type { ToolUse } from '../src/types.ts'
 import type { ServerConfig } from './store.ts'
 
 /**
  * One streamed reply from LM Studio's /api/v1/chat: the reading text as it
  * is written, reasoning left out. The same endpoint the chat app uses, so
- * the same models, token and reasoning levels apply.
+ * the same models, token and reasoning levels apply. A request can name
+ * LM Studio's MCP integrations; LM Studio then runs the tool calls itself,
+ * and the stream reports each one.
  */
 
 interface ChatEvent {
   type: string
   content?: string
   error?: { message?: string }
+  /** The tool events: `tool` is the plugin, the tool's own name comes with tool_call.name or .arguments; success and failure may name it or not. */
+  tool?: string
+  tool_name?: string
+  reason?: string
 }
 
 export interface WriteRequest {
@@ -17,9 +24,58 @@ export interface WriteRequest {
   input: string
   /** A ceiling on the reply, in tokens. */
   maxTokens?: number
+  /** LM Studio integrations the model may call, by plugin id ('mcp/<server>' from its mcp.json). */
+  tools?: string[]
+}
+
+/** Follows LM Studio's tool events: a call starts, gets its name, then succeeds or fails. */
+export class ToolTrail {
+  readonly uses: ToolUse[] = []
+
+  /** True when the event changed the trail. */
+  take(evt: ChatEvent): boolean {
+    switch (evt.type) {
+      case 'tool_call.start':
+        this.uses.push({ name: evt.tool_name || '', ok: null })
+        return true
+      case 'tool_call.name':
+      case 'tool_call.arguments': {
+        const name = evt.tool_name
+        if (!name) return false
+        const unnamed = this.uses.find((u) => u.ok === null && !u.name)
+        if (unnamed) { unnamed.name = name; return true }
+        if (this.uses.some((u) => u.ok === null && u.name === name)) return false
+        this.uses.push({ name, ok: null })
+        return true
+      }
+      case 'tool_call.success':
+      case 'tool_call.failure': {
+        const name = evt.tool_name
+        const use = (name && this.uses.find((u) => u.ok === null && u.name === name)) || this.uses.find((u) => u.ok === null)
+        if (!use) return false
+        use.ok = evt.type === 'tool_call.success'
+        if (name && !use.name) use.name = name
+        return true
+      }
+      default:
+        return false
+    }
+  }
 }
 
 export class ModelError extends Error {}
+
+/**
+ * A model that has just read a tool result sometimes writes its thinking
+ * as text and closes it with a bare </think> before the answer proper, or
+ * wraps it in <think> tags. Either way the thinking goes and the answer
+ * stays; the streamed text showed it, the kept copy does not.
+ */
+export function stripLeakedThinking(text: string): string {
+  const unwrapped = text.replace(/<think>[\s\S]*?<\/think>/g, '')
+  const close = unwrapped.lastIndexOf('</think>')
+  return close < 0 ? unwrapped : unwrapped.slice(close + '</think>'.length)
+}
 
 export async function writeWithModel(
   config: ServerConfig,
@@ -27,12 +83,15 @@ export async function writeWithModel(
   onDelta: (text: string) => void,
   signal?: AbortSignal,
   fetchImpl: typeof fetch = fetch,
+  /** Each change to the tools called so far, the whole list each time. */
+  onTools?: (uses: ToolUse[]) => void,
 ): Promise<string> {
   if (!config.model) throw new ModelError('No model chosen. Pick one in Settings.')
   const base = config.lmStudioUrl.replace(/\/+$/, '')
   const body: Record<string, unknown> = { model: config.model, input: req.input, system_prompt: req.system, stream: true }
   if (config.reasoning) body.reasoning = config.reasoning
   if (req.maxTokens) body.max_output_tokens = req.maxTokens
+  if (req.tools?.length) body.integrations = req.tools.map((id) => ({ type: 'plugin', id }))
 
   let res: Response
   try {
@@ -52,6 +111,7 @@ export async function writeWithModel(
   if (!res.body) throw new ModelError('LM Studio returned no stream')
 
   let text = ''
+  const trail = new ToolTrail()
   for await (const evt of sseEvents(res.body)) {
     if (evt.type === 'message.delta') {
       const piece = evt.content || ''
@@ -60,6 +120,8 @@ export async function writeWithModel(
       onDelta(piece)
     } else if (evt.type === 'error') {
       throw new ModelError(evt.error?.message || 'LM Studio reported an error')
+    } else if (evt.type.startsWith('tool_call.')) {
+      if (trail.take(evt)) onTools?.(trail.uses.map((u) => ({ ...u })))
     }
   }
   return text

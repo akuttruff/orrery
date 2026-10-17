@@ -9,14 +9,14 @@ import { Readings } from './readings.ts'
 import { Store } from './store.ts'
 import type { ApiState } from './api.ts'
 import type { WriteRequest } from './model.ts'
-import type { Casting, FollowUp, Memory } from '../src/types.ts'
+import type { Casting, FollowUp, Memory, ToolUse } from '../src/types.ts'
 
 /** The API on a real socket, with fake tools and a fake model, in a scratch data dir. */
-function serve(write: (req: WriteRequest, onDelta: (t: string) => void) => Promise<string>) {
+function serve(write: (req: WriteRequest, onDelta: (t: string) => void, onTools?: (uses: ToolUse[]) => void) => Promise<string>) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orrery-'))
   const store = new Store(dir, '/nonexistent/lm-chat.sqlite')
   const call = vi.fn(async (name: string, args: Record<string, unknown>) => JSON.stringify({ tool: name, args }))
-  const readings = new Readings(store, (_config, req, onDelta) => write(req, onDelta))
+  const readings = new Readings(store, (_config, req, onDelta, _signal, _fetch, onTools) => write(req, onDelta, onTools))
   // The memory pool lives in the scratch dir too, never in ~/.lm-memory.
   const state: ApiState = createApiState({ store, call, readings, memoryDb: path.join(dir, 'memory.sqlite'), write: (_config, req, onDelta) => write(req, onDelta) })
   const server = http.createServer((req, res) => createMiddleware(state)(req, res, () => { res.writeHead(404); res.end() }))
@@ -33,12 +33,12 @@ const post = (url: string, body?: unknown) => fetch(url, { method: 'POST', heade
 let ctx: Awaited<ReturnType<typeof serve>>
 // Writes a word at a time with a pause between, so a stream opened right after the start sees the deltas.
 const tick = () => new Promise((r) => setTimeout(r, 25))
-let writer = async (_req: WriteRequest, onDelta: (t: string) => void): Promise<string> => { await tick(); onDelta('Hello'); await tick(); onDelta(' there'); return 'Hello there' }
+let writer = async (_req: WriteRequest, onDelta: (t: string) => void, _onTools?: (uses: ToolUse[]) => void): Promise<string> => { await tick(); onDelta('Hello'); await tick(); onDelta(' there'); return 'Hello there' }
 
 beforeEach(async () => {
   // The shared setup stubs fetch for page tests; these talk to a real socket.
   vi.unstubAllGlobals()
-  ctx = await serve((req, onDelta) => writer(req, onDelta))
+  ctx = await serve((req, onDelta, onTools) => writer(req, onDelta, onTools))
 })
 afterEach(() => ctx.close())
 
@@ -114,7 +114,7 @@ describe('castings', () => {
 describe('questions under a reading', () => {
   const readAll = async (url: string) => {
     const events = await (await fetch(url)).text()
-    return events.split('\n\n').filter(Boolean).map((f) => JSON.parse(f.slice(5)) as { type: string; reading?: string })
+    return events.split('\n\n').filter(Boolean).map((f) => JSON.parse(f.slice(5)) as { type: string; reading?: string; tools?: ToolUse[] })
   }
   const castAndRead = async (): Promise<Casting> => {
     const c = await (await post(`${ctx.base}/api/castings`, { kind: 'month' })).json() as Casting
@@ -133,7 +133,14 @@ describe('questions under a reading', () => {
 
   it('answers on the server with the reading and the thread so far in the prompt, streams it and keeps it', async () => {
     const seen: WriteRequest[] = []
-    writer = async (req, onDelta) => { seen.push(req); await tick(); onDelta('Because '); await tick(); onDelta('Saturn.'); return 'Because Saturn.' }
+    writer = async (req, onDelta, onTools) => {
+      seen.push(req)
+      await tick()
+      onTools?.([{ name: 'verify_claim', ok: null }])
+      await tick()
+      onTools?.([{ name: 'verify_claim', ok: true }])
+      onDelta('Because '); await tick(); onDelta('Saturn.'); return 'Because Saturn.'
+    }
     const c = await castAndRead()
     expect(c.reading).toBe('Because Saturn.')
 
@@ -144,13 +151,19 @@ describe('questions under a reading', () => {
     // A second question while the first is being answered waits its turn.
     expect((await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'And the second?' })).status).toBe(400)
 
-    const types = (await readAll(`${ctx.base}/api/followups/${f1.id}/events`)).map((e) => e.type)
+    const events = await readAll(`${ctx.base}/api/followups/${f1.id}/events`)
+    const types = events.map((e) => e.type)
     expect(types[0]).toBe('snapshot')
     expect(types.at(-1)).toBe('done')
+    // The tool calls LM Studio ran for the answer are streamed (in the snapshot, when a listener comes late) and kept with it.
+    expect(events.filter((e) => e.tools).at(-1)).toMatchObject({ tools: [{ name: 'verify_claim', ok: true }] })
     const kept = await (await fetch(`${ctx.base}/api/followups/${f1.id}`)).json() as FollowUp
-    expect(kept).toMatchObject({ state: 'done', answer: 'Because Saturn.' })
+    expect(kept).toMatchObject({ state: 'done', answer: 'Because Saturn.', tools: [{ name: 'verify_claim', ok: true }] })
 
+    // The answer may call astro-mcp through LM Studio; the reading itself does not.
+    expect(seen[0]!.tools).toBeUndefined()
     const askReq = seen[1]!
+    expect(askReq.tools).toEqual(['mcp/astrology-v2'])
     expect(askReq.system).toContain('THE READING YOU WROTE:\nBecause Saturn.')
     expect(askReq.system).toContain('THE CASTING: October 2026.\nDATA:\n{"tool":"forecast_month"')
     expect(askReq.input).toBe('Sam asks: Which day is best for the move?')

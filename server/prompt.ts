@@ -2,6 +2,7 @@ import type { Casting, FollowUp, Profile } from '../src/types.ts'
 import { parseWheel } from '../src/lib/chartWheel.ts'
 import { readingsInput } from '../src/lib/readings.ts'
 import type { WriteRequest } from './model.ts'
+import { ASTRO_SERVER_NAME } from './astro.ts'
 
 /**
  * What the model is asked to write over a casting. The data it sees is the
@@ -73,7 +74,11 @@ const person = (profile: Profile, now: Date): string =>
  * far above the reading's own length: a stop for a runaway, not a budget.
  */
 const READING_MAX_TOKENS = 8000
-const ANSWER_MAX_TOKENS = 4000
+/** An answer may call tools, each round costing it more of the ceiling. */
+const ANSWER_MAX_TOKENS = 6000
+
+/** LM Studio's id for astro-mcp, as the answer's integration: LM Studio runs the tool calls itself. */
+export const ASTRO_PLUGIN = `mcp/${ASTRO_SERVER_NAME}`
 
 /**
  * What is known about the person, for a casting with memory on: framed as
@@ -98,7 +103,8 @@ export function readingRequest(casting: Casting, profile: Profile, now = new Dat
 const ANSWER_VOICE = [
   'You are the same astrologer, now answering a question the person asks about a reading you wrote for them.',
   'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown. Short: a paragraph or two, a list if the question wants one. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
-  'Draw only on the chart data and the reading below. Never add a transit or position the data does not list, and never work out positions yourself. If the data cannot answer, say what it would take.',
+  'Draw on the chart data and the reading below. For what they do not cover, use the astrology tools: another day or a date range (create_transit_chart, list_upcoming_transits, forecast_week, forecast_month, forecast_year), when an aspect is exact (verify_claim), a solar return, a progressed chart, Moon void periods, lunations and eclipses, planetary hours, or a horary question. The person\'s birth date, time and place are given below; pass them as a tool asks.',
+  'Never state a transit or position that neither the data nor a tool returned, and never work out positions yourself. When you looked something up, say so in a few words.',
 ].join(' ')
 
 /** How much of a long reply the next question still sees. */
@@ -123,7 +129,7 @@ export function followUpRequest(casting: Casting, earlier: FollowUp[], question:
     .filter((f) => f.state === 'done' && f.answer)
     .map((f) => `${profile.name} asked: ${f.question}\n\nYou answered: ${clip(f.answer, REPLAY_CHARS)}`)
   const input = [...(thread.length ? ['THE CONVERSATION SO FAR:', ...thread] : []), `${profile.name} asks: ${question}`].join('\n\n')
-  return { system, input, maxTokens: ANSWER_MAX_TOKENS }
+  return { system, input, maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN] }
 }
 
 const clip = (text: string, max: number): string => (text.length <= max ? text : `${text.slice(0, max)}…`)

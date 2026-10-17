@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Brain, RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
+import { Brain, RefreshCw, SendHorizontal, Square, Telescope, X } from 'lucide-react'
 import { useAnswer } from '../hooks/useReading.ts'
 import { api } from '../lib/api.ts'
 import type { FollowUp, ReadingState } from '../types.ts'
@@ -133,7 +133,8 @@ interface FollowUpItemProps {
 }
 
 function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget }: FollowUpItemProps) {
-  const { text, state, error } = useAnswer(followUp, onSettled)
+  const { text, state, error, tools } = useAnswer(followUp, onSettled)
+  const pending = tools.filter((t) => t.ok === null)
   return (
     <li className="followup">
       <div className="followup-q">
@@ -148,8 +149,14 @@ function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget
             <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
           </div>
         )}
-        {state === 'writing' && !text && <p className="reading-status">Thinking…</p>}
+        {state === 'writing' && !text && <p className="reading-status">{pending.length ? `Looking up ${pending.map((t) => t.name || 'the ephemeris').join(', ')}…` : 'Thinking…'}</p>}
         {state === 'failed' && <p className="reading-status error">{error ?? 'The answer failed.'}</p>}
+        {tools.length > 0 && (state !== 'writing' || text) && (
+          <p className="answer-tools">
+            <Telescope size={13} aria-hidden="true" />
+            <span>{state === 'writing' && pending.length ? 'Looking up ' : 'Looked up '}{tools.map((t) => `${t.name || 'the ephemeris'}${t.ok === false ? ' (failed)' : ''}`).join(', ')}{state === 'writing' && pending.length ? '…' : ''}</span>
+          </p>
+        )}
         <div className="followup-actions">
           {state === 'writing' && <button type="button" className="chip" onClick={onStop}><Square size={13} aria-hidden="true" /> Stop</button>}
           {state === 'failed' && <button type="button" className="chip" onClick={onAgain}><RefreshCw size={13} aria-hidden="true" /> Try again</button>}

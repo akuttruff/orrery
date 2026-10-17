@@ -29,8 +29,13 @@ the transit tables), copied rather than shared.
   from the store; `Recast` throws it away and casts again.
 - **Ask about it.** Under every reading is a box for follow-up questions.
   Each answer is written on the server like the reading (`server/readings.ts`
-  writes both) and kept with the casting (`follow_ups` table). LM Studio's
-  chat endpoint takes a single turn, so the data, the reading and the
+  writes both) and kept with the casting (`follow_ups` table). An answer may
+  call the astrology tools: the request names astro-mcp as an LM Studio
+  integration (`mcp/astrology-v2`, the entry in `~/.lmstudio/mcp.json`), so
+  LM Studio runs the tool calls itself for anything the casting's data does
+  not cover (another day, an exact time, a return, a horary question); the
+  stream reports each call and the answer lists what it looked up. LM
+  Studio's chat endpoint takes a single turn, so the data, the reading and the
   questions answered so far are replayed in the prompt each time
   (`followUpRequest` in `server/prompt.ts`). One answer at a time per
   casting; deleting the casting deletes its questions.

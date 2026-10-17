@@ -14,7 +14,7 @@ function serve(initial: FollowUp[]) {
     if (url === '/api/castings/c1/followups' && init?.method === 'POST') {
       const { question } = JSON.parse(init.body as string) as { question: string }
       asked.push(question)
-      const f: FollowUp = { id: `f${items.length + 1}`, castingId: 'c1', question, answer: 'The Moon says yes.', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [] }
+      const f: FollowUp = { id: `f${items.length + 1}`, castingId: 'c1', question, answer: 'The Moon says yes.', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], tools: [] }
       items.push(f)
       return reply(202, f)
     }
@@ -25,11 +25,12 @@ function serve(initial: FollowUp[]) {
 
 describe('FollowUps', () => {
   it('shows the questions asked so far with their answers', async () => {
-    serve([{ id: 'f1', castingId: 'c1', question: 'Which day?', answer: 'Thursday, when the **Moon** is in Leo.', state: 'done', error: null, createdAt: 1, remembered: [], memoriesUsed: ['m1', 'm2'] }])
+    serve([{ id: 'f1', castingId: 'c1', question: 'Which day?', answer: 'Thursday, when the **Moon** is in Leo.', state: 'done', error: null, createdAt: 1, remembered: [], memoriesUsed: ['m1', 'm2'], tools: [{ name: 'verify_claim', ok: true }, { name: 'forecast_week', ok: false }] }])
     render(<FollowUps castingId="c1" readingState="done" readingText="A reading." />)
     expect(await screen.findByText('Which day?')).toBeInTheDocument()
     expect(screen.getByText('Moon')).toBeInTheDocument()
     expect(screen.getByText('Answered with 2 memories · nothing new to remember')).toBeInTheDocument()
+    expect(screen.getByText('Looked up verify_claim, forecast_week (failed)')).toBeInTheDocument()
     expect(screen.getByLabelText('Ask another')).toBeEnabled()
   })
 
