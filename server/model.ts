@@ -16,7 +16,44 @@ interface ChatEvent {
   /** The tool events: `tool` is the plugin, the tool's own name comes with tool_call.name or .arguments; success and failure may name it or not. */
   tool?: string
   tool_name?: string
+  provider_info?: { plugin_id?: string }
+  arguments?: unknown
+  output?: unknown
   reason?: string
+}
+
+/** A result is kept whole (a year of transits is ~20 KB); this stops only a runaway tool. */
+const MAX_TOOL_OUTPUT = 50_000
+/** Parameters longer than this, as JSON, are cut down: they are for reading, not replaying. */
+const MAX_TOOL_ARGS = 8_000
+
+/** A tool's result as text: MCP content parts' text joined, or the raw string, or compact JSON. */
+export function toolOutputText(raw: unknown): string {
+  if (raw == null) return ''
+  let v: unknown = raw
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!(trimmed.startsWith('[') || trimmed.startsWith('{'))) return raw
+    try { v = JSON.parse(trimmed) } catch { return raw }
+  }
+  const parts: unknown[] = Array.isArray(v) ? v : [v]
+  const texts = parts
+    .map((p) => (p && typeof p === 'object' && typeof (p as { text?: unknown }).text === 'string' ? (p as { text: string }).text : null))
+    .filter((t): t is string => t !== null)
+  if (texts.length) return texts.join('\n')
+  return typeof raw === 'string' ? raw : JSON.stringify(v)
+}
+
+/** A call's parameters from an event: an object within MAX_TOOL_ARGS, each value cut down in turn past that, or nothing. */
+export function toolArgs(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const obj = raw as Record<string, unknown>
+  if (JSON.stringify(obj).length <= MAX_TOOL_ARGS) return obj
+  const share = Math.max(80, Math.floor(MAX_TOOL_ARGS / Math.max(1, Object.keys(obj).length)))
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => {
+    const text = typeof v === 'string' ? v : JSON.stringify(v)
+    return [k, text.length > share ? `${text.slice(0, share)}… (${text.length} characters)` : v]
+  }))
 }
 
 export interface WriteRequest {
@@ -36,16 +73,19 @@ export class ToolTrail {
   take(evt: ChatEvent): boolean {
     switch (evt.type) {
       case 'tool_call.start':
-        this.uses.push({ name: evt.tool_name || '', ok: null })
+        this.uses.push({ name: evt.tool_name || '', ok: null, ...(evt.tool ? { plugin: evt.tool } : {}) })
         return true
       case 'tool_call.name':
       case 'tool_call.arguments': {
         const name = evt.tool_name
         if (!name) return false
-        const unnamed = this.uses.find((u) => u.ok === null && !u.name)
-        if (unnamed) { unnamed.name = name; return true }
-        if (this.uses.some((u) => u.ok === null && u.name === name)) return false
-        this.uses.push({ name, ok: null })
+        let use = this.uses.find((u) => u.ok === null && !u.name) ?? this.uses.find((u) => u.ok === null && u.name === name)
+        if (!use) { use = { name, ok: null }; this.uses.push(use) }
+        use.name = name
+        const plugin = evt.provider_info?.plugin_id
+        if (plugin) use.plugin = plugin
+        const args = toolArgs(evt.arguments)
+        if (args) use.args = args
         return true
       }
       case 'tool_call.success':
@@ -55,6 +95,9 @@ export class ToolTrail {
         if (!use) return false
         use.ok = evt.type === 'tool_call.success'
         if (name && !use.name) use.name = name
+        const args = toolArgs(evt.arguments)
+        if (args) use.args = args
+        use.output = use.ok ? toolOutputText(evt.output).slice(0, MAX_TOOL_OUTPUT) : (evt.reason || 'Tool call failed')
         return true
       }
       default:

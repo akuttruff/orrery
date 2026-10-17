@@ -37,10 +37,16 @@ export type Remembered = Pick<Memory, 'id' | 'text'>
 
 export type ReadingState = 'none' | 'writing' | 'done' | 'failed'
 
-/** One tool the model called while answering: ok is null until the call returns. */
+/** One tool the model called while answering: ok is null until the call returns, then the result is kept with it. */
 export interface ToolUse {
   name: string
   ok: boolean | null
+  /** The MCP server it came from, e.g. "mcp/astrology-v2". */
+  plugin?: string
+  /** What it was called with. */
+  args?: Record<string, unknown>
+  /** What it returned, or why it failed. */
+  output?: string
 }
 
 /**

@@ -25,12 +25,15 @@ function serve(initial: FollowUp[]) {
 
 describe('FollowUps', () => {
   it('shows the questions asked so far with their answers', async () => {
-    serve([{ id: 'f1', castingId: 'c1', question: 'Which day?', answer: 'Thursday, when the **Moon** is in Leo.', state: 'done', error: null, createdAt: 1, remembered: [], memoriesUsed: ['m1', 'm2'], tools: [{ name: 'verify_claim', ok: true }, { name: 'forecast_week', ok: false }] }])
+    serve([{ id: 'f1', castingId: 'c1', question: 'Which day?', answer: 'Thursday, when the **Moon** is in Leo.', state: 'done', error: null, createdAt: 1, remembered: [], memoriesUsed: ['m1', 'm2'], tools: [{ name: 'verify_claim', ok: true, plugin: 'mcp/astrology-v2', args: { claim: 'Saturn trine Saturn' }, output: 'In effect; exact 2026-10-22.' }, { name: 'forecast_week', ok: false, output: 'timed out' }] }])
     render(<FollowUps castingId="c1" readingState="done" readingText="A reading." />)
     expect(await screen.findByText('Which day?')).toBeInTheDocument()
     expect(screen.getByText('Moon')).toBeInTheDocument()
     expect(screen.getByText('Answered with 2 memories · nothing new to remember')).toBeInTheDocument()
-    expect(screen.getByText('Looked up verify_claim, forecast_week (failed)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /verify claim/ })).toHaveTextContent('astrology-v2')
+    expect(screen.getByText('claim: Saturn trine Saturn')).toBeInTheDocument()
+    expect(screen.getByText('In effect; exact 2026-10-22.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /forecast week/ })).toHaveTextContent('failed')
     expect(screen.getByLabelText('Ask another')).toBeEnabled()
   })
 

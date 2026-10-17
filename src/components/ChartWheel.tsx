@@ -414,14 +414,16 @@ export function WheelSvg({ wheel, title, readings }: { wheel: Wheel; title: stri
  * A casting's wheel on its card. A tap opens it on a page of its own in a
  * new tab (WheelPage), where the browser's own pinch and zoom apply.
  */
-function ChartWheel({ wheel, castingId, readings }: { wheel: Wheel; castingId: string; readings?: Record<string, string> }) {
+function ChartWheel({ wheel, castingId, readings }: { wheel: Wheel; castingId?: string; readings?: Record<string, string> }) {
   const title = wheelTitle(wheel)
 
   return (
     <figure className="wheel">
-      <a className="wheel-open" href={wheelHashFor(castingId)} target="_blank" rel="noopener" aria-label="Open the wheel in a new tab" title="Open in a new tab">
-        <WheelSvg wheel={wheel} title={title} readings={readings} />
-      </a>
+      {castingId ? (
+        <a className="wheel-open" href={wheelHashFor(castingId)} target="_blank" rel="noopener" aria-label="Open the wheel in a new tab" title="Open in a new tab">
+          <WheelSvg wheel={wheel} title={title} readings={readings} />
+        </a>
+      ) : <WheelSvg wheel={wheel} title={title} readings={readings} />}
       <figcaption className="wheel-caption">
         <span className="wheel-title">{title}</span>
         <span className="wheel-legend" aria-hidden="true">

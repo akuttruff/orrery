@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Brain, RefreshCw, SendHorizontal, Square, Telescope, X } from 'lucide-react'
+import { Brain, RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
+import ToolCard from './ToolCard'
 import { useAnswer } from '../hooks/useReading.ts'
 import { api } from '../lib/api.ts'
 import type { FollowUp, ReadingState } from '../types.ts'
@@ -69,6 +70,8 @@ export default function FollowUps({ castingId, readingState, readingText }: Foll
       setQuestion('')
     } catch (e) {
       setError((e as Error).message)
+      // The question may have reached the server even though the reply did not come back: show what it has.
+      api.followUps(castingId).then(setItems).catch(() => { /* shown on the next open */ })
     } finally {
       setSending(false)
       box.current?.focus()
@@ -144,19 +147,18 @@ function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget
         )}
       </div>
       <div className="followup-a" aria-live="polite">
+        {tools.length > 0 && (
+          <div className="answer-tools" aria-label="Tools the answer used">
+            {tools.map((t, i) => <ToolCard key={i} use={t} />)}
+          </div>
+        )}
         {text && (
           <div className={`reading-body${state === 'writing' ? ' writing' : ''}`}>
             <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
           </div>
         )}
-        {state === 'writing' && !text && <p className="reading-status">{pending.length ? `Looking up ${pending.map((t) => t.name || 'the ephemeris').join(', ')}…` : 'Thinking…'}</p>}
+        {state === 'writing' && !text && <p className="reading-status">{pending.length ? `Looking up ${pending.map((t) => t.name || 'the ephemeris').join(', ')}…` : tools.length ? 'Writing…' : 'Thinking…'}</p>}
         {state === 'failed' && <p className="reading-status error">{error ?? 'The answer failed.'}</p>}
-        {tools.length > 0 && (state !== 'writing' || text) && (
-          <p className="answer-tools">
-            <Telescope size={13} aria-hidden="true" />
-            <span>{state === 'writing' && pending.length ? 'Looking up ' : 'Looked up '}{tools.map((t) => `${t.name || 'the ephemeris'}${t.ok === false ? ' (failed)' : ''}`).join(', ')}{state === 'writing' && pending.length ? '…' : ''}</span>
-          </p>
-        )}
         <div className="followup-actions">
           {state === 'writing' && <button type="button" className="chip" onClick={onStop}><Square size={13} aria-hidden="true" /> Stop</button>}
           {state === 'failed' && <button type="button" className="chip" onClick={onAgain}><RefreshCw size={13} aria-hidden="true" /> Try again</button>}

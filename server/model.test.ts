@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { ToolTrail, stripLeakedThinking, writeWithModel } from './model.ts'
+import { ToolTrail, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
 import type { ServerConfig } from './store.ts'
 import type { ToolUse } from '../src/types.ts'
 
@@ -23,7 +23,7 @@ describe('writeWithModel', () => {
       { type: 'tool_call.start' },
       { type: 'tool_call.name', tool_name: 'verify_claim', provider_info: { plugin_id: 'mcp/astrology-v2' } },
       { type: 'tool_call.arguments', tool_name: 'verify_claim', arguments: { claim: 'x' } },
-      { type: 'tool_call.success', tool_name: 'verify_claim', output: 'yes' },
+      { type: 'tool_call.success', tool_name: 'verify_claim', output: JSON.stringify([{ type: 'text', text: 'yes, exact Thursday' }]) },
       { type: 'tool_call.start', tool: 'mcp/astrology-v2' },
       { type: 'tool_call.name', tool_name: 'forecast_week' },
       { type: 'tool_call.failure', reason: 'timed out' },
@@ -35,9 +35,12 @@ describe('writeWithModel', () => {
     const text = await writeWithModel(config, { system: 's', input: 'i', tools: ['mcp/astrology-v2'] }, () => {}, undefined, lm.fetchImpl, (uses) => seen.push(uses))
     expect(text).toBe('Exact on Thursday.')
     expect(lm.body().integrations).toEqual([{ type: 'plugin', id: 'mcp/astrology-v2' }])
-    expect(seen.at(-1)).toEqual([{ name: 'verify_claim', ok: true }, { name: 'forecast_week', ok: false }])
+    expect(seen.at(-1)).toEqual([
+      { name: 'verify_claim', ok: true, plugin: 'mcp/astrology-v2', args: { claim: 'x' }, output: 'yes, exact Thursday' },
+      { name: 'forecast_week', ok: false, plugin: 'mcp/astrology-v2', output: 'timed out' },
+    ])
     // Each report is its own copy: a later change does not rewrite what a listener already got.
-    expect(seen[1]).toEqual([{ name: 'verify_claim', ok: null }])
+    expect(seen[1]).toEqual([{ name: 'verify_claim', ok: null, plugin: 'mcp/astrology-v2' }])
   })
 
   it('sends no integrations when the request names no tools', async () => {
@@ -55,6 +58,23 @@ describe('stripLeakedThinking', () => {
   })
 })
 
+describe('tool results', () => {
+  it('reads MCP content parts, plain text and other JSON', () => {
+    expect(toolOutputText('[{"type":"text","text":"a"},{"type":"text","text":"b"}]')).toBe('a\nb')
+    expect(toolOutputText('plain')).toBe('plain')
+    expect(toolOutputText({ k: 1 })).toBe('{"k":1}')
+    expect(toolOutputText(null)).toBe('')
+  })
+
+  it('keeps parameters as given, cut down only when huge', () => {
+    expect(toolArgs({ city: 'New York' })).toEqual({ city: 'New York' })
+    expect(toolArgs('nope')).toBeUndefined()
+    const huge = toolArgs({ a: 'x'.repeat(9000), b: 'short' })!
+    expect(String(huge.a)).toMatch(/… \(9000 characters\)$/)
+    expect(huge.b).toBe('short')
+  })
+})
+
 describe('ToolTrail', () => {
   it('matches a nameless result to the oldest call still waiting', () => {
     const t = new ToolTrail()
@@ -63,7 +83,7 @@ describe('ToolTrail', () => {
     t.take({ type: 'tool_call.start' })
     t.take({ type: 'tool_call.name', tool_name: 'b' })
     expect(t.take({ type: 'tool_call.success' })).toBe(true)
-    expect(t.uses).toEqual([{ name: 'a', ok: true }, { name: 'b', ok: null }])
+    expect(t.uses).toEqual([{ name: 'a', ok: true, output: '' }, { name: 'b', ok: null }])
     expect(t.take({ type: 'tool_call.success' })).toBe(true)
     expect(t.take({ type: 'tool_call.success' })).toBe(false)
     expect(t.take({ type: 'message.delta' })).toBe(false)
