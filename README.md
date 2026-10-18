@@ -48,7 +48,10 @@ the transit tables), copied rather than shared.
   screen's recent list groups them by kind in the tiles' order, with each
   casting's time being its last change (`updated_at`): a reading written or a
   question asked or answered moves it to the top of its group. Long groups
-  fold to four until asked.
+  fold to four until asked. On a wide window the castings sit in a sidebar
+  instead, every kind a section with a + to cast another; a star on a row
+  keeps that casting at the top of its kind, and a bin removes it, with
+  its reading and questions, after a second word in the row.
 - **The wheel's popups read too.** Hovering a planet or an aspect line on
   the wheel (a press and hold on a phone) shows its position and aspects;
   on a Today wheel each aspect's popup also carries a sentence on what that

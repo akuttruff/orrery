@@ -71,7 +71,7 @@ interface CastingRow extends WrittenRow {
   reading_state: string; reading_error: string | null; created_at: number; updated_at: number | null
   memory: number | null; memories_used: string | null; memory_excluded: string | null
   transit_readings: string | null
-  style: string | null; note: string | null; brief: string | null
+  style: string | null; note: string | null; brief: string | null; starred: number | null
 }
 
 const parseIds = (text: string | null): string[] => {
@@ -124,7 +124,7 @@ const fromRow = (r: CastingRow): Casting => ({
   readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
   memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
   written: parseWritten(r), transitReadings: parseReadingMap(r.transit_readings),
-  style: r.style, note: r.note ?? '', brief: parseBrief(r.brief),
+  style: r.style, note: r.note ?? '', brief: parseBrief(r.brief), starred: r.starred === 1,
 })
 
 interface FollowUpRow extends WrittenRow {
@@ -191,6 +191,7 @@ export class Store {
     if (!has('castings', 'style')) this.db.exec('ALTER TABLE castings ADD COLUMN style TEXT')
     if (!has('castings', 'note')) this.db.exec('ALTER TABLE castings ADD COLUMN note TEXT')
     if (!has('castings', 'brief')) this.db.exec('ALTER TABLE castings ADD COLUMN brief TEXT')
+    if (!has('castings', 'starred')) this.db.exec('ALTER TABLE castings ADD COLUMN starred INTEGER NOT NULL DEFAULT 0')
     this.db.exec('CREATE INDEX IF NOT EXISTS castings_updated ON castings (updated_at)')
     // A casting from before this was kept: its last change is its reading's or its latest question's.
     this.db.exec(`UPDATE castings SET updated_at = MAX(
@@ -243,7 +244,7 @@ export class Store {
   /** The castings, the most recently changed first: a reading written or a question asked moves one up. */
   listCastings(limit = 60): CastingSummary[] {
     const rows = this.db.prepare(
-      `SELECT id, kind, period, title, reading_state, reading_error, created_at, updated_at, memory, memories_used, memory_excluded, stats, started_at, finished_at, style, note,
+      `SELECT id, kind, period, title, reading_state, reading_error, created_at, updated_at, memory, memories_used, memory_excluded, stats, started_at, finished_at, style, note, starred,
         (SELECT COUNT(*) FROM follow_ups f WHERE f.casting_id = castings.id) AS questions
       FROM castings ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC LIMIT ?`,
     ).all(limit) as unknown as (Omit<CastingRow, 'result' | 'reading' | 'trail' | 'transit_readings' | 'brief'> & { questions: number })[]
@@ -251,7 +252,7 @@ export class Store {
       id: r.id, kind: r.kind as Kind, period: r.period, title: r.title,
       readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
       memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
-      written: parseWritten({ ...r, trail: null }), questions: Number(r.questions), style: r.style, note: r.note ?? '',
+      written: parseWritten({ ...r, trail: null }), questions: Number(r.questions), style: r.style, note: r.note ?? '', starred: r.starred === 1,
     }))
   }
 
@@ -261,16 +262,22 @@ export class Store {
   }
 
   /** A casting, with the choices made before it was cast: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
-  addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'> & Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note'>>): Casting {
+  addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'> & Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>>): Casting {
     const now = Date.now()
     const casting: Casting = {
-      memory: null, memoryExcluded: [], style: null, note: '', ...input,
+      memory: null, memoryExcluded: [], style: null, note: '', starred: false, ...input,
       id: newId(), reading: '', readingState: 'none', readingError: null, createdAt: now, updatedAt: now, memoriesUsed: [],
       written: { ...NOT_WRITTEN }, transitReadings: null, brief: null,
     }
     this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded, style, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded), casting.style, casting.note)
     return casting
+  }
+
+  /** Starred, or not: a star keeps the casting at the top of its kind. Not a change of the casting's own: its place by time stays. */
+  setStarred(id: string, starred: boolean): Casting | undefined {
+    this.db.prepare('UPDATE castings SET starred = ? WHERE id = ?').run(starred ? 1 : 0, id)
+    return this.getCasting(id)
   }
 
   /** The kind of reading and what it is for, changed before a Write again. */

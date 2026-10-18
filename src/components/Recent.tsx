@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { KIND_LABEL, KIND_ORDER } from '../lib/kinds.ts'
+import { Star } from 'lucide-react'
+import { KIND_LABEL, KIND_ORDER, byPlace } from '../lib/kinds.ts'
 import { formatWhen } from '../lib/when.ts'
 import type { CastingSummary, Kind } from '../types.ts'
 
@@ -19,7 +20,7 @@ interface RecentProps {
 export default function Recent({ castings, onOpen }: RecentProps) {
   const [expanded, setExpanded] = useState<Set<Kind>>(() => new Set())
   const groups = KIND_ORDER
-    .map((kind) => ({ kind, items: castings.filter((c) => c.kind === kind).sort((a, b) => b.updatedAt - a.updatedAt) }))
+    .map((kind) => ({ kind, items: castings.filter((c) => c.kind === kind).sort(byPlace) }))
     .filter((g) => g.items.length > 0)
   if (groups.length === 0) return null
   const toggle = (kind: Kind): void => setExpanded((cur) => {
@@ -58,7 +59,7 @@ function RecentRow({ casting: c, onOpen }: { casting: CastingSummary; onOpen: ()
   return (
     <li>
       <button type="button" onClick={onOpen}>
-        <span className="recent-title">{c.title}</span>
+        <span className="recent-title">{c.starred && <Star size={12} className="starred" aria-label="Starred" />}{c.title}</span>
         <span className="recent-state">{STATE_LABEL[c.readingState]}{questions ? ` · ${questions}` : ''} · {formatWhen(c.updatedAt)}</span>
       </button>
     </li>

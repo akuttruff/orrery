@@ -100,13 +100,23 @@ input, select { font: inherit; }
   border: none; border-radius: 8px; background: none; color: var(--paper-dim);
 }
 .side-add:hover, .side-add:focus-visible { color: var(--moss); background: var(--bg); }
+/* A row and, at its edge, its star and bin: shown on a hover or a focus, and the star whenever it is on. */
+.side-row-wrap { position: relative; display: flex; align-items: center; border-bottom: 1px solid var(--line); }
+.side-row-wrap:hover, .side-row-wrap:focus-within, .side-row-wrap.active { background: var(--bg); }
 .side-row {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 9px 6px; border: none; border-bottom: 1px solid var(--line); border-radius: 0;
+  display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0;
+  padding: 9px 6px; border: none; border-radius: 0;
   background: none; color: var(--paper); font-size: 15px; text-align: left;
 }
-.side-row:hover, .side-row:focus-visible { background: var(--bg); }
-.side-row.active { background: var(--bg); }
+.side-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; padding-right: 2px; opacity: 0; transition: opacity 0.12s ease; }
+.side-row-wrap:hover .side-actions, .side-row-wrap:focus-within .side-actions, .side-row-wrap.starred .side-actions { opacity: 1; }
+.side-row-wrap.starred:not(:hover):not(:focus-within) .side-actions .danger { opacity: 0; }
+.side-actions .icon-btn[aria-pressed="true"] { color: var(--gold); }
+.side-actions .icon-btn:hover, .side-actions .icon-btn:focus-visible { color: var(--paper); background: var(--bg-raised); }
+.side-actions .icon-btn.danger:hover, .side-actions .icon-btn.danger:focus-visible { color: var(--rust); }
+.side-confirm { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 0 6px 0 2px; font-size: 12px; color: var(--paper-dim); white-space: nowrap; }
+.side-confirm .chip { padding: 4px 9px; font-size: 12px; }
+.recent-title .starred { color: var(--gold); vertical-align: -1px; margin-right: 5px; }
 .side-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: transparent; }
 .side-row.active .side-dot { background: var(--moss); }
 .side-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }

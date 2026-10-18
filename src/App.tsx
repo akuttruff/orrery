@@ -175,6 +175,20 @@ export default function App() {
     home()
   }
 
+  /** From the sidebar: a casting goes, and the view with it when it was the one open. */
+  const removeOne = async (id: string): Promise<void> => {
+    await api.remove(id).catch(() => { /* already gone */ })
+    if (current?.id === id) home(); else refreshRecent()
+  }
+
+  const star = async (id: string, starred: boolean): Promise<void> => {
+    try {
+      const c = await api.updateCasting(id, { starred })
+      setCurrent((cur) => (cur?.id === id ? { ...cur, starred: c.starred } : cur))
+      refreshRecent()
+    } catch (e) { setError((e as Error).message) }
+  }
+
   // A transit wheel's popups arrive a little after the cast: look for them, and keep only them, so a reading mid-stream is not disturbed.
   const transitId = current?.kind === 'today' && current.transitReadings === null ? current.id : null
   useEffect(() => {
@@ -203,6 +217,8 @@ export default function App() {
           busy={busy}
           onOpen={(id) => void open(id)}
           onCast={setPending}
+          onStar={(id, starred) => void star(id, starred)}
+          onRemove={(id) => void removeOne(id)}
           onSettings={() => setSettingsOpen(true)}
           onCollapse={() => setSidebar(false)}
         />

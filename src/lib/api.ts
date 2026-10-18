@@ -1,7 +1,7 @@
 import type { Casting, CastingSummary, Config, FollowUp, Kind, Memory, Profile } from '../types.ts'
 
 /** The choices a casting is made with: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
-export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note'>>
+export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>>
 
 /** The server, from the page. Every call throws with the server's message on failure. */
 

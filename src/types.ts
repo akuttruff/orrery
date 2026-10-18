@@ -125,6 +125,8 @@ export interface Casting {
   note: string
   /** The brief the reading was last written with, kept for anyone who wants to see it; null until a reading starts. */
   brief: Brief | null
+  /** Starred by the person: kept at the top of its kind in the lists. */
+  starred: boolean
 }
 
 /** The prompt a reading was written with: the system part, and the task without the data under it. */

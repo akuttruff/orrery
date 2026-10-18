@@ -150,11 +150,12 @@ describe('castings', () => {
     expect(kept.brief!.system).toContain('WHAT SAM ASKED FOR, in their words: "anxious today"')
     expect(kept.brief!.task).toMatch(/^Write today's reading/)
     expect(kept.brief!.task).not.toContain('"chart_type"')
-    // Changed before a Write again.
-    const changed = await (await fetch(`${ctx.base}/api/castings/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: 'plain', note: '' }) })).json() as Casting
-    expect(changed).toMatchObject({ style: 'plain', note: '' })
+    // Changed before a Write again; starred from the list.
+    const changed = await (await fetch(`${ctx.base}/api/castings/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: 'plain', note: '', starred: true }) })).json() as Casting
+    expect(changed).toMatchObject({ style: 'plain', note: '', starred: true })
+    expect((await fetch(`${ctx.base}/api/castings/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ starred: 'yes' }) })).status).toBe(400)
     const list = await (await fetch(`${ctx.base}/api/castings`)).json() as CastingSummary[]
-    expect(list.find((x) => x.id === c.id)).toMatchObject({ style: 'plain' })
+    expect(list.find((x) => x.id === c.id)).toMatchObject({ style: 'plain', starred: true })
   })
 
   it('rejects a kind it does not know', async () => {

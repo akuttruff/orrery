@@ -7,7 +7,7 @@ import type { Casting, CastingSummary } from './types.ts'
 
 const casting = (id: string, over: Partial<Casting> = {}): Casting => ({
   id, kind: 'today', period: '2026-10-16', title: `Casting ${id}`, result: '{}', reading: '', readingState: 'writing', readingError: null,
-  createdAt: 1, updatedAt: 1, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: {}, style: null, note: '', brief: null, ...over,
+  createdAt: 1, updatedAt: 1, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: {}, style: null, note: '', brief: null, starred: false, ...over,
 })
 const summary = ({ result: _r, reading: _g, transitReadings: _t, brief: _b, ...rest }: Casting): CastingSummary => ({ ...rest, questions: 0 })
 
@@ -23,6 +23,18 @@ function serve(castings: Casting[]) {
       castings.push(c)
       return reply(201, c)
     }
+    const one = /^\/api\/castings\/([^/]+)$/.exec(url)
+    if (one && init?.method === 'PATCH') {
+      const c = castings.find((x) => x.id === one[1])
+      if (!c) return reply(404, { error: 'No such casting' })
+      Object.assign(c, JSON.parse(String(init.body)) as Partial<Casting>)
+      return reply(200, c)
+    }
+    if (one && init?.method === 'DELETE') {
+      const i = castings.findIndex((x) => x.id === one[1])
+      if (i >= 0) castings.splice(i, 1)
+      return reply(200, { ok: true })
+    }
     const reading = /^\/api\/castings\/([^/]+)\/reading$/.exec(url)
     if (reading && init?.method === 'POST') {
       const c = castings.find((x) => x.id === reading[1])!
@@ -37,7 +49,6 @@ function serve(castings: Casting[]) {
     if (url === '/api/config') return reply(200, config)
     if (url === '/api/memories') return reply(200, [{ id: 'm1', text: 'Works nights.', createdAt: 1, updatedAt: 1 }, { id: 'm2', text: 'Has a cat.', createdAt: 1, updatedAt: 1 }])
     if (url === '/api/castings') return reply(200, castings.map(summary))
-    const one = /^\/api\/castings\/([^/]+)$/.exec(url)
     if (one) {
       const c = castings.find((x) => x.id === one[1])
       return c ? reply(200, c) : reply(404, { error: 'No such casting' })
@@ -126,7 +137,7 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
     const side = await screen.findByRole('navigation', { name: 'Castings' })
-    expect(await within(side).findByRole('button', { name: /Thu 16 Oct/ })).toHaveTextContent('read')
+    expect(await within(side).findByRole('button', { name: /^Thu 16 Oct/ })).toHaveTextContent('read')
     // Every kind has a section, with or without castings; the home screen's own list stays out of the way.
     expect(within(side).getAllByRole('region')).toHaveLength(6)
     expect(screen.queryByRole('region', { name: 'Recent castings' })).not.toBeInTheDocument()
@@ -136,7 +147,7 @@ describe('App', () => {
     await user.click(within(await screen.findByRole('dialog', { name: 'Cast Week' })).getByRole('button', { name: 'Cast week' }))
     expect(await screen.findByRole('heading', { name: 'Casting new3' })).toBeInTheDocument()
     expect(castings[2]).toMatchObject({ kind: 'week', readingState: 'writing' })
-    expect(within(side).getByRole('button', { name: /Casting new3/ })).toHaveAttribute('aria-current', 'true')
+    expect(within(side).getByRole('button', { name: /^Casting new3/ })).toHaveAttribute('aria-current', 'true')
 
     // Its edge drags it wider, and the width is kept.
     const edge = within(side).getByRole('separator', { name: 'Sidebar width' })
@@ -177,6 +188,35 @@ describe('App', () => {
     expect(castings[0]).toMatchObject({ kind: 'moon', memory: true, memoryExcluded: ['m2'], style: 'gentle', note: "I'm going through some anxiety today" })
     expect(JSON.parse(localStorage.getItem('orrery.memoryExcluded')!)).toEqual(['m2'])
     expect(screen.getByText(/^Cast /)).toHaveTextContent("· Gentle · I'm going through some anxiety today")
+  })
+
+  it('stars a casting from the sidebar, which keeps it at the top of its kind, and deletes one after a second word', async () => {
+    const castings = [
+      casting('t1', { readingState: 'done', title: 'Thu 16 Oct', updatedAt: 30 }),
+      casting('t2', { readingState: 'done', title: 'Wed 15 Oct', updatedAt: 20 }),
+      casting('t3', { readingState: 'done', title: 'Tue 14 Oct', updatedAt: 10 }),
+    ]
+    serve(castings)
+    const wide = window.matchMedia
+    vi.stubGlobal('matchMedia', (q: string) => ({ ...wide(q), matches: q.includes('900') }))
+    const user = userEvent.setup()
+    render(<App />)
+    const side = await screen.findByRole('navigation', { name: 'Castings' })
+    const names = () => Array.from(side.querySelectorAll('.side-name')).map((el) => el.textContent)
+    await within(side).findByRole('button', { name: 'Star Tue 14 Oct' })
+    await user.click(within(side).getByRole('button', { name: 'Star Tue 14 Oct' }))
+    expect(await within(side).findByRole('button', { name: 'Unstar Tue 14 Oct' })).toHaveAttribute('aria-pressed', 'true')
+    expect(castings.find((c) => c.id === 't3')!.starred).toBe(true)
+    await waitFor(() => expect(names()[0]).toMatch(/^Tue 14 Oct/))
+
+    // The bin asks first; Keep leaves it; Delete takes it, questions and all.
+    await user.click(within(side).getByRole('button', { name: 'Delete Wed 15 Oct' }))
+    await user.click(within(side).getByRole('button', { name: 'Keep' }))
+    expect(castings).toHaveLength(3)
+    await user.click(within(side).getByRole('button', { name: 'Delete Wed 15 Oct' }))
+    await user.click(within(within(side).getByRole('group', { name: 'Delete Wed 15 Oct?' })).getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(within(side).queryByRole('button', { name: /Wed 15 Oct/ })).not.toBeInTheDocument())
+    expect(castings.map((c) => c.id)).toEqual(['t1', 't3'])
   })
 
   it('opens the popup straight from a cast address, then clears the address', async () => {

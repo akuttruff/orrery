@@ -130,7 +130,7 @@ export function createMiddleware(state: ApiState): Handler {
    * A new casting of a kind, cast now with the memory choice made before the
    * tap; the earlier ones stay. Two taps while the tools run share the one cast.
    */
-  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note'>): Promise<unknown> => {
+  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>): Promise<unknown> => {
     const profile = store.getProfile()
     const period = periodFor(kind, new Date())
     const key = `${kind}:${period}`
@@ -148,8 +148,12 @@ export function createMiddleware(state: ApiState): Handler {
   }
 
   /** The choices in a request body, checked: memory and the memories left out, the kind of reading, and what it is for. What is not given is left as it was. */
-  const framePatch = (body: Record<string, unknown>): Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note'>> => {
-    const out: Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note'>> = {}
+  const framePatch = (body: Record<string, unknown>): Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>> => {
+    const out: Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>> = {}
+    if ('starred' in body) {
+      if (typeof body.starred !== 'boolean') throw new Error('starred must be true or false')
+      out.starred = body.starred
+    }
     if ('style' in body) {
       if (body.style !== null && !isStyleId(body.style)) throw new Error('style must be one of the reading styles, or null')
       out.style = body.style as string | null
@@ -179,7 +183,7 @@ export function createMiddleware(state: ApiState): Handler {
 
     const fail = (err: unknown): void => {
       const status = err instanceof AstroToolError ? 422 : 400
-      if (!(err instanceof AstroToolError) && !(err instanceof MemoryInputError) && !(err instanceof SyntaxError) && !/^(Unknown kind|Ask something|Keep the question|Keep the note|Wait for the reading|One answer|Birth date|A birth city|Expected a JSON|Nothing to change|memory|style|note)/.test((err as Error).message)) console.log(`[orrery] ${(err as Error).message}`)
+      if (!(err instanceof AstroToolError) && !(err instanceof MemoryInputError) && !(err instanceof SyntaxError) && !/^(Unknown kind|Ask something|Keep the question|Keep the note|Wait for the reading|One answer|Birth date|A birth city|Expected a JSON|Nothing to change|memory|style|note|starred)/.test((err as Error).message)) console.log(`[orrery] ${(err as Error).message}`)
       json(res, status, { error: (err as Error).message || String(err) })
     }
 
@@ -242,8 +246,8 @@ export function createMiddleware(state: ApiState): Handler {
     if (url === '/api/castings' && method === 'POST') {
       void readBody(req).then(async (body) => {
         if (!isKind(body.kind)) throw new Error(`Unknown kind: ${String(body.kind)}`)
-        const { memory = null, memoryExcluded = [], style = null, note = '' } = framePatch(body)
-        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note }))
+        const { memory = null, memoryExcluded = [], style = null, note = '', starred = false } = framePatch(body)
+        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }))
       }).catch(fail)
       return undefined
     }
@@ -262,6 +266,7 @@ export function createMiddleware(state: ApiState): Handler {
           if (patch.memory !== undefined) store.setCastingMemory(id, patch.memory)
           if (patch.memoryExcluded !== undefined) store.setMemoryExcluded(id, patch.memoryExcluded)
           if (patch.style !== undefined || patch.note !== undefined) store.setFrame(id, patch)
+          if (patch.starred !== undefined) store.setStarred(id, patch.starred)
           json(res, 200, store.getCasting(id))
         }).catch(fail)
         return undefined

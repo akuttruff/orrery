@@ -1,6 +1,6 @@
 import { useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { PanelLeftClose, Plus, Settings as SettingsIcon } from 'lucide-react'
-import { KIND_LABEL, KIND_ORDER } from '../lib/kinds.ts'
+import { PanelLeftClose, Plus, Settings as SettingsIcon, Star, Trash2 } from 'lucide-react'
+import { KIND_LABEL, KIND_ORDER, byPlace } from '../lib/kinds.ts'
 import { formatWhen } from '../lib/when.ts'
 import type { CastingSummary, Kind } from '../types.ts'
 
@@ -56,6 +56,10 @@ interface SidebarProps {
   busy: Kind | null
   onOpen: (id: string) => void
   onCast: (kind: Kind) => void
+  /** Star a casting (kept at the top of its kind), or take the star off. */
+  onStar: (id: string, starred: boolean) => void
+  /** Delete a casting, with its reading and questions. */
+  onRemove: (id: string) => void
   onSettings: () => void
   onCollapse: () => void
   /** Above the sections: the memory choice the + buttons cast with. */
@@ -68,8 +72,10 @@ interface SidebarProps {
  * its head to cast another of it; within a section the most recently
  * changed casting is first. Settings waits at the foot.
  */
-export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onSettings, onCollapse, children }: SidebarProps) {
+export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onStar, onRemove, onSettings, onCollapse, children }: SidebarProps) {
   const { width, onPointerDown, onKeyDown, reset } = useSidebarWidth()
+  // The row whose delete is waiting for a second word.
+  const [confirming, setConfirming] = useState<string | null>(null)
   return (
     <nav className="sidebar" aria-label="Castings" style={{ flexBasis: width, width }}>
       <div className="side-head">
@@ -79,7 +85,7 @@ export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onSe
       {children}
       <div className="side-list">
         {KIND_ORDER.map((kind) => {
-          const items = castings.filter((c) => c.kind === kind).sort((a, b) => b.updatedAt - a.updatedAt)
+          const items = castings.filter((c) => c.kind === kind).sort(byPlace)
           return (
             <section key={kind} className="side-section" aria-label={KIND_LABEL[kind]}>
               <div className="side-section-head">
@@ -88,7 +94,19 @@ export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onSe
                   <Plus size={15} aria-hidden="true" />
                 </button>
               </div>
-              {items.map((c) => <SideRow key={c.id} casting={c} active={c.id === activeId} onOpen={() => onOpen(c.id)} />)}
+              {items.map((c) => (
+                <SideRow
+                  key={c.id}
+                  casting={c}
+                  active={c.id === activeId}
+                  confirming={confirming === c.id}
+                  onOpen={() => onOpen(c.id)}
+                  onStar={() => onStar(c.id, !c.starred)}
+                  onAsk={() => setConfirming(c.id)}
+                  onKeep={() => setConfirming(null)}
+                  onRemove={() => { setConfirming(null); onRemove(c.id) }}
+                />
+              ))}
             </section>
           )
         })}
@@ -114,19 +132,53 @@ export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onSe
 
 const STATE_LABEL: Record<CastingSummary['readingState'], string> = { none: 'cast', writing: 'writing', done: 'read', failed: 'failed' }
 
-function SideRow({ casting: c, active, onOpen }: { casting: CastingSummary; active: boolean; onOpen: () => void }) {
+interface SideRowProps {
+  casting: CastingSummary
+  active: boolean
+  confirming: boolean
+  onOpen: () => void
+  onStar: () => void
+  onAsk: () => void
+  onKeep: () => void
+  onRemove: () => void
+}
+
+/**
+ * One casting: the row opens it; a star and a bin wait at its edge for a
+ * hover (the star stays once it is on). The bin asks once, in the row,
+ * before the casting and everything under it go.
+ */
+function SideRow({ casting: c, active, confirming, onOpen, onStar, onAsk, onKeep, onRemove }: SideRowProps) {
   const questions = c.questions === 1 ? '1 question' : c.questions > 1 ? `${c.questions} questions` : null
   const writing = c.readingState === 'writing'
   return (
-    <button type="button" className={`side-row${active ? ' active' : ''}`} aria-current={active ? 'true' : undefined} onClick={onOpen}>
-      <span className="side-dot" aria-hidden="true" />
-      <span className="side-main">
-        <span className="side-name">{c.title}</span>
-        <span className="side-time">
-          {writing ? <span className="side-working"><span className="pulse" aria-hidden="true" /> Writing</span> : STATE_LABEL[c.readingState]}
-          {questions ? ` · ${questions}` : ''} · {formatWhen(c.updatedAt)}
+    <div className={`side-row-wrap${active ? ' active' : ''}${c.starred ? ' starred' : ''}`}>
+      <button type="button" className={`side-row${active ? ' active' : ''}`} aria-current={active ? 'true' : undefined} onClick={onOpen}>
+        <span className="side-dot" aria-hidden="true" />
+        <span className="side-main">
+          <span className="side-name">{c.title}</span>
+          <span className="side-time">
+            {writing ? <span className="side-working"><span className="pulse" aria-hidden="true" /> Writing</span> : STATE_LABEL[c.readingState]}
+            {questions ? ` · ${questions}` : ''} · {formatWhen(c.updatedAt)}
+          </span>
         </span>
-      </span>
-    </button>
+      </button>
+      {confirming ? (
+        <div className="side-confirm" role="group" aria-label={`Delete ${c.title}?`}>
+          <span>Delete{questions ? `, with its ${questions},` : ''}?</span>
+          <button type="button" className="chip danger" onClick={onRemove}>Delete</button>
+          <button type="button" className="chip" onClick={onKeep}>Keep</button>
+        </div>
+      ) : (
+        <div className="side-actions">
+          <button type="button" className="icon-btn small" aria-label={c.starred ? `Unstar ${c.title}` : `Star ${c.title}`} aria-pressed={c.starred} onClick={onStar}>
+            <Star size={15} aria-hidden="true" fill={c.starred ? 'currentColor' : 'none'} />
+          </button>
+          <button type="button" className="icon-btn small danger" aria-label={`Delete ${c.title}`} disabled={writing} title={writing ? 'Stop the reading first' : undefined} onClick={onAsk}>
+            <Trash2 size={15} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
