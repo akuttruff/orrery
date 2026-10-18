@@ -12,16 +12,18 @@ import { ASTRO_SERVER_NAME } from './astro.ts'
  */
 
 const VOICE = [
-  'You are an astrologer writing a private reading for one person, addressed as "you".',
-  'Warm, concrete and plain: what each contact tends to bring up, in their day-to-day terms. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
+  'You are an astrologer writing a private reading for one person, addressed as "you", who knows you and their chart well.',
+  'Warm, concrete and unhurried. Give every contact its own full paragraph: name it with both positions and its timing, say in plain words what that kind of contact tends to bring up, then how it is likely to show up for this person given the natal point it touches, the houses either end sits in, and what that point does in their chart. Explain as if they knew none of the symbols; the lived version matters more than the label.',
+  'Make it theirs: where a contact touches what you know of their life, say so in their own terms, and say what to do with it. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
   'Use only the transits, positions and dates in the data. Never add a transit the data does not list, and never work out positions yourself.',
   'Write a retrograde planet as "Saturn ℞" the first time it is named, only when the data says it is retrograde.',
-  'Write in Markdown: short headings (###), short paragraphs, the odd bold phrase for the thing to remember.',
+  'Write in Markdown: a heading (###) per section or contact, full paragraphs, bold for the thing to remember. A table is fine for a backdrop of slower, wider contacts.',
 ].join(' ')
 
-const DROP = new Set(['how_to_read', 'note', 'headline_note', 'left_out'])
+/** The parts of a result written for a model choosing tools, not reading data; the notes on how to read the fields stay. */
+const DROP = new Set(['how_to_read', 'left_out'])
 
-/** The result with the model-facing commentary taken out, as compact JSON. */
+/** The result with the tool-choosing commentary taken out, as compact JSON. */
 export function trimmedData(result: string): string {
   let data: unknown
   try { data = JSON.parse(result) } catch { return result }
@@ -30,9 +32,10 @@ export function trimmedData(result: string): string {
   return JSON.stringify(kept)
 }
 
+/** Room to write: a full paragraph per contact, so a day's reading runs to several hundred words and a year's to over a thousand. */
 const WORDS: Record<Casting['kind'], string> = {
-  today: '250 to 350 words', week: '350 to 450 words', month: '450 to 600 words', year: '600 to 800 words',
-  natal: '500 to 700 words', moon: '200 to 300 words',
+  today: '500 to 700 words', week: '600 to 800 words', month: '700 to 900 words', year: '900 to 1200 words',
+  natal: '800 to 1000 words', moon: '300 to 450 words',
 }
 
 function ask(casting: Casting): { task: string; data: string } {
@@ -47,14 +50,14 @@ function ask(casting: Casting): { task: string; data: string } {
         if (m?.position) moon = `\nTransiting Moon: ${m.position}${m.house ? `, natal house ${m.house}` : ''}${d.moon_phase?.formatted ? `, ${d.moon_phase.formatted}` : ''}.`
       } catch { /* no moon line */ }
       return {
-        task: `Write today's reading (${casting.period}). Lead with the one or two contacts that matter most today (tight orbs, slower planets first), then the Moon's day, then one line to carry. ${WORDS.today}.`,
-        data: (transits ?? trimmedData(casting.result)) + moon,
+        task: `Write today's reading (${casting.period}). Cover every contact in the data, in three tiers: exact today, applying within the next day or two, and the slower backdrop still in orb. Give each its exact moment and, when it has a run of passes, where this one sits in the run and what that means. Then the Moon's day: its sign, phase and house, and the hours to use. Close with one line to carry. ${WORDS.today}.`,
+        data: `${transits ? `TRANSITS, in brief:\n${transits}\n\nTHE CHART IN FULL:\n` : ''}${trimmedData(casting.result)}${moon}`,
       }
     }
     case 'week':
-      return { task: `Write the forecast for the week starting ${casting.period}. Take the headline transits in order with their dates, then the week's lunations, stations and ingresses that touch the chart, then one line to carry. ${WORDS.week}.`, data: trimmedData(casting.result) }
+      return { task: `Write the forecast for the week starting ${casting.period}. Take every headline transit in order with its dates, a full paragraph each, then the week's lunations, stations and ingresses that touch the chart, then one line to carry. ${WORDS.week}.`, data: trimmedData(casting.result) }
     case 'month':
-      return { task: `Write the forecast for ${casting.title}. Take the headline transits in order with their dates, then the month's lunations and eclipses in their natal houses, then stations and ingresses worth knowing, then one line to carry. ${WORDS.month}.`, data: trimmedData(casting.result) }
+      return { task: `Write the forecast for ${casting.title}. Take every headline transit in order with its dates, a full paragraph each, then the month's lunations and eclipses in their natal houses, then stations and ingresses worth knowing, then one line to carry. ${WORDS.month}.`, data: trimmedData(casting.result) }
     case 'year':
       return { task: `Write the forecast for the year from ${casting.period}. Open with the year's theme from the slow-planet transits, take each headline transit with its exact dates and retrograde passes, note the eclipses in their natal houses, and close with the months to watch. ${WORDS.year}.`, data: trimmedData(casting.result) }
     case 'natal':
@@ -69,11 +72,12 @@ const person = (profile: Profile, now: Date): string =>
 
 /**
  * Ceilings on a reply, in tokens. LM Studio counts the model's reasoning
- * against max_output_tokens, and a reasoning model given a year of data
- * can think for a few thousand tokens before its first word, so these are
- * far above the reading's own length: a stop for a runaway, not a budget.
+ * against max_output_tokens, and a reasoning model given a whole chart and
+ * a full brief thinks for six or seven thousand tokens before its first
+ * word (an 8000 cap cut a 750-word day off mid-sentence), so these are far
+ * above the reading's own length: a stop for a runaway, not a budget.
  */
-const READING_MAX_TOKENS = 8000
+const READING_MAX_TOKENS = 16000
 /** An answer may call tools, each round costing it more of the ceiling. */
 const ANSWER_MAX_TOKENS = 6000
 

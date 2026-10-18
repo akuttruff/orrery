@@ -22,20 +22,26 @@ describe('readingRequest', () => {
     expect(req.input).toContain('Transits:')
     expect(req.input).toContain('- key:')
     expect(req.input).toContain('Transiting Moon:')
-    expect(req.input).not.toContain('"houses"')
+    // The brief list of transits first, then the whole chart, with the tool's notes on how to read its fields.
+    expect(req.input).toMatch(/TRANSITS, in brief:\nDay: .*\nTransits:\n- key:/)
+    expect(req.input).toContain('THE CHART IN FULL:\n{"chart_type"')
+    expect(req.input).toContain('"houses"')
+    expect(req.input).toContain('"note":"This chart reflects')
+    expect(req.input).toContain('500 to 700 words')
   })
 
   it('hands a forecast over as its JSON, minus the notes written for a tool-picking model', () => {
     const req = readingRequest(casting({ kind: 'week', result: week, title: 'Week of Oct 12', period: '2026-10-12' }), amie)
     expect(req.input).toContain('headline_transits')
     expect(req.input).not.toContain('how_to_read')
-    expect(req.input).not.toContain('headline_note')
+    expect(req.input).not.toContain('left_out')
+    expect(req.input).toContain('headline_note')
     expect(req.input).toContain('week starting 2026-10-12')
   })
 
   it('leaves text that is not JSON as it is', () => {
     expect(trimmedData('not json')).toBe('not json')
-    expect(trimmedData('{"a":1,"note":"x"}')).toBe('{"a":1}')
+    expect(trimmedData('{"a":1,"how_to_read":"x","note":"keep"}')).toBe('{"a":1,"note":"keep"}')
   })
 })
 

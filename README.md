@@ -18,7 +18,10 @@ the transit tables), copied rather than shared.
   `~/.lmstudio/mcp.json`) and calls them directly, so the wheel and tables
   are on screen in under a second and the model never picks a wrong tool.
 - **The model writes.** The tool's own result goes to LM Studio's
-  `/api/v1/chat` with a short brief (`server/prompt.ts`); the reading streams
+  `/api/v1/chat` with a brief (`server/prompt.ts`) that asks for a full
+  paragraph per contact, explained in plain words and tied to the person's
+  life, several hundred words for a day and over a thousand for a year; the
+  tool's own notes on reading its fields go too. The reading streams
   to the page and is stored with the casting (`server/readings.ts`). The
   model writes on the server, so a phone that locks mid-reading loses
   nothing, and Back during a reading leaves it writing: the home screen
