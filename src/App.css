@@ -228,6 +228,10 @@ input, select { font: inherit; }
 .casting-head h2 { margin: 0; font-size: 20px; }
 .casting-sub { margin: 2px 0 10px; font-size: 12px; color: var(--paper-dim); }
 .casting-actions { display: flex; gap: 8px; margin: 22px 0 8px; }
+/* Under the questions: the kinds of reading again, each a recast in that tone. */
+.retone { margin-top: 22px; }
+.retone .frame-styles { margin-top: 0; }
+.retone .memory-note { display: block; margin-top: 8px; font-size: 12px; color: var(--paper-dim); }
 
 .chip {
   display: inline-flex; align-items: center; gap: 6px;

@@ -215,6 +215,22 @@ describe('App', () => {
     expect(castings.map((c) => c.id)).toEqual(['t1', 't3'])
   })
 
+  it('casts the same kind again in another tone from under the questions', async () => {
+    const castings = [casting('t1', { readingState: 'done', reading: 'Done.', style: 'balanced', note: 'a note', memory: true, memoryExcluded: ['m1'] })]
+    serve(castings)
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: /Casting t1/ }))
+    const again = await screen.findByRole('group', { name: 'Read it again as' })
+    expect(within(again).getByRole('button', { name: 'Balanced' })).toHaveClass('on')
+    await user.click(within(again).getByRole('button', { name: 'Coach' }))
+    expect(await screen.findByRole('heading', { name: 'Casting new2' })).toBeInTheDocument()
+    expect(castings).toHaveLength(2)
+    expect(castings[1]).toMatchObject({ kind: 'today', style: 'coach', note: 'a note', memory: true, memoryExcluded: ['m1'] })
+    // The tone chips wait while the new reading is written.
+    expect(within(screen.getByRole('group', { name: 'Read it again as' })).getByRole('button', { name: 'Gentle' })).toBeDisabled()
+  })
+
   it('opens the popup straight from a cast address, then clears the address', async () => {
     serve([])
     window.history.replaceState(null, '', '/#/cast/week')

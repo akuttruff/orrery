@@ -22,6 +22,9 @@ the transit tables), copied rather than shared.
   from the day of the cast: seven on a Sunday, one on a Saturday. The tool
   always gives seven days from its start, so the days past Saturday are
   trimmed off (`trimWeek` in `server/cast.ts`).
+- **Read it again as.** Under the questions, the kinds of reading again:
+  a tap casts the same kind anew in that tone, with the note and memory
+  choices carried over, and the earlier casting stays beside it.
 - **Every transit has a weight.** The tables' last column is the
   forecasts' own ranking (astro-mcp's `forecast.py`): the transiting
   planet's slowness (Mercury 0.5 up to Pluto 5), doubled on the Sun, Moon,

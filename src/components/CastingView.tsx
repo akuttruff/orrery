@@ -26,7 +26,8 @@ interface CastingViewProps {
   onMemories: () => void
   onWrite: (again: boolean) => void
   onStop: () => void
-  onRecast: () => void
+  /** Cast this kind again with the same choices, or with another kind of reading. */
+  onRecast: (style?: StyleId) => void
   onDelete: () => void
   /** The reading finished (or failed) on the server: the kept casting can be fetched. */
   onSettled: (id: string) => void
@@ -105,8 +106,28 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
       {memoryOn && picking && <MemoryPicker excluded={casting.memoryExcluded} used={casting.memoriesUsed} onChange={onExclude} onManage={onMemories} />}
       <Reading reading={reading} brief={casting.brief} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
       <FollowUps key={casting.id} castingId={casting.id} readingState={reading.state} readingText={reading.text} />
+      {reading.state !== 'none' && (
+        <div className="retone" role="group" aria-label="Read it again as">
+          <span className="ask-label">Read it again as</span>
+          <div className="frame-styles">
+            {READING_STYLES.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`chip${style.id === s.id ? ' on' : ''}`}
+                title={style.id === s.id ? `${s.hint}. How this one was read` : s.hint}
+                disabled={reading.state === 'writing'}
+                onClick={() => onRecast(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <span className="memory-note">A new casting of the same kind, read that way; this one stays.</span>
+        </div>
+      )}
       <div className="casting-actions">
-        <button type="button" className="chip" onClick={onRecast}><RotateCw size={13} aria-hidden="true" /> Recast</button>
+        <button type="button" className="chip" onClick={() => onRecast()}><RotateCw size={13} aria-hidden="true" /> Recast</button>
         <button type="button" className="chip danger" onClick={onDelete}><Trash2 size={13} aria-hidden="true" /> Delete</button>
       </div>
     </article>

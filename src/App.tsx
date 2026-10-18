@@ -252,7 +252,7 @@ export default function App() {
             onMemories={() => setMemoriesOpen(true)}
             onWrite={(again) => void write(again)}
             onStop={() => void stop()}
-            onRecast={() => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: current.style, note: current.note })}
+            onRecast={(style) => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: style ?? current.style, note: current.note })}
             onDelete={() => void remove()}
             onSettled={settled}
           />
