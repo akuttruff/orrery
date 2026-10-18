@@ -18,12 +18,12 @@ import transitChart from '../src/test/fixtures/transit-chart.json?raw'
 const plain = (text: string): Reply => ({ text, trail: [], stats: null })
 
 /** A test's writer may return the text alone; the real one returns the text with its trail and numbers. */
-function serve(write: (req: WriteRequest, onDelta: (t: string) => void, opts?: WriteOptions) => Promise<Reply | string>) {
+function serve(write: (req: WriteRequest, onDelta: (t: string) => void, opts?: WriteOptions) => Promise<Reply | string>, timeoutMs?: number) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orrery-'))
   const store = new Store(dir, '/nonexistent/lm-chat.sqlite')
   const call = vi.fn(async (name: string, args: Record<string, unknown>) => JSON.stringify({ tool: name, args }))
   const model: typeof writeWithModel = async (_config, req, onDelta, opts) => { const r = await write(req, onDelta, opts); return typeof r === 'string' ? plain(r) : r }
-  const readings = new Readings(store, model)
+  const readings = new Readings(store, model, timeoutMs)
   // The memory pool lives in the scratch dir too, never in ~/.lm-memory.
   const state: ApiState = createApiState({ store, call, readings, memoryDb: path.join(dir, 'memory.sqlite'), write: model })
   const server = http.createServer((req, res) => createMiddleware(state)(req, res, () => { res.writeHead(404); res.end() }))
@@ -122,6 +122,9 @@ describe('castings', () => {
     ctx.call.mockImplementation(async (name: string) => (name === 'create_transit_chart' ? transitChart : '{}'))
     const c = await (await post(`${ctx.base}/api/castings`, { kind: 'today' })).json() as Casting
     expect(c.transitReadings).toBeNull()
+    // A casting with no transit wheel has nothing to write, and says so at once rather than being looked at on every open.
+    const moon = await (await post(`${ctx.base}/api/castings`, { kind: 'moon' })).json() as Casting
+    expect((await (await fetch(`${ctx.base}/api/castings/${moon.id}`)).json() as Casting).transitReadings).toEqual({})
     let kept = c
     for (let i = 0; i < 40 && kept.transitReadings === null; i++) {
       await tick()
@@ -188,6 +191,40 @@ describe('castings', () => {
     expect(kept.readingState).toBe('failed')
     expect(kept.readingError).toContain('boom')
     writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return plain('ok') }
+  })
+
+  /** A writer that writes one word, then waits for its signal, failing as the real client does when aborted. */
+  const hanging = async (_r: WriteRequest, onDelta: (t: string) => void, opts?: WriteOptions): Promise<Reply> => {
+    await tick()
+    onDelta('Half')
+    await new Promise<void>((_, reject) => opts?.signal?.addEventListener('abort', () => reject(new Error(`Couldn't reach LM Studio. (${String(opts.signal?.reason)})`))))
+    return plain('never')
+  }
+
+  it('says a stopped reading was stopped, and keeps what was written', async () => {
+    writer = hanging
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'moon' })).json() as Casting
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await tick(); await tick()
+    expect(await (await fetch(`${ctx.base}/api/castings/${c.id}/reading`, { method: 'DELETE' })).json()).toEqual({ stopped: true })
+    await fetch(`${ctx.base}/api/castings/${c.id}/events`)
+    const kept = await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json() as Casting
+    expect(kept.readingState).toBe('failed')
+    expect(kept.readingError).toBe('Stopped before it was finished.')
+    expect(kept.reading).toBe('Half')
+  })
+
+  it('gives up on a model that never finishes', async () => {
+    ctx.close()
+    ctx = await serve((req, onDelta, opts) => hanging(req, onDelta, opts), 120)
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'moon' })).json() as Casting
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    // The stream ends when the run does, given up on at the timeout.
+    await (await fetch(`${ctx.base}/api/castings/${c.id}/events`)).text()
+    const kept = await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json() as Casting
+    expect(kept.readingState).toBe('failed')
+    expect(kept.readingError).toMatch(/^Given up after 0 minutes/)
+    expect(await (await fetch(`${ctx.base}/api/busy`)).json()).toMatchObject({ readings: 0 })
   })
 })
 

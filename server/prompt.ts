@@ -41,12 +41,28 @@ export function noteBlock(profile: Profile, note: string): string | null {
 /** The parts of a result written for a model choosing tools, not reading data; the notes on how to read the fields stay. */
 const DROP = new Set(['how_to_read', 'left_out'])
 
-/** The result with the tool-choosing commentary taken out, as compact JSON. */
+/** The scans folded into a week or a month (server/cast.ts), whose rows are slimmed for the brief. */
+const SCANS = ['week_transits', 'month_transits']
+/**
+ * What a scan row keeps in the brief. The rest (the label, the aspect's
+ * symbol, the sign names) says again what these say, and a brief is sent
+ * with every question under the reading.
+ */
+const SCAN_ROW = ['from_object', 'type', 'to_object', 'start', 'end', 'exact', 'orb', 'from_position', 'to_position', 'from_house', 'to_house', 'from_retrograde']
+
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+
+/** The result with the tool-choosing commentary taken out and the scan rows slimmed, as compact JSON. */
 export function trimmedData(result: string): string {
   let data: unknown
   try { data = JSON.parse(result) } catch { return result }
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return result
-  const kept = Object.fromEntries(Object.entries(data as Record<string, unknown>).filter(([k]) => !DROP.has(k)))
+  if (!isRecord(data)) return result
+  const kept = Object.fromEntries(Object.entries(data).filter(([k]) => !DROP.has(k)))
+  for (const key of SCANS) {
+    const scan = kept[key]
+    if (!isRecord(scan) || !Array.isArray(scan.transits)) continue
+    kept[key] = { ...scan, transits: scan.transits.map((t: unknown) => (isRecord(t) ? Object.fromEntries(SCAN_ROW.filter((k) => k in t).map((k) => [k, t[k]])) : t)) }
+  }
   return JSON.stringify(kept)
 }
 

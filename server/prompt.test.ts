@@ -50,6 +50,12 @@ describe('readingRequest', () => {
     expect(full.input).toContain("the week's events")
     expect(full.input).toContain('"week_transits":{"range"')
     expect(full.input).toContain('"from_object":"Uranus"')
+    // The scan's rows go slimmed: what the model reads, not the label and symbol that say it again.
+    expect(full.input).toContain('"from_position"')
+    expect(full.input).not.toContain('"symbol"')
+    expect(full.input).not.toContain('"from_sign"')
+    expect(full.input.length).toBeLessThan(readingRequest(casting({ kind: 'week', result: withScan('week', weekOct18, scan), title: 'Week of Oct 18', period: '2026-10-18' }), amie).input.length + 1)
+    expect(trimmedData(withScan('week', weekOct18, scan)).length).toBeLessThan(withScan('week', weekOct18, scan).length - 3000)
   })
 
   it('asks for the month\'s every contact when it was cast with its scan, and its headlines when not', () => {

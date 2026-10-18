@@ -61,6 +61,14 @@ export const answerOf = (store: Store, id: string): Target => ({
 /** Thinking arrives many pieces a second; the page gets them joined, this often. */
 const THINKING_FLUSH_MS = 150
 
+/**
+ * How long a reading or answer may take before it is given up on: a year's
+ * reading with high reasoning runs a few minutes, so this is far above
+ * that. Without it a model that hangs leaves the casting writing forever,
+ * refusing questions and holding up a deploy, until someone presses Stop.
+ */
+export const WRITE_TIMEOUT_MS = 10 * 60_000
+
 interface Run {
   text: string
   trail: Step[]
@@ -75,7 +83,7 @@ interface Run {
 export class Readings {
   private runs = new Map<string, Run>()
 
-  constructor(private readonly store: Store, private readonly write = writeWithModel) {}
+  constructor(private readonly store: Store, private readonly write = writeWithModel, private readonly timeoutMs = WRITE_TIMEOUT_MS) {}
 
   get busy(): number { return this.runs.size }
 
@@ -87,13 +95,14 @@ export class Readings {
     const run: Run = { text: '', trail: [], startedAt: Date.now(), listeners: new Set(), controller: new AbortController(), thought: '', thoughtTimer: null }
     this.runs.set(id, run)
     target.begin(req)
+    const timeout = AbortSignal.timeout(this.timeoutMs)
     void (async () => {
       try {
         const reply = await this.write(this.store.getConfig(), req, (piece) => {
           run.text += piece
           this.broadcast(run, { type: 'delta', text: piece })
         }, {
-          signal: run.controller.signal,
+          signal: AbortSignal.any([run.controller.signal, timeout]),
           onTrail: (trail) => {
             run.trail = trail
             target.trail(trail)
@@ -111,7 +120,10 @@ export class Readings {
         target.finish(reading, 'done', null, written)
         this.broadcast(run, { type: 'done', reading, written })
       } catch (err) {
-        const message = err instanceof ModelError ? err.message : `Could not write the reading. (${(err as Error).message})`
+        // Stopped by the person, or given up on, before any other reading of the error: the model client wraps an abort as its own failure.
+        const message = run.controller.signal.aborted ? 'Stopped before it was finished.'
+          : timeout.aborted ? `Given up after ${Math.round(this.timeoutMs / 60_000)} minutes without the model finishing.`
+          : err instanceof ModelError ? err.message : `Could not write the reading. (${(err as Error).message})`
         // Thinking cut short (stopped, or the model gave out) is over all the same: the page must not show it as still going.
         const trail = run.trail.map((s) => (s.kind === 'reasoning' && !s.done ? { ...s, done: true } : s))
         const written: Written = { trail, stats: null, startedAt: run.startedAt, finishedAt: Date.now() }

@@ -27,10 +27,10 @@ export class TransitReadings {
     const casting = this.store.getCasting(id)
     if (!casting || casting.transitReadings !== null || this.inFlight.has(id)) return
     const wheel = parseWheel(casting.result)
-    if (!wheel || wheel.kind !== 'transit') return
-    const input = readingsInput(wheel)
-    // A quiet day: nothing to ask, and nothing for the page to wait for.
-    if (!input) { this.store.setTransitReadings(id, {}); return }
+    // No transit wheel (a forecast, the Moon, the birth chart) or a quiet day: nothing to ask, nothing for the
+    // page to wait for, and nothing to parse again on the next open.
+    const input = wheel?.kind === 'transit' ? readingsInput(wheel) : null
+    if (!wheel || !input) { this.store.setTransitReadings(id, {}); return }
     const keys = wheel.aspects.map(aspectKey)
     this.inFlight.add(id)
     void (async () => {

@@ -55,7 +55,10 @@ the transit tables), copied rather than shared.
   model writes on the server, so a phone that locks mid-reading loses
   nothing, and Back during a reading leaves it writing: the home screen
   lists what is in progress above the shortcuts, and another cast can be
-  started meanwhile. A casting is `#/c/<id>` in the address, so the
+  started meanwhile. Stop keeps what was written and says it was stopped;
+  a model that never finishes is given up on after ten minutes
+  (`WRITE_TIMEOUT_MS` in `server/readings.ts`), so a hang cannot hold a
+  casting, its questions or a deploy forever. A casting is `#/c/<id>` in the address, so the
   browser's Back and a reload both land where expected.
 - **Every tap casts anew.** A tile opens a popup for the choices a reading
   is made with, and its button casts the chart afresh and starts the reading
