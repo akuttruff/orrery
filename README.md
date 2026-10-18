@@ -1,7 +1,7 @@
 # Orrery
 
 Your transits, forecasts and birth chart, one tap each. The charts are
-computed on the Mac by [astro-mcp](../astro-mcp) and drawn at once. A local
+computed on the Mac by [astro-mcp](https://github.com/akuttruff/astro-mcp) and drawn at once. A local
 model in LM Studio then writes the reading over them, streamed in and kept.
 
 Standalone from LM Chat: nothing here touches the chat app or its data,
