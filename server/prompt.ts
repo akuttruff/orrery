@@ -2,6 +2,7 @@ import type { Casting, FollowUp, Profile } from '../src/types.ts'
 import { parseWheel } from '../src/lib/chartWheel.ts'
 import { readingsInput } from '../src/lib/readings.ts'
 import { styleOf } from '../src/lib/styles.ts'
+import { shortDate } from './cast.ts'
 import type { WriteRequest } from './model.ts'
 import { ASTRO_SERVER_NAME } from './astro.ts'
 
@@ -71,8 +72,15 @@ function ask(casting: Casting): { task: string; data: string } {
         data: `${transits ? `TRANSITS, in brief:\n${transits}\n\nTHE CHART IN FULL:\n` : ''}${trimmedData(casting.result)}${moon}`,
       }
     }
-    case 'week':
-      return { task: `Write the forecast for the week starting ${casting.period}. Take every headline transit in order with its dates, a full paragraph each, then the week's lunations, stations and ingresses that touch the chart, then one line to carry. ${WORDS.week}.`, data: trimmedData(casting.result) }
+    case 'week': {
+      // The week is Sunday to Saturday; the data covers the days left in it from the day it was cast.
+      let span = ''
+      try {
+        const r = (JSON.parse(casting.result) as { range?: { start?: string; end?: string } }).range
+        if (r?.start && r.end) span = r.start === r.end ? ` It covers one day, ${r.start}.` : ` It covers ${r.start} to ${r.end}, the days left in the week.`
+      } catch { /* no span */ }
+      return { task: `Write the forecast for the week of ${shortDate(casting.period)}, Sunday to Saturday.${span} Take every headline transit in order with its dates, a full paragraph each, then the week's lunations, stations and ingresses that touch the chart, then one line to carry. ${WORDS.week}.`, data: trimmedData(casting.result) }
+    }
     case 'month':
       return { task: `Write the forecast for ${casting.title}. Take every headline transit in order with its dates, a full paragraph each, then the month's lunations and eclipses in their natal houses, then stations and ingresses worth knowing, then one line to carry. ${WORDS.month}.`, data: trimmedData(casting.result) }
     case 'year':

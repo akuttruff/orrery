@@ -17,6 +17,11 @@ the transit tables), copied rather than shared.
   stdio (`server/astro.ts`, started the same way LM Studio starts it, from
   `~/.lmstudio/mcp.json`) and calls them directly, so the wheel and tables
   are on screen in under a second and the model never picks a wrong tool.
+- **The week is Sunday to Saturday.** A week casting is keyed to its
+  Sunday whatever day it is cast on, and covers the days left in that week
+  from the day of the cast: seven on a Sunday, one on a Saturday. The tool
+  always gives seven days from its start, so the days past Saturday are
+  trimmed off (`trimWeek` in `server/cast.ts`).
 - **The model writes.** The tool's own result goes to LM Studio's
   `/api/v1/chat` with a brief (`server/prompt.ts`) that asks for a full
   paragraph per contact, explained in plain words and tied to the person's

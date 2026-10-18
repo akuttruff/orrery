@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { addDays, castResult, localDate, periodFor, shortDate, titleFor } from './cast.ts'
+import { addDays, castResult, localDate, periodFor, shortDate, sundayOf, titleFor, trimWeek, weekSpan } from './cast.ts'
 import type { Profile } from '../src/types.ts'
+import week from '../src/test/fixtures/forecast-week.json?raw'
 
 const amie: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
 const oct15 = new Date(2026, 9, 15, 22, 8)
@@ -9,7 +10,8 @@ const oct15 = new Date(2026, 9, 15, 22, 8)
 describe('periods', () => {
   it('keys each kind by the span it covers', () => {
     expect(periodFor('today', oct15)).toBe('2026-10-15')
-    expect(periodFor('week', oct15)).toBe('2026-10-15')
+    // A Thursday: its week began on Sunday the 11th.
+    expect(periodFor('week', oct15)).toBe('2026-10-11')
     expect(periodFor('month', oct15)).toBe('2026-10')
     expect(periodFor('year', oct15)).toBe('2026-10-15')
     expect(periodFor('moon', oct15)).toBe('2026-10-15')
@@ -38,8 +40,40 @@ describe('castResult', () => {
     expect(call).toHaveBeenCalledWith('create_transit_chart', { date_time: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' })
     await castResult('month', '2026-10', amie, call)
     expect(call).toHaveBeenLastCalledWith('forecast_month', expect.objectContaining({ month: '2026-10' }))
-    await castResult('week', '2026-10-15', amie, call)
+    // The week's forecast starts on the day it is cast, not on its Sunday.
+    await castResult('week', '2026-10-11', amie, call, oct15)
     expect(call).toHaveBeenLastCalledWith('forecast_week', expect.objectContaining({ start_date: '2026-10-15' }))
+  })
+
+  it('anchors the week to Sunday and covers the days left in it, seven at most and one at least', () => {
+    expect(weekSpan('2026-10-11', new Date(2026, 9, 11, 9))).toEqual({ start: '2026-10-11', end: '2026-10-17', days: 7 })
+    expect(weekSpan('2026-10-11', oct15)).toEqual({ start: '2026-10-15', end: '2026-10-17', days: 3 })
+    expect(weekSpan('2026-10-11', new Date(2026, 9, 17, 23, 50))).toEqual({ start: '2026-10-17', end: '2026-10-17', days: 1 })
+    expect(sundayOf(new Date(2026, 9, 18, 0, 5))).toBe('2026-10-18')
+    expect(sundayOf(new Date(2026, 9, 24, 12))).toBe('2026-10-18')
+  })
+
+  it('trims a week forecast to the days asked for', () => {
+    const trimmed = JSON.parse(trimWeek(week, '2026-10-15', '2026-10-17')) as {
+      range: { start: string; end: string }
+      headline_transits: { transiting: string; natal: string; start: string; end: string; exact: string | null; nearest_exact: string | null }[]
+      stations: { exact: string }[]
+    }
+    expect(trimmed.range).toEqual({ start: '2026-10-15', end: '2026-10-17' })
+    const whole = JSON.parse(week) as { headline_transits: unknown[] }
+    expect(trimmed.headline_transits.length).toBe(whole.headline_transits.length)
+    for (const h of trimmed.headline_transits) {
+      expect(h.start >= '2026-10-15').toBe(true)
+      expect(h.end <= '2026-10-17').toBe(true)
+      if (h.exact) expect(h.exact.slice(0, 10) >= '2026-10-15' && h.exact.slice(0, 10) <= '2026-10-17').toBe(true)
+    }
+    // Mercury sextile MC was exact on the 13th: outside the days, so only its nearest moment stands.
+    const mercury = trimmed.headline_transits.find((h) => h.transiting === 'Mercury' && h.natal === 'MC')!
+    expect(mercury.exact).toBeNull()
+    expect(mercury.nearest_exact).toBe('2026-10-13 16:16')
+    expect(trimmed.stations).toHaveLength(1)
+    expect(JSON.parse(trimWeek(week, '2026-10-19', '2026-10-24')).headline_transits).toEqual([])
+    expect(trimWeek('not json', '2026-10-15', '2026-10-17')).toBe('not json')
   })
 
   it('leaves an empty state or country out rather than sending blanks', async () => {

@@ -36,7 +36,7 @@ describe('readingRequest', () => {
     expect(req.input).not.toContain('how_to_read')
     expect(req.input).not.toContain('left_out')
     expect(req.input).toContain('headline_note')
-    expect(req.input).toContain('week starting 2026-10-12')
+    expect(req.input).toContain('week of Oct 12, Sunday to Saturday. It covers 2026-10-12 to 2026-10-18, the days left in the week.')
   })
 
   it('speaks in the kind of reading chosen, and takes up what the person asked for', () => {

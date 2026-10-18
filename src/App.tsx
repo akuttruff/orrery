@@ -19,7 +19,7 @@ import type { Casting, CastingSummary, Config, Kind, Profile } from './types.ts'
 /** The shortcut buttons: what one tap casts, anew each time. */
 const SHORTCUTS: { kind: Kind; label: string; hint: string; Icon: typeof Sun }[] = [
   { kind: 'today', label: 'Today', hint: 'Transits now, over the birth chart', Icon: Sun },
-  { kind: 'week', label: 'This week', hint: 'Seven days of headline transits', Icon: CalendarDays },
+  { kind: 'week', label: 'This week', hint: 'The rest of the week, through Saturday', Icon: CalendarDays },
   { kind: 'month', label: 'This month', hint: 'Lunations, stations and ingresses', Icon: CalendarRange },
   { kind: 'year', label: 'Year ahead', hint: 'The slow planets, with their passes', Icon: Orbit },
   { kind: 'moon', label: 'Moon', hint: 'Void windows and lunations, two weeks', Icon: Moon },
