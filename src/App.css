@@ -295,9 +295,23 @@ input, select { font: inherit; }
     --gutter: 20px;
   }
   .sheet.cast-sheet .sheet-head { padding-top: 14px; }
+  /* The dialog scrolls as a whole, not its body: a popup over a tone chip then has room to open below the row. */
+  .sheet.cast-sheet { overflow-y: auto; }
+  .sheet.cast-sheet .sheet-body { overflow: visible; }
 }
 .frame-box { display: block; width: 100%; font-size: 15px; }
 .frame-styles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* What each kind of reading is like, in a popup over its chip while a pointer rests on it (the popup rules are the transit table's, in wheel.css). */
+.style-chip { position: relative; display: inline-flex; }
+.style-chip.tt-th-help:hover .style-tip, .style-chip.tt-th-help:focus-within .style-tip { left: 0; right: auto; width: 300px; max-width: calc(100vw - 2 * var(--gutter)); }
+/* The last chips in a row sit near the right edge: their popups open leftwards. */
+.style-chip.tt-th-help:nth-last-child(-n+2):hover .style-tip, .style-chip.tt-th-help:nth-last-child(-n+2):focus-within .style-tip { left: auto; right: 0; }
+.style-tip .wheel-tip-title { margin-bottom: 2px; }
+.style-chosen { font-weight: 400; color: var(--paper-dim); }
+.style-voice { font-style: italic; color: var(--paper-dim); }
+/* A phone has nothing to hover: the chosen kind's line sits under the row instead. */
+.style-hint { display: none; margin: 8px 0 0; font-size: 12px; color: var(--paper-dim); line-height: 1.4; }
+@media (hover: none) { .style-hint { display: block; } }
 .casting .frame-styles .chip { padding: 5px 10px; font-size: 13px; }
 .casting .frame { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-raised); }
 .casting-note { font-style: italic; color: var(--paper); }

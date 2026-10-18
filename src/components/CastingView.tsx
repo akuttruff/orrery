@@ -6,11 +6,12 @@ import { ActiveTransits, ForecastTransits } from './TransitTable'
 import MoonView from './MoonView'
 import Reading from './Reading'
 import FollowUps from './FollowUps'
+import StyleChips from './StyleChips'
 import { useReading } from '../hooks/useReading.ts'
 import { parseWheel } from '../lib/chartWheel.ts'
 import { parseForecast } from '../lib/forecastTable.ts'
 import { formatWhen } from '../lib/when.ts'
-import { READING_STYLES, styleOf, NOTE_MAX, type StyleId } from '../lib/styles.ts'
+import { styleOf, NOTE_MAX, type StyleId } from '../lib/styles.ts'
 import type { Casting } from '../types.ts'
 
 interface CastingViewProps {
@@ -70,13 +71,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
         <div className="frame" role="group" aria-label="Frame of the reading">
           <label className="ask-label" htmlFor={`note-${casting.id}`}>What you want from it, in your words</label>
           <textarea id={`note-${casting.id}`} className="ask-box frame-box" rows={2} maxLength={NOTE_MAX} value={noteDraft} placeholder="Optional. Context helps: “I'm going through some anxiety today”" onChange={(e) => setNoteDraft(e.target.value)} onBlur={() => { if (noteDraft.trim() !== casting.note) onFrame({ note: noteDraft.trim() }) }} />
-          <div className="frame-styles" role="radiogroup" aria-label="Kind of reading">
-            {READING_STYLES.map((s) => (
-              <button key={s.id} type="button" role="radio" aria-checked={style.id === s.id} className={`chip${style.id === s.id ? ' on' : ''}`} title={s.hint} onClick={() => onFrame({ style: s.id })}>
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <StyleChips value={style.id} as="radio" onPick={(id) => onFrame({ style: id })} />
         </div>
       )}
       <div className="memory-switch">
@@ -109,20 +104,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
       {reading.state !== 'none' && (
         <div className="retone" role="group" aria-label="Read it again as">
           <span className="ask-label">Read it again as</span>
-          <div className="frame-styles">
-            {READING_STYLES.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                className={`chip${style.id === s.id ? ' on' : ''}`}
-                title={style.id === s.id ? `${s.hint}. How this one was read` : s.hint}
-                disabled={reading.state === 'writing'}
-                onClick={() => onRecast(s.id)}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <StyleChips value={style.id} as="button" disabled={reading.state === 'writing'} onPick={onRecast} chosenNote="How this one was read" />
           <span className="memory-note">A new casting of the same kind, read that way; this one stays.</span>
         </div>
       )}

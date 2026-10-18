@@ -65,7 +65,9 @@ the transit tables), copied rather than shared.
   at once: what the reading is for, in the person's words ("I'm going
   through some anxiety today"), the kind of reading (`src/lib/styles.ts`:
   balanced, companion, coach, strategist, gentle, plain, each a sentence or
-  two at the seam of the brief where the tone lives), and memory (the
+  two at the seam of the brief where the tone lives; a popup over each chip
+  says what that reading is like and what the model is told, and a phone
+  reads the chosen one's line under the row), and memory (the
   switch is Settings' default; the memories left out are remembered by the
   browser). All of it stays on the casting, so Write again and the
   questions under it keep the same frame, and the brief a reading was

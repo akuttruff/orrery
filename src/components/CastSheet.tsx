@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import MemoryChoice from './MemoryChoice'
-import { NOTE_MAX, READING_STYLES, type StyleId } from '../lib/styles.ts'
+import StyleChips from './StyleChips'
+import { NOTE_MAX, type StyleId } from '../lib/styles.ts'
 import { KIND_LABEL } from '../lib/kinds.ts'
 import type { Kind } from '../types.ts'
 
@@ -55,13 +56,7 @@ export default function CastSheet({ kind, note, style, memoryOn, excluded, busy,
             onChange={(e) => onNote(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onCast() } }}
           />
-          <div className="frame-styles" role="radiogroup" aria-label="Kind of reading">
-            {READING_STYLES.map((s) => (
-              <button key={s.id} type="button" role="radio" aria-checked={style === s.id} className={`chip${style === s.id ? ' on' : ''}`} title={s.hint} onClick={() => onStyle(s.id)}>
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <StyleChips value={style} as="radio" onPick={onStyle} />
           <MemoryChoice on={memoryOn} excluded={excluded} onToggle={onMemory} onExclude={onExclude} onManage={onManage} quiet />
         </div>
         <footer className="sheet-foot cast-foot">
