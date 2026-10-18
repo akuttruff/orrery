@@ -26,6 +26,18 @@
 .tt-num, .tt-when { font-variant-numeric: tabular-nums; color: var(--paper-dim); }
 /* The weight: the number over a bar of it, Pluto on the Sun filling the bar. */
 .tt-weight { color: var(--paper); min-width: 2.6em; }
+/* What the weight is, under its header while a pointer rests on it; a phone goes without. */
+.tt-th-help { position: relative; }
+.tt-help { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .tt-th-help:hover .tt-help, .tt-th-help:focus-within .tt-help {
+    display: block; position: absolute; top: 100%; right: 0; z-index: 70; width: 290px; margin-top: 4px;
+    padding: 8px 11px; border-radius: 8px; text-align: left; white-space: normal; font-weight: 400;
+    background: var(--bg-raised); border: 1px solid var(--line); color: var(--paper);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); font-size: 12.5px; line-height: 1.45;
+  }
+  .tt-help p { margin: 4px 0 0; }
+}
 .tt-bar { height: 3px; margin-top: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .tt-bar-fill { height: 100%; border-radius: 2px; background: var(--moss); }
 /* A date and its time may sit on two lines where the card is narrow. */

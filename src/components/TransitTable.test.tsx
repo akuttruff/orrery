@@ -46,6 +46,7 @@ describe('ActiveTransits', () => {
     render(<ActiveTransits wheel={wheel} />)
     const weights = () => within(screen.getByRole('table')).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[4]!.textContent!)
     expect(weights()).toEqual(rows.map((r) => (r.weight === null ? '—' : String(r.weight))))
+    expect(screen.getByRole('button', { name: 'Weight' })).toHaveAccessibleDescription(/doubled on the Sun, Moon, Ascendant, MC or chart ruler/)
     await user.click(screen.getByRole('button', { name: 'Weight' }))
     await user.click(screen.getByRole('button', { name: /^Weight/ }))
     expect(screen.getByRole('columnheader', { name: /Weight/ })).toHaveAttribute('aria-sort', 'descending')

@@ -22,12 +22,19 @@ function SortHead({ sort, onSort }: { sort: Sort | null; onSort: (key: SortKey) 
         {COLUMNS.map(({ key, label, hint }) => {
           const on = sort?.key === key ? sort.dir : null
           return (
-            <th key={key} aria-sort={on === 'asc' ? 'ascending' : on === 'desc' ? 'descending' : 'none'}>
-              <button type="button" className={`tt-sort${on ? ' on' : ''}`} title={`Sort ${hint}`} onClick={() => onSort(key)}>
+            <th key={key} aria-sort={on === 'asc' ? 'ascending' : on === 'desc' ? 'descending' : 'none'} className={key === 'weight' ? 'tt-th-help' : undefined}>
+              <button
+                type="button"
+                className={`tt-sort${on ? ' on' : ''}`}
+                title={key === 'weight' ? undefined : `Sort ${hint}`}
+                aria-describedby={key === 'weight' ? 'tt-weight-help' : undefined}
+                onClick={() => onSort(key)}
+              >
                 {label}
                 {on === 'asc' && <ArrowUp size={11} aria-label="ascending" />}
                 {on === 'desc' && <ArrowDown size={11} aria-label="descending" />}
               </button>
+              {key === 'weight' && <WeightHelp />}
             </th>
           )
         })}
@@ -79,6 +86,21 @@ function Natal({ name, retrograde = false, house }: { name: string; retrograde?:
       <Body name={name} retrograde={retrograde} />
       {house !== null && <span className="tt-house"> · {ordinal(house)}</span>}
     </>
+  )
+}
+
+/** What the Weight column means, in a popup over its header on a pointer; a phone goes without. */
+function WeightHelp() {
+  return (
+    <div className="tt-help" role="tooltip" id="tt-weight-help">
+      <div className="wheel-tip-title">Weight</div>
+      <p>How much a transit shapes its period, as the forecasts rank theirs.</p>
+      <p>
+        The transiting planet's slowness (Moon 0.2, Mercury 0.5, Venus 0.7, Sun 0.8, Mars 1, Jupiter and Chiron 3, Saturn and Uranus 4, Neptune and Pluto 5),
+        doubled on the Sun, Moon, Ascendant, MC or chart ruler, times the aspect (conjunction and opposition 1, square 0.9, trine 0.7, sextile 0.5).
+      </p>
+      <p className="wheel-tip-sub">Pluto on the Sun is 10 and fills the bar. Click to sort by it.</p>
+    </div>
   )
 }
 
