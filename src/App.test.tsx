@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App, { WRITING_POLL_MS } from './App'
 import { NOT_WRITTEN } from './types.ts'
@@ -107,6 +107,32 @@ describe('App', () => {
     expect(castings[3]!.readingState).toBe('writing')
   })
 
+  it('on a wide window lists the castings in a sidebar, where + casts another of a kind', async () => {
+    const castings = [casting('t1', { readingState: 'done', title: 'Thu 16 Oct' }), casting('n1', { kind: 'natal', readingState: 'done', title: 'Birth chart' })]
+    serve(castings)
+    const wide = window.matchMedia
+    vi.stubGlobal('matchMedia', (q: string) => ({ ...wide(q), matches: q.includes('900') }))
+    const user = userEvent.setup()
+    render(<App />)
+    const side = await screen.findByRole('navigation', { name: 'Castings' })
+    expect(await within(side).findByRole('button', { name: /Thu 16 Oct/ })).toHaveTextContent('read')
+    // Every kind has a section, with or without castings; the home screen's own list stays out of the way.
+    expect(within(side).getAllByRole('region')).toHaveLength(6)
+    expect(screen.queryByRole('region', { name: 'Recent castings' })).not.toBeInTheDocument()
+    expect(screen.getByText('Transits now, over the birth chart')).toBeInTheDocument()
+
+    await user.click(within(side).getByRole('button', { name: 'Cast week' }))
+    expect(await screen.findByRole('heading', { name: 'Casting new3' })).toBeInTheDocument()
+    expect(castings[2]).toMatchObject({ kind: 'week', readingState: 'writing' })
+    expect(within(side).getByRole('button', { name: /Casting new3/ })).toHaveAttribute('aria-current', 'true')
+
+    // Tucked away, the list comes back from the header.
+    await user.click(within(side).getByRole('button', { name: 'Hide the castings' }))
+    expect(screen.queryByRole('navigation', { name: 'Castings' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Show the castings' }))
+    expect(screen.getByRole('navigation', { name: 'Castings' })).toBeInTheDocument()
+  })
+
   it('shows a long group in part, and the rest on request', async () => {
     const castings = Array.from({ length: 6 }, (_, i) => casting(`m${i}`, { kind: 'moon', readingState: 'done', updatedAt: i, title: `Moon ${i}` }))
     serve(castings)
@@ -115,7 +141,7 @@ describe('App', () => {
     const moon = await screen.findByRole('region', { name: 'Moon' })
     expect(moon.querySelectorAll('li')).toHaveLength(4)
     expect(moon.querySelector('li')).toHaveTextContent('Moon 5')
-    await user.click(screen.getByRole('button', { name: 'Show all 6' }))
+    await user.click(screen.getByRole('button', { name: 'Show 2 more' }))
     expect(moon.querySelectorAll('li')).toHaveLength(6)
   })
 

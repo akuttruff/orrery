@@ -50,6 +50,9 @@ input, select { font: inherit; }
   padding: 8px var(--gutter) 10px;
   border-bottom: 1px solid var(--line);
 }
+/* Either side of the title holds a button or two, or nothing; the title stays centred over the column. */
+.app-header-side { flex: 0 0 auto; display: flex; align-items: center; min-width: 38px; }
+.app-header-side.end { justify-content: flex-end; }
 .app-title { flex: 1; min-width: 0; text-align: center; }
 .app-title h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: 0.02em; }
 .app-sub { display: block; font-size: 12px; color: var(--paper-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -59,6 +62,56 @@ input, select { font: inherit; }
   background: transparent; color: var(--paper-dim);
 }
 .icon-btn:active { background: var(--bg-raised); }
+
+/* ====== A wide window: the castings down the side ====== */
+.main { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.app.with-sidebar { flex-direction: row; }
+.sidebar {
+  flex: 0 0 300px;
+  display: flex; flex-direction: column;
+  min-height: 0;
+  padding: 10px 12px 0;
+  border-right: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 6px; }
+.side-title { margin: 0; font-size: 17px; font-weight: 600; }
+.side-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 16px; }
+.side-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 6px 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--paper-dim) 72%, transparent);
+}
+.side-section:first-child .side-section-head { padding-top: 4px; }
+/* "+" on a section's head: another casting of that kind. Small, but a full tap target. */
+.side-add {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; margin: -6px -4px -6px 0;
+  border: none; border-radius: 8px; background: none; color: var(--paper-dim);
+}
+.side-add:hover, .side-add:focus-visible { color: var(--moss); background: var(--bg); }
+.side-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 6px; border: none; border-bottom: 1px solid var(--line); border-radius: 0;
+  background: none; color: var(--paper); font-size: 15px; text-align: left;
+}
+.side-row:hover, .side-row:focus-visible { background: var(--bg); }
+.side-row.active { background: var(--bg); }
+.side-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: transparent; }
+.side-row.active .side-dot { background: var(--moss); }
+.side-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.side-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-time { font-size: 12px; color: var(--paper-dim); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-working { display: inline-flex; align-items: center; gap: 5px; color: var(--gold); }
+.side-working .pulse { width: 7px; height: 7px; }
+.side-settings {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  margin: 0 0 10px; padding: 10px 8px; border: 1px solid var(--line); border-radius: 10px;
+  background: none; color: var(--paper); font-size: 14px; text-align: left;
+}
+.side-settings:hover, .side-settings:focus-visible { background: var(--bg); }
+.with-sidebar .shortcuts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .scroll {
   flex: 1 1 auto;
@@ -114,8 +167,7 @@ input, select { font: inherit; }
 
 .recent-group { margin-top: 14px; }
 .recent-group:first-of-type { margin-top: 6px; }
-.recent-group-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 4px; font-size: 13px; font-weight: 600; }
-.recent-count { font-size: 11px; color: var(--paper-dim); font-weight: 500; }
+.recent-group-head { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: var(--moss); }
 .recent-more { display: block; margin: 8px 4px 0; font-size: 13px; }
 .recent-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .recent-list li { border-bottom: 1px solid var(--line); }

@@ -35,16 +35,13 @@ export default function Recent({ castings, onOpen }: RecentProps) {
         const shown = open ? items : items.slice(0, SHOWN_PER_KIND)
         return (
           <section key={kind} className="recent-group" aria-label={KIND_LABEL[kind]}>
-            <h4 className="recent-group-head">
-              <span className="recent-kind">{KIND_LABEL[kind]}</span>
-              <span className="recent-count">{items.length}</span>
-            </h4>
+            <h4 className="recent-group-head">{KIND_LABEL[kind]}</h4>
             <ul className="recent-list">
               {shown.map((c) => <RecentRow key={c.id} casting={c} onOpen={() => onOpen(c.id)} />)}
             </ul>
             {items.length > SHOWN_PER_KIND && (
               <button type="button" className="link recent-more" aria-expanded={open} onClick={() => toggle(kind)}>
-                {open ? 'Show fewer' : `Show all ${items.length}`}
+                {open ? 'Show fewer' : `Show ${items.length - SHOWN_PER_KIND} more`}
               </button>
             )}
           </section>

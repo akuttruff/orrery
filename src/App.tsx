@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, CalendarDays, CalendarRange, ChevronRight, Moon, Orbit, Settings as SettingsIcon, Sun, Sunrise } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CalendarRange, ChevronRight, Moon, Orbit, PanelLeftOpen, Settings as SettingsIcon, Sun, Sunrise } from 'lucide-react'
 import CastingView from './components/CastingView'
 import Recent from './components/Recent'
 import Settings from './components/Settings'
+import Sidebar from './components/Sidebar'
 import MemoriesSheet from './components/MemoriesSheet'
+import useMediaQuery, { WIDE } from './hooks/useMediaQuery.ts'
 import { api } from './lib/api.ts'
 import { KIND_LABEL } from './lib/kinds.ts'
 import { formatWhen } from './lib/when.ts'
@@ -35,6 +37,14 @@ export default function App() {
   const [memoriesOpen, setMemoriesOpen] = useState(false)
   const [busy, setBusy] = useState<Kind | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // A wide window lists the castings beside the one open; the list can be tucked away, and stays so across visits.
+  const wide = useMediaQuery(WIDE)
+  const [sidebarOpen, setSidebarOpen] = useState(() => { try { return localStorage.getItem('orrery.sidebar') !== 'closed' } catch { return true } })
+  const setSidebar = (open: boolean): void => {
+    setSidebarOpen(open)
+    try { localStorage.setItem('orrery.sidebar', open ? 'open' : 'closed') } catch { /* a preference, not a record */ }
+  }
+  const sidebar = wide && sidebarOpen
 
   const refreshRecent = useCallback(() => { api.castings().then(setRecent).catch(() => { /* the list is a convenience */ }) }, [])
 
@@ -136,16 +146,33 @@ export default function App() {
   }, [refreshRecent])
 
   return (
-    <div className="app">
+    <div className={`app${sidebar ? ' with-sidebar' : ''}`}>
+      {sidebar && (
+        <Sidebar
+          castings={recent}
+          activeId={current?.id ?? null}
+          busy={busy}
+          onOpen={(id) => void open(id)}
+          onCast={(kind) => void cast(kind)}
+          onSettings={() => setSettingsOpen(true)}
+          onCollapse={() => setSidebar(false)}
+        />
+      )}
+      <div className="main">
       <header className="app-header">
-        {current ? (
-          <button type="button" className="icon-btn" aria-label="Back" onClick={home}><ArrowLeft size={20} aria-hidden="true" /></button>
-        ) : <span className="icon-btn" aria-hidden="true" />}
+        <span className="app-header-side">
+          {wide && !sidebarOpen && (
+            <button type="button" className="icon-btn" aria-label="Show the castings" onClick={() => setSidebar(true)}><PanelLeftOpen size={20} aria-hidden="true" /></button>
+          )}
+          {current && <button type="button" className="icon-btn" aria-label="Back" onClick={home}><ArrowLeft size={20} aria-hidden="true" /></button>}
+        </span>
         <div className="app-title">
           <h1>Orrery</h1>
           {profile && <span className="app-sub">{profile.name} · {profile.dateTime.slice(0, 10)} · {profile.city}</span>}
         </div>
-        <button type="button" className="icon-btn" aria-label="Settings" onClick={() => setSettingsOpen(true)}><SettingsIcon size={19} aria-hidden="true" /></button>
+        <span className="app-header-side end">
+          {!sidebar && <button type="button" className="icon-btn" aria-label="Settings" onClick={() => setSettingsOpen(true)}><SettingsIcon size={19} aria-hidden="true" /></button>}
+        </span>
       </header>
 
       <main className="scroll">
@@ -189,10 +216,11 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <Recent castings={recent.filter((c) => c.readingState !== 'writing')} onOpen={(id) => void open(id)} />
+            {!sidebar && <Recent castings={recent.filter((c) => c.readingState !== 'writing')} onOpen={(id) => void open(id)} />}
           </>
         )}
       </main>
+      </div>
 
       {settingsOpen && profile && config && (
         <Settings
