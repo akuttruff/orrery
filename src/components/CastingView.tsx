@@ -29,9 +29,6 @@ interface CastingViewProps {
   onSettled: (id: string) => void
 }
 
-/** No per-aspect readings here (the reading below covers the day), so the popups show the aspect alone. */
-const NO_READINGS: Record<string, string> = {}
-
 // The reading redraws this view many times a second while it streams; the chart and tables above it have not changed.
 const Transits = memo(ActiveTransits)
 const Forecast = memo(ForecastTransits)
@@ -51,7 +48,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
         <h2>{casting.title}</h2>
         <p className="casting-sub">Cast {formatWhen(casting.createdAt)}</p>
       </header>
-      {wheel && <ChartWheel wheel={wheel} castingId={casting.id} readings={NO_READINGS} />}
+      {wheel && <ChartWheel wheel={wheel} castingId={casting.id} readings={casting.transitReadings ?? undefined} />}
       {wheel?.kind === 'transit' && <Transits wheel={wheel} />}
       {forecast && <Forecast table={forecast} />}
       {casting.kind === 'moon' && <Moon result={casting.result} />}

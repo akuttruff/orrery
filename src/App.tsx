@@ -27,6 +27,10 @@ const SHORTCUTS: { kind: Kind; label: string; hint: string; Icon: typeof Sun }[]
 /** How often the home screen asks after readings still being written. */
 export const WRITING_POLL_MS = 3000
 
+/** The popup sentences for a transit wheel are written beside the reading; the open casting looks for them this often, this many times. */
+export const TRANSIT_POLL_MS = 4000
+const TRANSIT_POLLS = 45
+
 /** The history entry this page made for a casting, so Back can be told from an address someone arrived at. */
 const ENTRY = { orrery: true }
 
@@ -155,6 +159,20 @@ export default function App() {
     await api.remove(current.id).catch(() => { /* already gone */ })
     home()
   }
+
+  // A transit wheel's popups arrive a little after the cast: look for them, and keep only them, so a reading mid-stream is not disturbed.
+  const transitId = current?.kind === 'today' && current.transitReadings === null ? current.id : null
+  useEffect(() => {
+    if (!transitId) return undefined
+    let left = TRANSIT_POLLS
+    const timer = window.setInterval(() => {
+      api.casting(transitId).then((c) => {
+        if (c.transitReadings !== null || --left <= 0) window.clearInterval(timer)
+        if (c.transitReadings !== null) setCurrent((cur) => (cur?.id === c.id ? { ...cur, transitReadings: c.transitReadings } : cur))
+      }).catch(() => { /* next look */ })
+    }, TRANSIT_POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [transitId])
 
   // The reading was written (or failed) on the server: fetch the kept copy, so a reopen shows it without the stream.
   const settled = useCallback((id: string) => {

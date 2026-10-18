@@ -86,6 +86,8 @@ export interface WriteRequest {
   input: string
   /** A ceiling on the reply, in tokens. */
   maxTokens?: number
+  /** LM Studio's reasoning level for this call alone ('off' for a short answer); unset leaves it to Settings. */
+  reasoning?: string
   /** LM Studio integrations the model may call, by plugin id ('mcp/<server>' from its mcp.json). */
   tools?: string[]
 }
@@ -218,7 +220,8 @@ export async function writeWithModel(
   if (!config.model) throw new ModelError('No model chosen. Pick one in Settings.')
   const base = config.lmStudioUrl.replace(/\/+$/, '')
   const body: Record<string, unknown> = { model: config.model, input: req.input, system_prompt: req.system, stream: true }
-  if (config.reasoning) body.reasoning = config.reasoning
+  const reasoning = req.reasoning ?? config.reasoning
+  if (reasoning) body.reasoning = reasoning
   if (req.maxTokens) body.max_output_tokens = req.maxTokens
   if (req.tools?.length) body.integrations = req.tools.map((id) => ({ type: 'plugin', id }))
 

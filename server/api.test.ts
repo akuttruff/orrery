@@ -10,6 +10,9 @@ import { Store } from './store.ts'
 import type { ApiState } from './api.ts'
 import type { Reply, WriteOptions, WriteRequest, writeWithModel } from './model.ts'
 import type { Casting, CastingSummary, FollowUp, Memory, Step, Written } from '../src/types.ts'
+import { parseWheel } from '../src/lib/chartWheel.ts'
+import { READINGS_PROMPT, aspectKey } from '../src/lib/readings.ts'
+import transitChart from '../src/test/fixtures/transit-chart.json?raw'
 
 /** The API on a real socket, with fake tools and a fake model, in a scratch data dir. */
 const plain = (text: string): Reply => ({ text, trail: [], stats: null })
@@ -37,9 +40,11 @@ const post = (url: string, body?: unknown) => fetch(url, { method: 'POST', heade
 let ctx: Awaited<ReturnType<typeof serve>>
 // Writes a word at a time with a pause between, so a stream opened right after the start sees the deltas.
 const tick = () => new Promise((r) => setTimeout(r, 25))
-let writer = async (_req: WriteRequest, onDelta: (t: string) => void, _opts?: WriteOptions): Promise<Reply | string> => { await tick(); onDelta('Hello'); await tick(); onDelta(' there'); return plain('Hello there') }
+const defaultWriter = async (_req: WriteRequest, onDelta: (t: string) => void, _opts?: WriteOptions): Promise<Reply | string> => { await tick(); onDelta('Hello'); await tick(); onDelta(' there'); return plain('Hello there') }
+let writer = defaultWriter
 
 beforeEach(async () => {
+  writer = defaultWriter
   // The shared setup stubs fetch for page tests; these talk to a real socket.
   vi.unstubAllGlobals()
   ctx = await serve((req, onDelta, opts) => writer(req, onDelta, opts))
@@ -104,6 +109,33 @@ describe('castings', () => {
     expect(await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json()).toMatchObject({ memory: false, memoryExcluded: ['m1', 'm2'] })
     expect((await post(`${ctx.base}/api/castings`, { kind: 'today', memory: 'yes' })).status).toBe(400)
     expect((await post(`${ctx.base}/api/castings`, { kind: 'today', memoryExcluded: 'm1' })).status).toBe(400)
+  })
+
+  it('writes a sentence for each transit on a today wheel beside the reading, and keeps it on the casting', async () => {
+    const asked: WriteRequest[] = []
+    writer = async (req) => {
+      asked.push(req)
+      if (req.system !== READINGS_PROMPT) return 'The reading.'
+      const keys = [...req.input.matchAll(/^- key: (.+)$/gm)].map((m) => m[1]!)
+      return JSON.stringify(Object.fromEntries(keys.map((k) => [k, `About ${k.split('|')[0]} today.`])))
+    }
+    ctx.call.mockImplementation(async (name: string) => (name === 'create_transit_chart' ? transitChart : '{}'))
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'today' })).json() as Casting
+    expect(c.transitReadings).toBeNull()
+    let kept = c
+    for (let i = 0; i < 40 && kept.transitReadings === null; i++) {
+      await tick()
+      kept = await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json() as Casting
+    }
+    const wheel = parseWheel(transitChart)!
+    expect(Object.keys(kept.transitReadings!)).toHaveLength(wheel.aspects.length)
+    expect(kept.transitReadings![aspectKey(wheel.aspects[0]!)]).toMatch(/^About \w+ today\.$/)
+    // One short call, without thinking, and only once.
+    expect(asked.filter((r) => r.system === READINGS_PROMPT)).toHaveLength(1)
+    expect(asked[0]).toMatchObject({ reasoning: 'off' })
+    await fetch(`${ctx.base}/api/castings/${c.id}`)
+    expect(asked.filter((r) => r.system === READINGS_PROMPT)).toHaveLength(1)
+    expect(await (await fetch(`${ctx.base}/api/busy`)).json()).toMatchObject({ transits: 0 })
   })
 
   it('rejects a kind it does not know', async () => {

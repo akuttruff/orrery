@@ -114,10 +114,15 @@ export interface Casting {
   memoryExcluded: string[]
   /** How the reading was written. A casting in a list carries no trail. */
   written: Written
+  /**
+   * On a transit wheel, a sentence for each aspect by its key (see lib/readings.ts),
+   * for the popup over it; null until the model has written them.
+   */
+  transitReadings: Record<string, string> | null
 }
 
 /** A casting in the recent list: everything but the bodies, and how many questions were asked under it. */
-export type CastingSummary = Omit<Casting, 'result' | 'reading'> & { questions: number }
+export type CastingSummary = Omit<Casting, 'result' | 'reading' | 'transitReadings'> & { questions: number }
 
 /**
  * A question asked under a reading and the model's answer, written on the

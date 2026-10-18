@@ -4,9 +4,6 @@ import { api } from '../lib/api.ts'
 import { parseWheel, wheelTitle } from '../lib/chartWheel.ts'
 import type { Casting } from '../types.ts'
 
-/** The card shows no per-aspect readings, and neither does this. */
-const NO_READINGS: Record<string, string> = {}
-
 /**
  * A casting's wheel filling a tab of its own (`#/w/<id>`): the browser's
  * pinch and zoom do the rest, so the page lifts the app's pin to scale 1.
@@ -29,7 +26,7 @@ export default function WheelPage({ id }: { id: string }) {
   if (!wheel || !title) return <p className="error-card">This casting has no wheel to draw.</p>
   return (
     <main className="wheel-page">
-      <WheelSvg wheel={wheel} title={title} readings={NO_READINGS} />
+      <WheelSvg wheel={wheel} title={title} readings={casting.transitReadings ?? undefined} />
       <p className="wheel-page-title">{title}</p>
     </main>
   )

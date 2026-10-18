@@ -34,6 +34,12 @@ the transit tables), copied rather than shared.
   casting's time being its last change (`updated_at`): a reading written or a
   question asked or answered moves it to the top of its group. Long groups
   fold to four until asked.
+- **The wheel's popups read too.** Hovering a planet or an aspect line on
+  the wheel (a press and hold on a phone) shows its position and aspects;
+  on a Today wheel each aspect's popup also carries a sentence on what that
+  transit tends to bring up that day, written by the model in one short
+  call beside the reading (`server/transits.ts`, the prompt in
+  `src/lib/readings.ts`) and kept on the casting.
 - **Ask about it.** Under every reading is a box for follow-up questions.
   Each answer is written on the server like the reading (`server/readings.ts`
   writes both) and kept with the casting (`follow_ups` table). An answer may

@@ -70,11 +70,22 @@ interface CastingRow extends WrittenRow {
   id: string; kind: string; period: string; title: string; result: string; reading: string
   reading_state: string; reading_error: string | null; created_at: number; updated_at: number | null
   memory: number | null; memories_used: string | null; memory_excluded: string | null
+  transit_readings: string | null
 }
 
 const parseIds = (text: string | null): string[] => {
   if (!text) return []
   try { const v = JSON.parse(text) as unknown; return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [] } catch { return [] }
+}
+
+/** A transit wheel's readings by aspect key, as kept; null when not written yet. */
+const parseReadingMap = (text: string | null): Record<string, string> | null => {
+  if (!text) return null
+  try {
+    const v = JSON.parse(text) as unknown
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+    return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === 'string'))
+  } catch { return null }
 }
 
 const parseTrail = (text: string | null): Step[] | null => {
@@ -103,7 +114,7 @@ const fromRow = (r: CastingRow): Casting => ({
   id: r.id, kind: r.kind as Kind, period: r.period, title: r.title, result: r.result, reading: r.reading,
   readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
   memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
-  written: parseWritten(r),
+  written: parseWritten(r), transitReadings: parseReadingMap(r.transit_readings),
 })
 
 interface FollowUpRow extends WrittenRow {
@@ -166,6 +177,7 @@ export class Store {
       if (!has(table, 'finished_at')) this.db.exec(`ALTER TABLE ${table} ADD COLUMN finished_at INTEGER`)
     }
     if (!has('castings', 'updated_at')) this.db.exec('ALTER TABLE castings ADD COLUMN updated_at INTEGER')
+    if (!has('castings', 'transit_readings')) this.db.exec('ALTER TABLE castings ADD COLUMN transit_readings TEXT')
     this.db.exec('CREATE INDEX IF NOT EXISTS castings_updated ON castings (updated_at)')
     // A casting from before this was kept: its last change is its reading's or its latest question's.
     this.db.exec(`UPDATE castings SET updated_at = MAX(
@@ -241,7 +253,7 @@ export class Store {
     const casting: Casting = {
       memory: null, memoryExcluded: [], ...input,
       id: newId(), reading: '', readingState: 'none', readingError: null, createdAt: now, updatedAt: now, memoriesUsed: [],
-      written: { ...NOT_WRITTEN },
+      written: { ...NOT_WRITTEN }, transitReadings: null,
     }
     this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded))
@@ -275,6 +287,11 @@ export class Store {
     const now = Date.now()
     this.db.prepare('UPDATE castings SET reading = ?, reading_state = ?, reading_error = ?, trail = ?, stats = ?, finished_at = ?, updated_at = ? WHERE id = ?')
       .run(reading, state, error, JSON.stringify(written.trail), written.stats ? JSON.stringify(written.stats) : null, now, now, id)
+  }
+
+  /** The popup sentences for the wheel's transits, once the model has written them. Not a change of the person's: the casting keeps its place. */
+  setTransitReadings(id: string, readings: Record<string, string>): void {
+    this.db.prepare('UPDATE castings SET transit_readings = ? WHERE id = ?').run(JSON.stringify(readings), id)
   }
 
   /** The casting's own memory switch: on, off, or null to follow Settings. */

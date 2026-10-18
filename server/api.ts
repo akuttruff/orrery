@@ -13,6 +13,7 @@ import { followUpRequest, readingRequest } from './prompt.ts'
 import { Readings, answerOf } from './readings.ts'
 import { Store } from './store.ts'
 import type { ServerConfig } from './store.ts'
+import { TransitReadings } from './transits.ts'
 
 export interface ApiOptions {
   dir?: string
@@ -22,8 +23,9 @@ export interface ApiOptions {
   store?: Store
   /** Orrery's memory file; defaults to memory.sqlite in the data dir. */
   memoryDb?: string
-  /** The model, for the short calls that are not streamed to a page (what a question reveals). */
+  /** The model, for the short calls that are not streamed to a page (what a question reveals, the transit popups). */
   write?: typeof writeWithModel
+  transits?: TransitReadings
 }
 
 export interface ApiState {
@@ -32,6 +34,8 @@ export interface ApiState {
   readings: Readings
   memories: Memories
   write: typeof writeWithModel
+  /** The popup sentence for each transit on a wheel, written beside the reading. */
+  transits: TransitReadings
   /** Casts in flight by kind+period, so two taps run the tools once. */
   casting: Map<string, Promise<unknown>>
 }
@@ -80,7 +84,8 @@ export function createApiState(options: ApiOptions = {}): ApiState {
   const call: ToolCaller = options.call ?? ((name, args) => astro!.call(name, args))
   const readings = options.readings ?? new Readings(store)
   const memories = new Memories(options.memoryDb ?? memoryPath(path.resolve(options.dir ?? '.data')))
-  return { store, call, readings, memories, write: options.write ?? writeWithModel, casting: new Map() }
+  const write = options.write ?? writeWithModel
+  return { store, call, readings, memories, write, transits: options.transits ?? new TransitReadings(store, write), casting: new Map() }
 }
 
 export function createMiddleware(state: ApiState): Handler {
@@ -132,7 +137,9 @@ export function createMiddleware(state: ApiState): Handler {
     if (!pending) {
       pending = (async () => {
         const result = await castResult(kind, period, profile, call)
-        return store.addCasting({ kind, period, title: titleFor(kind, period, profile), result, ...memory })
+        const casting = store.addCasting({ kind, period, title: titleFor(kind, period, profile), result, ...memory })
+        state.transits.ensure(casting.id)
+        return casting
       })().finally(() => state.casting.delete(key))
       state.casting.set(key, pending)
     }
@@ -172,7 +179,7 @@ export function createMiddleware(state: ApiState): Handler {
         .catch((err: Error) => json(res, 200, { ok: false, astro: false, error: err.message }))
       return undefined
     }
-    if (url === '/api/busy' && method === 'GET') return json(res, 200, { readings: readings.busy, casts: state.casting.size })
+    if (url === '/api/busy' && method === 'GET') return json(res, 200, { readings: readings.busy, casts: state.casting.size, transits: state.transits.busy })
 
     // --- settings -------------------------------------------------------
     if (url === '/api/profile' && method === 'GET') return json(res, 200, store.getProfile())
@@ -236,7 +243,8 @@ export function createMiddleware(state: ApiState): Handler {
       const sub = m[2]
       const casting = store.getCasting(id)
       if (!casting) return json(res, 404, { error: 'No such casting' })
-      if (!sub && method === 'GET') return json(res, 200, casting)
+      // A wheel opened before its popups were written (or whose writing failed) gets them asked for again.
+      if (!sub && method === 'GET') { state.transits.ensure(id); return json(res, 200, casting) }
       if (!sub && method === 'PATCH') {
         void readBody(req).then((body) => {
           const patch = memoryPatch(body)
