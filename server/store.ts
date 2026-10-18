@@ -15,7 +15,7 @@ export interface ServerConfig extends Omit<Config, 'hasToken'> {
 const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', apiToken: '', model: '', reasoning: 'low', memoryDefault: 'off' }
 
 /** The first chart the app opens with, until Settings says otherwise. */
-const DEFAULT_PROFILE: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
+const DEFAULT_PROFILE: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
 
 /** The chat app's database, whose LM Studio settings seed ours on first run so there is nothing to type twice. */
 const LM_CHAT_DB = path.join(os.homedir(), 'Code', 'mobile-ai-chat', 'lm-chat', '.data', 'lm-chat.sqlite')

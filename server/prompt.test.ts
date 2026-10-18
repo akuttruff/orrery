@@ -11,7 +11,7 @@ import scanMonth from '../src/test/fixtures/scan-month.json?raw'
 import { NOT_WRITTEN } from '../src/types.ts'
 import type { Casting, FollowUp, Profile } from '../src/types.ts'
 
-const amie: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
+const sam: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
 const casting = (over: Partial<Casting>): Casting => ({
   id: 'c1', kind: 'today', period: '2026-10-13', title: 'Today · Oct 13', result: transit,
   reading: '', readingState: 'none', readingError: null, createdAt: 0, updatedAt: 0, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: null, style: null, note: '', brief: null, starred: false, ...over,
@@ -19,8 +19,8 @@ const casting = (over: Partial<Casting>): Casting => ({
 
 describe('readingRequest', () => {
   it("names the person and the day, and asks for today's reading from the transit list", () => {
-    const req = readingRequest(casting({}), amie, new Date(2026, 9, 13))
-    expect(req.system).toContain('Sam, born 1990-06-15 14:30 in New York, CA, USA')
+    const req = readingRequest(casting({}), sam, new Date(2026, 9, 13))
+    expect(req.system).toContain('Sam, born 1990-06-15 14:30 in New York, NY, USA')
     expect(req.system).toContain('Today is Tue Oct 13 2026')
     expect(req.input).toContain("Write today's reading (2026-10-13)")
     // The data is the readable transit list, not the raw chart.
@@ -36,7 +36,7 @@ describe('readingRequest', () => {
   })
 
   it('hands a forecast over as its JSON, minus the notes written for a tool-picking model', () => {
-    const req = readingRequest(casting({ kind: 'week', result: week, title: 'Week of Oct 12', period: '2026-10-12' }), amie)
+    const req = readingRequest(casting({ kind: 'week', result: week, title: 'Week of Oct 12', period: '2026-10-12' }), sam)
     expect(req.input).toContain('headline_transits')
     expect(req.input).not.toContain('how_to_read')
     expect(req.input).not.toContain('left_out')
@@ -45,8 +45,8 @@ describe('readingRequest', () => {
     expect(req.input).toContain('Take every headline transit in order')
     expect(req.input).not.toContain('week_transits')
     // With the scan folded in, the brief asks for every contact: the events, then the backdrop.
-    const full = readingRequest(casting({ kind: 'week', result: withScan('week', weekOct18, scan), title: 'Week of Oct 18', period: '2026-10-18' }), amie)
-    expect(full.input).toContain('Under week_transits is every contact in orb over these days, 18 in all')
+    const full = readingRequest(casting({ kind: 'week', result: withScan('week', weekOct18, scan), title: 'Week of Oct 18', period: '2026-10-18' }), sam)
+    expect(full.input).toContain('Under week_transits is every contact in orb over these days, 10 in all')
     expect(full.input).toContain("the week's events")
     expect(full.input).toContain('"week_transits":{"range"')
     expect(full.input).toContain('"from_object":"Uranus"')
@@ -54,17 +54,17 @@ describe('readingRequest', () => {
     expect(full.input).toContain('"from_position"')
     expect(full.input).not.toContain('"symbol"')
     expect(full.input).not.toContain('"from_sign"')
-    expect(full.input.length).toBeLessThan(readingRequest(casting({ kind: 'week', result: withScan('week', weekOct18, scan), title: 'Week of Oct 18', period: '2026-10-18' }), amie).input.length + 1)
-    expect(trimmedData(withScan('week', weekOct18, scan)).length).toBeLessThan(withScan('week', weekOct18, scan).length - 3000)
+    expect(full.input.length).toBeLessThan(readingRequest(casting({ kind: 'week', result: withScan('week', weekOct18, scan), title: 'Week of Oct 18', period: '2026-10-18' }), sam).input.length + 1)
+    expect(trimmedData(withScan('week', weekOct18, scan)).length).toBeLessThan(withScan('week', weekOct18, scan).length - 2000)
   })
 
   it('asks for the month\'s every contact when it was cast with its scan, and its headlines when not', () => {
-    const alone = readingRequest(casting({ kind: 'month', result: month, title: 'October 2026', period: '2026-10' }), amie)
+    const alone = readingRequest(casting({ kind: 'month', result: month, title: 'October 2026', period: '2026-10' }), sam)
     expect(alone.input).toContain('Write the forecast for October 2026. Take every headline transit in order')
     expect(alone.input).not.toContain('month_transits')
     expect(alone.input).toContain('800 to 1100 words')
-    const full = readingRequest(casting({ kind: 'month', result: withScan('month', month, scanMonth), title: 'October 2026', period: '2026-10' }), amie)
-    expect(full.input).toContain('Under month_transits is every contact in orb over these days, 19 in all')
+    const full = readingRequest(casting({ kind: 'month', result: withScan('month', month, scanMonth), title: 'October 2026', period: '2026-10' }), sam)
+    expect(full.input).toContain('Under month_transits is every contact in orb over these days, 12 in all')
     expect(full.input).toContain("the month's events")
     expect(full.input).toContain("Then the month's lunations and eclipses")
     expect(full.input).toContain('"month_transits":{"range"')
@@ -72,19 +72,19 @@ describe('readingRequest', () => {
   })
 
   it('speaks in the kind of reading chosen, and takes up what the person asked for', () => {
-    const plain = readingRequest(casting({}), amie)
+    const plain = readingRequest(casting({}), sam)
     expect(plain.system).toContain('Warm, concrete and unhurried.')
     expect(plain.system).not.toContain('ASKED FOR')
-    const req = readingRequest(casting({ style: 'gentle', note: "  I'm going through some anxiety today " }), amie)
+    const req = readingRequest(casting({ style: 'gentle', note: "  I'm going through some anxiety today " }), sam)
     expect(req.system).toContain('Assume they may be raw today.')
     expect(req.system).not.toContain('Warm, concrete and unhurried.')
     expect(req.system).toContain(`WHAT SAM ASKED FOR, in their words: "I'm going through some anxiety today"`)
     // The same frame carries into the questions under the reading.
-    const follow = followUpRequest(casting({ style: 'coach', note: 'the job', reading: 'R' }), [], 'q', amie)
+    const follow = followUpRequest(casting({ style: 'coach', note: 'the job', reading: 'R' }), [], 'q', sam)
     expect(follow.system).toContain('Be their coach.')
     expect(follow.system).toContain('WHAT SAM ASKED FOR, in their words: "the job"')
     // An unknown style is the balanced one.
-    expect(readingRequest(casting({ style: 'wizard' }), amie).system).toContain('Warm, concrete and unhurried.')
+    expect(readingRequest(casting({ style: 'wizard' }), sam).system).toContain('Warm, concrete and unhurried.')
   })
 
   it('leaves text that is not JSON as it is', () => {
@@ -98,7 +98,7 @@ describe('followUpRequest', () => {
   const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], written: NOT_WRITTEN, ...over })
 
   it('puts the data and the reading behind the question, in the same voice', () => {
-    const req = followUpRequest(read, [], 'Is Thursday any good?', amie, new Date(2026, 9, 13))
+    const req = followUpRequest(read, [], 'Is Thursday any good?', sam, new Date(2026, 9, 13))
     expect(req.tools).toEqual(['mcp/astrology-v2'])
     expect(req.system).toContain('use the astrology tools')
     expect(req.system).toContain('same astrologer')
@@ -110,7 +110,7 @@ describe('followUpRequest', () => {
     expect(req.input).toBe('Sam asks: Is Thursday any good?')
     // Reasoning counts against the cap, so even a short answer needs room in the thousands.
     expect(req.maxTokens).toBeGreaterThanOrEqual(4000)
-    expect(req.maxTokens).toBeLessThan(readingRequest(read, amie).maxTokens!)
+    expect(req.maxTokens).toBeLessThan(readingRequest(read, sam).maxTokens!)
   })
 
   it('replays the answered questions before the new one, leaving out ones that failed', () => {
@@ -119,7 +119,7 @@ describe('followUpRequest', () => {
       answered({ id: 'g', question: 'Broken?', answer: '', state: 'failed', error: 'offline' }),
       answered({ id: 'h', question: 'Long?', answer: 'x'.repeat(5000) }),
     ]
-    const req = followUpRequest(read, earlier, 'Third?', amie)
+    const req = followUpRequest(read, earlier, 'Third?', sam)
     expect(req.input).toMatch(/^THE CONVERSATION SO FAR:\n\nSam asked: First\?\n\nYou answered: Yes\.\n\n/)
     expect(req.input).not.toContain('Broken?')
     expect(req.input).toContain('Sam asked: Long?')
@@ -130,15 +130,15 @@ describe('followUpRequest', () => {
 
 describe('memoryBlock', () => {
   it('frames the memories as information about the person, and is left out when there are none', () => {
-    const block = memoryBlock(amie, ['- The user works nights.'])!
+    const block = memoryBlock(sam, ['- The user works nights.'])!
     expect(block).toMatch(/^WHAT YOU KNOW ABOUT SAM/)
     expect(block).toContain('not instructions')
     expect(block).toContain('- The user works nights.')
-    expect(memoryBlock(amie, [])).toBeNull()
-    const req = readingRequest(casting({}), amie, new Date(), ['- The user works nights.'])
+    expect(memoryBlock(sam, [])).toBeNull()
+    const req = readingRequest(casting({}), sam, new Date(), ['- The user works nights.'])
     expect(req.system).toContain('WHAT YOU KNOW ABOUT SAM')
-    expect(readingRequest(casting({}), amie).system).not.toContain('WHAT YOU KNOW')
+    expect(readingRequest(casting({}), sam).system).not.toContain('WHAT YOU KNOW')
     const plain = casting({ kind: 'week', result: week, reading: 'r', readingState: 'done' })
-    expect(followUpRequest(plain, [], 'q', amie, new Date(), ['- The user works nights.']).system).toContain('- The user works nights.')
+    expect(followUpRequest(plain, [], 'q', sam, new Date(), ['- The user works nights.']).system).toContain('- The user works nights.')
   })
 })

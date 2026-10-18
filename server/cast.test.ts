@@ -8,7 +8,7 @@ import scan from '../src/test/fixtures/scan-week.json?raw'
 import month from '../src/test/fixtures/forecast-month.json?raw'
 import scanMonth from '../src/test/fixtures/scan-month.json?raw'
 
-const amie: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
+const sam: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
 const oct15 = new Date(2026, 9, 15, 22, 8)
 
 describe('periods', () => {
@@ -30,41 +30,41 @@ describe('periods', () => {
   })
 
   it('titles read as a person would say them', () => {
-    expect(titleFor('today', '2026-10-15', amie)).toBe('Today · Oct 15')
-    expect(titleFor('month', '2026-10', amie)).toBe('October 2026')
-    expect(titleFor('natal', 'natal', amie)).toBe("Sam's birth chart")
-    expect(titleFor('moon', '2026-10-15', amie)).toBe('Moon · Oct 15 – Oct 29')
+    expect(titleFor('today', '2026-10-15', sam)).toBe('Today · Oct 15')
+    expect(titleFor('month', '2026-10', sam)).toBe('October 2026')
+    expect(titleFor('natal', 'natal', sam)).toBe("Sam's birth chart")
+    expect(titleFor('moon', '2026-10-15', sam)).toBe('Moon · Oct 15 – Oct 29')
   })
 })
 
 describe('castResult', () => {
   it('passes the birth data by city, and the period as the tool wants it', async () => {
     const call = vi.fn(async (name: string) => `{"tool":"${name}"}`)
-    await castResult('today', '2026-10-15', amie, call)
-    expect(call).toHaveBeenCalledWith('create_transit_chart', { date_time: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' })
+    await castResult('today', '2026-10-15', sam, call)
+    expect(call).toHaveBeenCalledWith('create_transit_chart', { date_time: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' })
     // The month's forecast and its scan over the calendar month, Mars outward, as the forecast itself ranks.
-    await castResult('month', '2026-10', amie, call)
+    await castResult('month', '2026-10', sam, call)
     expect(call).toHaveBeenCalledWith('forecast_month', expect.objectContaining({ month: '2026-10' }))
     expect(call).toHaveBeenLastCalledWith('list_upcoming_transits', expect.objectContaining({ start_date: '2026-10-01', end_date: '2026-10-31', object_filter: SCAN_OBJECTS.month, date_time: '1990-06-15 14:30' }))
     expect(SCAN_OBJECTS.month).not.toContain('Venus')
     // The week's forecast starts on the day it is cast, not on its Sunday; the scan covers the same days, Moon left out.
-    await castResult('week', '2026-10-11', amie, call, oct15)
+    await castResult('week', '2026-10-11', sam, call, oct15)
     expect(call).toHaveBeenCalledWith('forecast_week', expect.objectContaining({ start_date: '2026-10-15' }))
     expect(call).toHaveBeenLastCalledWith('list_upcoming_transits', expect.objectContaining({ start_date: '2026-10-15', end_date: '2026-10-17', object_filter: WEEK_SCAN_OBJECTS, date_time: '1990-06-15 14:30' }))
   })
 
   it('folds the week\'s scan into its forecast, and casts the week without it when the scan fails', async () => {
     const call = vi.fn(async (name: string) => (name === 'forecast_week' ? weekOct18 : scan))
-    const result = JSON.parse(await castResult('week', '2026-10-18', amie, call, new Date(2026, 9, 18, 9))) as { forecast: string; week_transits: { range: unknown; total: number; transits: { from_object: string; exact: string | null }[] } }
+    const result = JSON.parse(await castResult('week', '2026-10-18', sam, call, new Date(2026, 9, 18, 9))) as { forecast: string; week_transits: { range: unknown; total: number; transits: { from_object: string; exact: string | null }[] } }
     expect(result.forecast).toBe('week')
     expect(result.week_transits.range).toEqual({ start: '2026-10-18', end: '2026-10-24' })
-    expect(result.week_transits.total).toBe(18)
-    expect(result.week_transits.transits).toHaveLength(18)
+    expect(result.week_transits.total).toBe(10)
+    expect(result.week_transits.transits).toHaveLength(10)
     expect(result.week_transits.transits.some((t) => t.from_object === 'Uranus' && t.exact === null)).toBe(true)
 
     const failing = vi.fn(async (name: string) => { if (name === 'forecast_week') return weekOct18; throw new Error('scan timed out') })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const alone = JSON.parse(await castResult('week', '2026-10-18', amie, failing, new Date(2026, 9, 18, 9))) as Record<string, unknown>
+    const alone = JSON.parse(await castResult('week', '2026-10-18', sam, failing, new Date(2026, 9, 18, 9))) as Record<string, unknown>
     expect(alone.forecast).toBe('week')
     expect(alone.week_transits).toBeUndefined()
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('scan failed'))
@@ -76,15 +76,15 @@ describe('castResult', () => {
 
   it('folds the month\'s scan into its forecast under its own key', async () => {
     const call = vi.fn(async (name: string) => (name === 'forecast_month' ? month : scanMonth))
-    const result = JSON.parse(await castResult('month', '2026-10', amie, call)) as { forecast: string; week_transits?: unknown; month_transits: { range: unknown; total: number; transits: { from_object: string; exact: string | null }[] } }
+    const result = JSON.parse(await castResult('month', '2026-10', sam, call)) as { forecast: string; week_transits?: unknown; month_transits: { range: unknown; total: number; transits: { from_object: string; exact: string | null }[] } }
     expect(result.forecast).toBe('month')
     expect(result.week_transits).toBeUndefined()
     expect(result.month_transits.range).toEqual({ start: '2026-10-01', end: '2026-10-31' })
-    expect(result.month_transits.total).toBe(19)
-    // The six Mars contacts the twelve headlines had no room for, every one exact in the month.
+    expect(result.month_transits.total).toBe(12)
+    // The scan's six Mars contacts: five exact in the month, the sixth (Mars square Venus) perfecting on Nov 1.
     const mars = result.month_transits.transits.filter((t) => t.from_object === 'Mars')
     expect(mars).toHaveLength(6)
-    expect(mars.every((t) => t.exact?.startsWith('2026-10'))).toBe(true)
+    expect(mars.filter((t) => t.exact?.startsWith('2026-10'))).toHaveLength(5)
   })
 
   it('anchors the week to Sunday and covers the days left in it, seven at most and one at least', () => {
@@ -104,17 +104,19 @@ describe('castResult', () => {
       stations: { exact: string }[]
     }
     expect(trimmed.range).toEqual({ start: '2026-10-15', end: '2026-10-17' })
+    // Mars opposite the Node was over by the 14th: the one headline outside the days is dropped.
     const whole = JSON.parse(week) as { headline_transits: unknown[] }
-    expect(trimmed.headline_transits.length).toBe(whole.headline_transits.length)
+    expect(trimmed.headline_transits.length).toBe(whole.headline_transits.length - 1)
+    expect(trimmed.headline_transits.some((h) => h.transiting === 'Mars' && h.natal === 'True North Node')).toBe(false)
     for (const h of trimmed.headline_transits) {
       expect(h.start >= '2026-10-15').toBe(true)
       expect(h.end <= '2026-10-17').toBe(true)
       expect(!h.exact || (h.exact.slice(0, 10) >= '2026-10-15' && h.exact.slice(0, 10) <= '2026-10-17')).toBe(true)
     }
-    // Mercury sextile MC was exact on the 13th: outside the days, so only its nearest moment stands.
+    // Mercury trine MC was exact on the 14th: outside the days, so only its nearest moment stands.
     const mercury = trimmed.headline_transits.find((h) => h.transiting === 'Mercury' && h.natal === 'MC')!
     expect(mercury.exact).toBeNull()
-    expect(mercury.nearest_exact).toBe('2026-10-13 16:16')
+    expect(mercury.nearest_exact).toBe('2026-10-14 04:42')
     expect(trimmed.stations).toHaveLength(1)
     expect(JSON.parse(trimWeek(week, '2026-10-19', '2026-10-24')).headline_transits).toEqual([])
     expect(trimWeek('not json', '2026-10-15', '2026-10-17')).toBe('not json')
@@ -122,13 +124,13 @@ describe('castResult', () => {
 
   it('leaves an empty state or country out rather than sending blanks', async () => {
     const call = vi.fn(async (_name: string, _args: Record<string, unknown>) => '{}')
-    await castResult('natal', 'natal', { ...amie, state: '', country: '' }, call)
+    await castResult('natal', 'natal', { ...sam, state: '', country: '' }, call)
     expect(call.mock.calls[0]![1]).toEqual({ date_time: '1990-06-15 14:30', city: 'New York', state: undefined, country: undefined })
   })
 
   it('folds the two Moon tools into one result', async () => {
     const call = vi.fn(async (name: string) => (name === 'moon_void_periods' ? '{"periods":[]}' : '{"events":[]}'))
-    const result = JSON.parse(await castResult('moon', '2026-10-15', amie, call)) as { void: unknown; lunations: unknown }
+    const result = JSON.parse(await castResult('moon', '2026-10-15', sam, call)) as { void: unknown; lunations: unknown }
     expect(result).toEqual({ void: { periods: [] }, lunations: { events: [] } })
     expect(call).toHaveBeenCalledWith('moon_void_periods', expect.objectContaining({ start_date: '2026-10-15', end_date: '2026-10-29' }))
     expect(call).toHaveBeenCalledWith('lunations_and_eclipses', expect.objectContaining({ date_time: '1990-06-15 14:30', end_date: '2026-11-29' }))

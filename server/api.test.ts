@@ -64,7 +64,7 @@ describe('settings', () => {
   it('refuses a birth time the tools would reject', async () => {
     const r = await fetch(`${ctx.base}/api/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dateTime: 'June 15 1990' }) })
     expect(r.status).toBe(400)
-    expect(profilePatch({ name: ' Sam ', state: 'CA' })).toEqual({ name: 'Sam', state: 'CA' })
+    expect(profilePatch({ name: ' Sam ', state: 'NY' })).toEqual({ name: 'Sam', state: 'NY' })
     expect(() => profilePatch({ city: '  ' })).toThrow(/city/)
   })
 })

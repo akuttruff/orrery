@@ -41,7 +41,7 @@ function serve(castings: Casting[]) {
       Object.assign(c, { readingState: 'writing' })
       return reply(202, c)
     }
-    if (url === '/api/profile') return reply(200, { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'US' })
+    if (url === '/api/profile') return reply(200, { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'US' })
     if (url === '/api/config' && init?.method === 'PUT') {
       Object.assign(config, JSON.parse(String(init.body)) as Partial<typeof config>)
       return reply(200, config)

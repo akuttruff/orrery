@@ -135,7 +135,7 @@ npm run check      # typecheck, lint, tests
 npm run deploy     # build and restart the launchd instance on :8410
 ```
 
-The persistent instance is `com.amie.orrery` (launchd), served by Tailscale
+The persistent instance is `com.sam.orrery` (launchd), served by Tailscale
 at `https://<your-machine>.<your-tailnet>.ts.net:8445`. Its data lives in
 `.data/orrery.sqlite`.
 
