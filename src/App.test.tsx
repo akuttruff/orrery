@@ -209,12 +209,8 @@ describe('App', () => {
     expect(castings.find((c) => c.id === 't3')!.starred).toBe(true)
     await waitFor(() => expect(names()[0]).toMatch(/^Tue 14 Oct/))
 
-    // The bin asks first; Keep leaves it; Delete takes it, questions and all.
+    // The bin takes it straight away, questions and all.
     await user.click(within(side).getByRole('button', { name: 'Delete Wed 15 Oct' }))
-    await user.click(within(side).getByRole('button', { name: 'Keep' }))
-    expect(castings).toHaveLength(3)
-    await user.click(within(side).getByRole('button', { name: 'Delete Wed 15 Oct' }))
-    await user.click(within(within(side).getByRole('group', { name: 'Delete Wed 15 Oct?' })).getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(within(side).queryByRole('button', { name: /Wed 15 Oct/ })).not.toBeInTheDocument())
     expect(castings.map((c) => c.id)).toEqual(['t1', 't3'])
   })

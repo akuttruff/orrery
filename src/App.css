@@ -115,8 +115,6 @@ input, select { font: inherit; }
 .side-actions .icon-btn[aria-pressed="true"] { color: var(--gold); }
 .side-actions .icon-btn:hover, .side-actions .icon-btn:focus-visible { color: var(--paper); background: var(--bg-raised); }
 .side-actions .icon-btn.danger:hover, .side-actions .icon-btn.danger:focus-visible { color: var(--rust); }
-.side-confirm { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 0 16px 0 2px; font-size: 12px; color: var(--paper-dim); white-space: nowrap; }
-.side-confirm .chip { padding: 4px 9px; font-size: 12px; }
 .recent-title .starred { color: var(--gold); vertical-align: -1px; margin-right: 5px; }
 .side-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: transparent; }
 .side-row.active .side-dot { background: var(--moss); }
