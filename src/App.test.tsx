@@ -13,12 +13,13 @@ const summary = ({ result: _r, reading: _g, ...rest }: Casting): CastingSummary 
 
 /** A fetch that serves the app's routes from a list of castings the test can change. */
 function serve(castings: Casting[]) {
+  const config = { lmStudioUrl: '', model: 'm', reasoning: 'low', hasToken: false, memoryDefault: 'off' }
   const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     // A tap casts anew: the new casting joins the list, and its reading is started.
     if (url === '/api/castings' && init?.method === 'POST') {
-      const { kind } = JSON.parse(String(init.body)) as { kind: Casting['kind'] }
-      const c = casting(`new${castings.length + 1}`, { kind, readingState: 'none', createdAt: 100, updatedAt: 100 })
+      const { kind, memory = null, memoryExcluded = [] } = JSON.parse(String(init.body)) as Pick<Casting, 'kind'> & Partial<Casting>
+      const c = casting(`new${castings.length + 1}`, { kind, memory, memoryExcluded, readingState: 'none', createdAt: 100, updatedAt: 100 })
       castings.push(c)
       return reply(201, c)
     }
@@ -29,7 +30,12 @@ function serve(castings: Casting[]) {
       return reply(202, c)
     }
     if (url === '/api/profile') return reply(200, { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'US' })
-    if (url === '/api/config') return reply(200, { lmStudioUrl: '', model: 'm', reasoning: 'low', hasToken: false, memoryDefault: 'off' })
+    if (url === '/api/config' && init?.method === 'PUT') {
+      Object.assign(config, JSON.parse(String(init.body)) as Partial<typeof config>)
+      return reply(200, config)
+    }
+    if (url === '/api/config') return reply(200, config)
+    if (url === '/api/memories') return reply(200, [{ id: 'm1', text: 'Works nights.', createdAt: 1, updatedAt: 1 }, { id: 'm2', text: 'Has a cat.', createdAt: 1, updatedAt: 1 }])
     if (url === '/api/castings') return reply(200, castings.map(summary))
     const one = /^\/api\/castings\/([^/]+)$/.exec(url)
     if (one) {
@@ -131,6 +137,27 @@ describe('App', () => {
     expect(screen.queryByRole('navigation', { name: 'Castings' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Show the castings' }))
     expect(screen.getByRole('navigation', { name: 'Castings' })).toBeInTheDocument()
+  })
+
+  it('lets memory be switched on, and some memories left out, before the tap that casts', async () => {
+    const castings: Casting[] = []
+    serve(castings)
+    const user = userEvent.setup()
+    render(<App />)
+    const memory = await screen.findByRole('switch', { name: 'Memory off' })
+    expect(screen.getByText(/read from the chart alone/)).toBeInTheDocument()
+    await user.click(memory)
+    expect(await screen.findByRole('switch', { name: 'Memory on' })).toBeInTheDocument()
+    // Settings' default changed with it, so the choice stays.
+    expect(await screen.findByText(/what the model knows about you/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Choose' }))
+    await user.click(await screen.findByRole('checkbox', { name: /Has a cat/ }))
+    expect(screen.getByRole('button', { name: 'Choose · 1 out' })).toBeInTheDocument()
+
+    await user.click(screen.getByText('Void windows and lunations, two weeks').closest('button')!)
+    expect(await screen.findByRole('heading', { name: 'Casting new1' })).toBeInTheDocument()
+    expect(castings[0]).toMatchObject({ kind: 'moon', memory: true, memoryExcluded: ['m2'] })
+    expect(JSON.parse(localStorage.getItem('orrery.memoryExcluded')!)).toEqual(['m2'])
   })
 
   it('shows a long group in part, and the rest on request', async () => {

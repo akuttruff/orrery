@@ -26,7 +26,9 @@ the transit tables), copied rather than shared.
   started meanwhile. A casting is `#/c/<id>` in the address, so the
   browser's Back and a reload both land where expected.
 - **Every tap casts anew.** A tile casts the chart afresh and starts its
-  reading at once; the earlier castings of that kind stay, so a day can hold
+  reading at once, with the memory choice made above the tiles beforehand
+  (the switch is Settings' default; the memories left out are remembered by
+  the browser); the earlier castings of that kind stay, so a day can hold
   several readings of the same kind and `Recast` adds one more. The home
   screen's recent list groups them by kind in the tiles' order, with each
   casting's time being its last change (`updated_at`): a reading written or a

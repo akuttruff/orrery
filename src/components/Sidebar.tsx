@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { PanelLeftClose, Plus, Settings as SettingsIcon } from 'lucide-react'
 import { KIND_LABEL, KIND_ORDER } from '../lib/kinds.ts'
 import { formatWhen } from '../lib/when.ts'
@@ -12,6 +13,8 @@ interface SidebarProps {
   onCast: (kind: Kind) => void
   onSettings: () => void
   onCollapse: () => void
+  /** Above the sections: the memory choice the + buttons cast with. */
+  children?: ReactNode
 }
 
 /**
@@ -20,13 +23,14 @@ interface SidebarProps {
  * its head to cast another of it; within a section the most recently
  * changed casting is first. Settings waits at the foot.
  */
-export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onSettings, onCollapse }: SidebarProps) {
+export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onSettings, onCollapse, children }: SidebarProps) {
   return (
     <nav className="sidebar" aria-label="Castings">
       <div className="side-head">
         <h2 className="side-title">Castings</h2>
         <button type="button" className="icon-btn small" aria-label="Hide the castings" onClick={onCollapse}><PanelLeftClose size={17} aria-hidden="true" /></button>
       </div>
+      {children}
       <div className="side-list">
         {KIND_ORDER.map((kind) => {
           const items = castings.filter((c) => c.kind === kind).sort((a, b) => b.updatedAt - a.updatedAt)

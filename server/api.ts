@@ -120,8 +120,11 @@ export function createMiddleware(state: ApiState): Handler {
     }
   }
 
-  /** A new casting of a kind, cast now; the earlier ones stay. Two taps while the tools run share the one cast. */
-  const cast = async (kind: Kind): Promise<unknown> => {
+  /**
+   * A new casting of a kind, cast now with the memory choice made before the
+   * tap; the earlier ones stay. Two taps while the tools run share the one cast.
+   */
+  const cast = async (kind: Kind, memory: Pick<Casting, 'memory' | 'memoryExcluded'>): Promise<unknown> => {
     const profile = store.getProfile()
     const period = periodFor(kind, new Date())
     const key = `${kind}:${period}`
@@ -129,11 +132,26 @@ export function createMiddleware(state: ApiState): Handler {
     if (!pending) {
       pending = (async () => {
         const result = await castResult(kind, period, profile, call)
-        return store.addCasting({ kind, period, title: titleFor(kind, period, profile), result })
+        return store.addCasting({ kind, period, title: titleFor(kind, period, profile), result, ...memory })
       })().finally(() => state.casting.delete(key))
       state.casting.set(key, pending)
     }
     return pending
+  }
+
+  /** The memory switch and exclusions in a request body, checked; what is not given is left as it was. */
+  const memoryPatch = (body: Record<string, unknown>): Partial<Pick<Casting, 'memory' | 'memoryExcluded'>> => {
+    const out: Partial<Pick<Casting, 'memory' | 'memoryExcluded'>> = {}
+    if ('memory' in body) {
+      if (body.memory !== null && typeof body.memory !== 'boolean') throw new Error('memory must be true, false or null')
+      out.memory = body.memory as boolean | null
+    }
+    if ('memoryExcluded' in body) {
+      const ids = body.memoryExcluded
+      if (!Array.isArray(ids) || !ids.every((x) => typeof x === 'string')) throw new Error('memoryExcluded must be a list of memory ids')
+      out.memoryExcluded = [...new Set(ids as string[])]
+    }
+    return out
   }
 
   return (req, res, next) => {
@@ -207,7 +225,8 @@ export function createMiddleware(state: ApiState): Handler {
     if (url === '/api/castings' && method === 'POST') {
       void readBody(req).then(async (body) => {
         if (!isKind(body.kind)) throw new Error(`Unknown kind: ${String(body.kind)}`)
-        json(res, 201, await cast(body.kind))
+        const { memory = null, memoryExcluded = [] } = memoryPatch(body)
+        json(res, 201, await cast(body.kind, { memory, memoryExcluded }))
       }).catch(fail)
       return undefined
     }
@@ -220,17 +239,10 @@ export function createMiddleware(state: ApiState): Handler {
       if (!sub && method === 'GET') return json(res, 200, casting)
       if (!sub && method === 'PATCH') {
         void readBody(req).then((body) => {
-          if (!('memory' in body) && !('memoryExcluded' in body)) throw new Error('Nothing to change')
-          if ('memory' in body) {
-            const memory = body.memory
-            if (memory !== null && typeof memory !== 'boolean') throw new Error('memory must be true, false or null')
-            store.setCastingMemory(id, memory)
-          }
-          if ('memoryExcluded' in body) {
-            const ids = body.memoryExcluded
-            if (!Array.isArray(ids) || !ids.every((x) => typeof x === 'string')) throw new Error('memoryExcluded must be a list of memory ids')
-            store.setMemoryExcluded(id, [...new Set(ids as string[])])
-          }
+          const patch = memoryPatch(body)
+          if (patch.memory === undefined && patch.memoryExcluded === undefined) throw new Error('Nothing to change')
+          if (patch.memory !== undefined) store.setCastingMemory(id, patch.memory)
+          if (patch.memoryExcluded !== undefined) store.setMemoryExcluded(id, patch.memoryExcluded)
           json(res, 200, store.getCasting(id))
         }).catch(fail)
         return undefined

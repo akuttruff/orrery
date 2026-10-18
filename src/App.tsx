@@ -5,8 +5,10 @@ import Recent from './components/Recent'
 import Settings from './components/Settings'
 import Sidebar from './components/Sidebar'
 import MemoriesSheet from './components/MemoriesSheet'
+import MemoryChoice from './components/MemoryChoice'
 import useMediaQuery, { WIDE } from './hooks/useMediaQuery.ts'
 import { api } from './lib/api.ts'
+import type { MemoryChoice as MemoryChoiceOf } from './lib/api.ts'
 import { KIND_LABEL } from './lib/kinds.ts'
 import { formatWhen } from './lib/when.ts'
 import { castingIdIn, hashFor } from './lib/route.ts'
@@ -45,6 +47,20 @@ export default function App() {
     try { localStorage.setItem('orrery.sidebar', open ? 'open' : 'closed') } catch { /* a preference, not a record */ }
   }
   const sidebar = wide && sidebarOpen
+  // The memory choice a tap casts with: the switch is Settings' default; the memories left out are kept on this device.
+  const memoryOn = config?.memoryDefault === 'on'
+  const [excluded, setExcluded] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('orrery.memoryExcluded') ?? '[]') as string[] } catch { return [] } })
+  const setMemoryOn = async (on: boolean): Promise<void> => {
+    try { setConfig(await api.saveConfig({ memoryDefault: on ? 'on' : 'off' })) } catch (e) { setError((e as Error).message) }
+  }
+  const exclude = (ids: string[]): void => {
+    setExcluded(ids)
+    try { localStorage.setItem('orrery.memoryExcluded', JSON.stringify(ids)) } catch { /* a preference, not a record */ }
+  }
+  const choice: MemoryChoiceOf = { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [] }
+  const memoryChoice = config && (
+    <MemoryChoice on={memoryOn} excluded={excluded} onToggle={(on) => void setMemoryOn(on)} onExclude={exclude} onManage={() => setMemoriesOpen(true)} compact={sidebar} />
+  )
 
   const refreshRecent = useCallback(() => { api.castings().then(setRecent).catch(() => { /* the list is a convenience */ }) }, [])
 
@@ -97,12 +113,12 @@ export default function App() {
     return () => window.clearInterval(timer)
   }, [current, writing.length, refreshRecent])
 
-  // A tap casts anew and starts its reading straight away; the earlier castings of the kind stay in the list.
-  const cast = useCallback(async (kind: Kind) => {
+  // A tap casts anew, with the memory choice made beforehand, and starts its reading straight away; the earlier castings of the kind stay.
+  const cast = useCallback(async (kind: Kind, memory: MemoryChoiceOf) => {
     setBusy(kind)
     setError(null)
     try {
-      let casting = await api.cast(kind)
+      let casting = await api.cast(kind, memory)
       if (casting.readingState === 'none') casting = await api.startReading(casting.id)
       show(casting)
       refreshRecent()
@@ -153,10 +169,12 @@ export default function App() {
           activeId={current?.id ?? null}
           busy={busy}
           onOpen={(id) => void open(id)}
-          onCast={(kind) => void cast(kind)}
+          onCast={(kind) => void cast(kind, choice)}
           onSettings={() => setSettingsOpen(true)}
           onCollapse={() => setSidebar(false)}
-        />
+        >
+          {memoryChoice}
+        </Sidebar>
       )}
       <div className="main">
       <header className="app-header">
@@ -186,7 +204,7 @@ export default function App() {
             onMemories={() => setMemoriesOpen(true)}
             onWrite={(again) => void write(again)}
             onStop={() => void stop()}
-            onRecast={() => void cast(current.kind)}
+            onRecast={() => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded })}
             onDelete={() => void remove()}
             onSettled={settled}
           />
@@ -207,9 +225,10 @@ export default function App() {
                 ))}
               </section>
             )}
+            {!sidebar && memoryChoice}
             <div className="shortcuts" role="list">
               {SHORTCUTS.map(({ kind, label, hint, Icon }) => (
-                <button key={kind} type="button" role="listitem" className={`shortcut${busy === kind ? ' busy' : ''}`} disabled={busy !== null} onClick={() => void cast(kind)}>
+                <button key={kind} type="button" role="listitem" className={`shortcut${busy === kind ? ' busy' : ''}`} disabled={busy !== null} onClick={() => void cast(kind, choice)}>
                   <Icon size={22} aria-hidden="true" />
                   <span className="shortcut-label">{busy === kind ? 'Casting…' : label}</span>
                   <span className="shortcut-hint">{hint}</span>

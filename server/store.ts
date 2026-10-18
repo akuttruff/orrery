@@ -235,14 +235,16 @@ export class Store {
     return r ? fromRow(r) : undefined
   }
 
-  addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'>): Casting {
+  /** A casting, with the memory choice made before it was cast: its own switch (null follows Settings) and the memories it leaves out. */
+  addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'> & Partial<Pick<Casting, 'memory' | 'memoryExcluded'>>): Casting {
     const now = Date.now()
     const casting: Casting = {
-      id: newId(), ...input, reading: '', readingState: 'none', readingError: null, createdAt: now, updatedAt: now, memory: null, memoriesUsed: [], memoryExcluded: [],
+      memory: null, memoryExcluded: [], ...input,
+      id: newId(), reading: '', readingState: 'none', readingError: null, createdAt: now, updatedAt: now, memoriesUsed: [],
       written: { ...NOT_WRITTEN },
     }
-    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now)
+    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded))
     return casting
   }
 

@@ -98,6 +98,14 @@ describe('castings', () => {
     expect(list[0]).toMatchObject({ id: a.id, questions: 1 })
   })
 
+  it('casts with the memory choice made before the tap', async () => {
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'today', memory: false, memoryExcluded: ['m1', 'm1', 'm2'] })).json() as Casting
+    expect(c).toMatchObject({ memory: false, memoryExcluded: ['m1', 'm2'] })
+    expect(await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json()).toMatchObject({ memory: false, memoryExcluded: ['m1', 'm2'] })
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'today', memory: 'yes' })).status).toBe(400)
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'today', memoryExcluded: 'm1' })).status).toBe(400)
+  })
+
   it('rejects a kind it does not know', async () => {
     expect((await post(`${ctx.base}/api/castings`, { kind: 'tarot' })).status).toBe(400)
   })
