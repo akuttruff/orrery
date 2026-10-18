@@ -109,7 +109,9 @@ export class Readings {
         this.broadcast(run, { type: 'done', reading, written })
       } catch (err) {
         const message = err instanceof ModelError ? err.message : `Could not write the reading. (${(err as Error).message})`
-        const written: Written = { trail: run.trail, stats: null, startedAt: run.startedAt, finishedAt: Date.now() }
+        // Thinking cut short (stopped, or the model gave out) is over all the same: the page must not show it as still going.
+        const trail = run.trail.map((s) => (s.kind === 'reasoning' && !s.done ? { ...s, done: true } : s))
+        const written: Written = { trail, stats: null, startedAt: run.startedAt, finishedAt: Date.now() }
         // A store already closed (shutdown) has nowhere to keep the failure; the listeners still hear it.
         try { target.finish(run.text.trim(), 'failed', message, written) } catch (e) { console.error(`[orrery] could not keep the failed run ${id}: ${(e as Error).message}`) }
         this.broadcast(run, { type: 'error', message, written })
