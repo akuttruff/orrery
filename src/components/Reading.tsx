@@ -1,6 +1,5 @@
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { RefreshCw, Square } from 'lucide-react'
+import Body from './Body'
 import Trail from './Trail'
 import WrittenMeta from './WrittenMeta'
 import type { LiveReading } from '../hooks/useReading.ts'
@@ -28,11 +27,7 @@ export default function Reading({ reading, onWrite, onStop }: ReadingProps) {
         )}
       </div>
       <Trail trail={written.trail} />
-      {text && (
-        <div className={`reading-body${state === 'writing' ? ' writing' : ''}`}>
-          <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
-        </div>
-      )}
+      {text && <Body text={text} writing={state === 'writing'} />}
       {state === 'writing' && <p className="reading-status">{thinking(written.trail) ? 'Thinking' : text ? 'Writing' : 'Starting'}… This carries on if you go back and cast another.</p>}
       {state === 'failed' && <p className="reading-status error">{error ?? 'The reading failed.'}</p>}
       {state === 'none' && <p className="reading-status">No reading yet.</p>}

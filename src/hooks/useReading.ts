@@ -14,6 +14,9 @@ export interface LiveReading {
 
 const NOTHING: LiveReading = { text: '', state: 'none', error: null, written: NOT_WRITTEN }
 
+/** Text and thinking arrive many pieces a second; the page is redrawn with them this often. */
+const FLUSH_MS = 120
+
 /**
  * Text the server is writing, as it is written: a reading, or the answer
  * to a question under one. The server owns the writing; this follows it
@@ -29,45 +32,71 @@ export function useLiveText(id: string | null, stored: LiveReading, eventsUrl: (
     const source = new EventSource(eventsUrl(id))
     let text = ''
     let written: Written = stored.written
-    // Written or failed: the stream is over, and whoever holds the record can fetch the kept copy.
-    const settle = (): void => { source.close(); onSettled?.(id) }
-    const show = (state: ReadingState, error: string | null = null): void => setLive({ id, reading: { text, state, error, written } })
+    let state: ReadingState = 'writing'
+    let error: string | null = null
+    let over = false
+    // Pieces wait here and are applied together: one redraw per batch, not per piece.
+    let pending: ReadingEvent[] = []
+    let timer: number | null = null
+    let thought = ''
+    const think = (): void => {
+      if (!thought) return
+      written = { ...written, trail: appendThinking(written.trail, thought) }
+      thought = ''
+    }
+    const flush = (): void => {
+      if (timer !== null) { window.clearTimeout(timer); timer = null }
+      const batch = pending
+      pending = []
+      for (const event of batch) {
+        if (event.type !== 'thinking') think()
+        switch (event.type) {
+          case 'snapshot':
+            text = event.reading
+            written = event.written
+            state = event.state
+            error = event.error
+            over = state !== 'writing'
+            break
+          case 'delta':
+            text += event.text
+            break
+          case 'thinking':
+            thought += event.text
+            break
+          case 'trail':
+            written = { ...written, trail: event.trail }
+            break
+          case 'done':
+            text = event.reading
+            written = event.written
+            state = 'done'
+            over = true
+            break
+          case 'error':
+            written = event.written
+            state = 'failed'
+            error = event.message
+            over = true
+            break
+        }
+      }
+      think()
+      setLive({ id, reading: { text, state, error, written } })
+      // Written or failed: the stream is over, and whoever holds the record can fetch the kept copy.
+      if (over) { source.close(); onSettled?.(id) }
+    }
     source.onmessage = (e: MessageEvent<string>) => {
       const event = JSON.parse(e.data) as ReadingEvent
-      switch (event.type) {
-        case 'snapshot':
-          text = event.reading
-          written = event.written
-          show(event.state, event.error)
-          if (event.state !== 'writing') settle()
-          break
-        case 'delta':
-          text += event.text
-          show('writing')
-          break
-        case 'thinking':
-          written = { ...written, trail: appendThinking(written.trail, event.text) }
-          show('writing')
-          break
-        case 'trail':
-          written = { ...written, trail: event.trail }
-          show('writing')
-          break
-        case 'done':
-          text = event.reading
-          written = event.written
-          show('done')
-          settle()
-          break
-        case 'error':
-          written = event.written
-          show('failed', event.message)
-          settle()
-          break
+      pending.push(event)
+      if (event.type === 'delta' || event.type === 'thinking') {
+        if (timer === null) timer = window.setTimeout(flush, FLUSH_MS)
+      } else {
+        flush()
       }
     }
     // EventSource reconnects by itself; the snapshot on reconnect resets `text`.
-    return () => source.close()
+    return () => { if (timer !== null) window.clearTimeout(timer); source.close() }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onSettled and eventsUrl are stable
   }, [id, stored.state])
 

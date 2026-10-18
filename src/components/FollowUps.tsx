@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { Brain, RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
+import Body from './Body'
 import Trail from './Trail'
 import WrittenMeta from './WrittenMeta'
 import { useAnswer } from '../hooks/useReading.ts'
@@ -154,11 +153,7 @@ function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget
       </div>
       <div className="followup-a" aria-live="polite">
         <Trail trail={written.trail} />
-        {text && (
-          <div className={`reading-body${state === 'writing' ? ' writing' : ''}`}>
-            <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
-          </div>
-        )}
+        {text && <Body text={text} writing={state === 'writing'} />}
         {state === 'writing' && !text && <p className="reading-status">{status}</p>}
         {state === 'failed' && <p className="reading-status error">{error ?? 'The answer failed.'}</p>}
         <div className="followup-actions">

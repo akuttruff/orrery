@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { Brain, ListChecks, RotateCw, Trash2 } from 'lucide-react'
 import MemoryPicker from './MemoryPicker'
 import ChartWheel from './ChartWheel'
@@ -32,6 +32,11 @@ interface CastingViewProps {
 /** No per-aspect readings here (the reading below covers the day), so the popups show the aspect alone. */
 const NO_READINGS: Record<string, string> = {}
 
+// The reading redraws this view many times a second while it streams; the chart and tables above it have not changed.
+const Transits = memo(ActiveTransits)
+const Forecast = memo(ForecastTransits)
+const Moon = memo(MoonView)
+
 /** One casting: its chart or tables, the reading, then the questions asked about it. */
 export default function CastingView({ casting, memoryDefault, onMemory, onExclude, onMemories, onWrite, onStop, onRecast, onDelete, onSettled }: CastingViewProps) {
   const memoryOn = casting.memory ?? memoryDefault
@@ -47,9 +52,9 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
         <p className="casting-sub">Cast {formatWhen(casting.createdAt)}</p>
       </header>
       {wheel && <ChartWheel wheel={wheel} castingId={casting.id} readings={NO_READINGS} />}
-      {wheel?.kind === 'transit' && <ActiveTransits wheel={wheel} />}
-      {forecast && <ForecastTransits table={forecast} />}
-      {casting.kind === 'moon' && <MoonView result={casting.result} />}
+      {wheel?.kind === 'transit' && <Transits wheel={wheel} />}
+      {forecast && <Forecast table={forecast} />}
+      {casting.kind === 'moon' && <Moon result={casting.result} />}
       {!wheel && !forecast && casting.kind !== 'moon' && <p className="reading-status error">The tool's result could not be drawn.</p>}
       <div className="memory-switch">
         <button

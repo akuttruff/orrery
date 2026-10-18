@@ -55,12 +55,18 @@ export const answerOf = (store: Store, id: string): Target => ({
   finish: (text, state, error, written) => store.finishAnswer(id, text, state, error, written),
 })
 
+/** Thinking arrives many pieces a second; the page gets them joined, this often. */
+const THINKING_FLUSH_MS = 150
+
 interface Run {
   text: string
   trail: Step[]
   startedAt: number
   listeners: Set<ServerResponse>
   controller: AbortController
+  /** Thinking not yet sent to the listeners, and the timer that will send it. */
+  thought: string
+  thoughtTimer: NodeJS.Timeout | null
 }
 
 export class Readings {
@@ -75,7 +81,7 @@ export class Readings {
   /** Start writing into a target, unless it is already being written. */
   start(id: string, req: WriteRequest, target: Target = readingOf(this.store, id)): void {
     if (this.runs.has(id)) return
-    const run: Run = { text: '', trail: [], startedAt: Date.now(), listeners: new Set(), controller: new AbortController() }
+    const run: Run = { text: '', trail: [], startedAt: Date.now(), listeners: new Set(), controller: new AbortController(), thought: '', thoughtTimer: null }
     this.runs.set(id, run)
     target.begin()
     void (async () => {
@@ -92,7 +98,8 @@ export class Readings {
           },
           onThinking: (piece) => {
             run.trail = appendThinking(run.trail, piece)
-            this.broadcast(run, { type: 'thinking', text: piece })
+            run.thought += piece
+            if (!run.thoughtTimer) run.thoughtTimer = setTimeout(() => this.flushThinking(run), THINKING_FLUSH_MS)
           },
         })
         const reading = stripLeakedThinking(reply.text).trim()
@@ -107,6 +114,7 @@ export class Readings {
         try { target.finish(run.text.trim(), 'failed', message, written) } catch (e) { console.error(`[orrery] could not keep the failed run ${id}: ${(e as Error).message}`) }
         this.broadcast(run, { type: 'error', message, written })
       } finally {
+        this.flushThinking(run)
         this.runs.delete(id)
         for (const res of run.listeners) res.end()
       }
@@ -130,6 +138,8 @@ export class Readings {
     if (!kept) return false
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive' })
     const run = this.runs.get(id)
+    // The snapshot carries the thinking so far; what is waiting to go out goes out first, so this listener does not get it twice.
+    if (run) this.flushThinking(run)
     const snapshot: ReadingEvent = run
       ? { type: 'snapshot', reading: run.text, state: 'writing', error: null, written: { trail: run.trail, stats: null, startedAt: run.startedAt, finishedAt: null } }
       : { type: 'snapshot', reading: kept.text, state: kept.state, error: kept.error, written: kept.written }
@@ -140,7 +150,21 @@ export class Readings {
     return true
   }
 
+  /** The thinking waiting to go out, sent as one piece, ahead of anything else. */
+  private flushThinking(run: Run): void {
+    if (run.thoughtTimer) { clearTimeout(run.thoughtTimer); run.thoughtTimer = null }
+    if (!run.thought) return
+    const text = run.thought
+    run.thought = ''
+    this.send(run, { type: 'thinking', text })
+  }
+
   private broadcast(run: Run, event: ReadingEvent): void {
+    this.flushThinking(run)
+    this.send(run, event)
+  }
+
+  private send(run: Run, event: ReadingEvent): void {
     const data = frame(event)
     for (const res of run.listeners) {
       try { res.write(data) } catch { run.listeners.delete(res) }
