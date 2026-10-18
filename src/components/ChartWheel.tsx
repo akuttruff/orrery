@@ -2,7 +2,7 @@ import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   aspectDetail, aspectFamily, aspectSentence, aspectsOfPoint, describePoint, elementOf, fromLongitude, natalLongitude,
-  polar, screenAngle, signDegrees, spread, SIGN_GLYPHS, SIGN_NAMES,
+  polar, screenAngle, spread, SIGN_GLYPHS, SIGN_NAMES,
   type AspectFamily, type Element as ZodiacElement, type Ring as RingName, type Wheel, type WheelPoint, aspectGlyph, hasRetrograde, wheelTitle } from '../lib/chartWheel.ts'
 import { wheelHashFor } from '../lib/route.ts'
 import { readingFor } from '../lib/readings.ts'
@@ -27,7 +27,7 @@ const PALETTE = {
   // Aspect lines: brighter than the sign colours, so they read across the centre.
   hard: '#E8906C', soft: '#8FBCE6', conjunction: '#EDE8DC', minor: '#9FB592',
   // The natal ring is in paper; the transit ring a violet nothing else uses, so the two read apart.
-  natal: '#EDE8DC', transit: '#C9B4EC', natalDegree: '#B9B4A6', transitDegree: '#A99AC9',
+  natal: '#EDE8DC', transit: '#C9B4EC',
 }
 const ELEMENT_COLOR: Record<ZodiacElement, string> = {
   fire: PALETTE.fire, earth: PALETTE.earth, air: PALETTE.air, water: PALETTE.water,
@@ -75,9 +75,8 @@ interface RingProps {
   band: Band
   asc: number
   glyphSize: number
-  /** Glyph and degree colours, one pair per ring. */
+  /** The ring's glyph colour. */
   color: string
-  degreeColor: string
   /** A pointer came to, left, or pressed one of this ring's points. */
   onPoint: (ring: RingName, point: WheelPoint, x: number, y: number, e: React.PointerEvent, what: Touch) => void
   /** A click on a point: the card wants to know, so a tap on a planet shows its popup instead of opening the viewer. */
@@ -86,10 +85,14 @@ interface RingProps {
 
 type Touch = 'enter' | 'leave' | 'press'
 
-/** One ring of planets: a pointer at each true position, the glyph and its degree beside it. */
-function Ring({ name, points, band, asc, glyphSize, color, degreeColor, onPoint, onPointClick }: RingProps) {
+/**
+ * One ring of planets: a pointer at each true position and the glyph beside
+ * it, with a small ℞ on a retrograde one. The degree is not drawn; the popup
+ * gives it, with the sign and house, to a pointer that hovers or a finger
+ * that holds.
+ */
+function Ring({ name, points, band, asc, glyphSize, color, onPoint, onPointClick }: RingProps) {
   const glyphR = band.outer - 17
-  const degreeR = band.outer - 36
   const placed = place(points, glyphR, glyphSize)
   return (
     <g>
@@ -99,8 +102,6 @@ function Ring({ name, points, band, asc, glyphSize, color, degreeColor, onPoint,
         const [x1, y1] = polar(C, C, band.outer, trueAngle)
         const [x2, y2] = polar(C, C, band.outer - 6, trueAngle)
         const [gx, gy] = polar(C, C, glyphR, shownAngle)
-        const [dx, dy] = polar(C, C, degreeR, shownAngle)
-        const { deg, min } = signDegrees(p.longitude)
         return (
           <g
             key={p.name}
@@ -115,10 +116,9 @@ function Ring({ name, points, band, asc, glyphSize, color, degreeColor, onPoint,
             <text x={gx} y={gy} fontSize={glyphSize} fill={color} textAnchor="middle" dominantBaseline="central" fontFamily={FONT}>
               {p.glyph}
             </text>
-            <text x={dx} y={dy} fontSize={11} fill={degreeColor} textAnchor="middle" dominantBaseline="central" fontFamily={FONT}>
-              {deg}°<tspan fontSize={8}>{String(min).padStart(2, '0')}</tspan>
-              {p.retrograde && <tspan className="wheel-rx" fontSize={9} fill={PALETTE.hard}> ℞</tspan>}
-            </text>
+            {p.retrograde && (
+              <text className="wheel-rx" x={gx + glyphSize * 0.5} y={gy - glyphSize * 0.42} fontSize={8} fill={PALETTE.hard} textAnchor="start" dominantBaseline="central" fontFamily={FONT}>℞</text>
+            )}
           </g>
         )
       })}
@@ -398,12 +398,12 @@ export function WheelSvg({ wheel, title, readings }: { wheel: Wheel; title: stri
         {rings.outer && (
           <Ring
             name="outer" points={wheel.outer} band={rings.outer} asc={asc} glyphSize={18}
-            color={PALETTE.transit} degreeColor={PALETTE.transitDegree} onPoint={onPoint} onPointClick={onPointClick}
+            color={PALETTE.transit} onPoint={onPoint} onPointClick={onPointClick}
           />
         )}
         <Ring
           name="inner" points={wheel.inner} band={rings.inner} asc={asc} glyphSize={wheel.kind === 'transit' ? 17 : 19}
-          color={PALETTE.natal} degreeColor={PALETTE.natalDegree} onPoint={onPoint} onPointClick={onPointClick}
+          color={PALETTE.natal} onPoint={onPoint} onPointClick={onPointClick}
         />
       </svg>
     </>
