@@ -12,7 +12,8 @@ import type { CastOptions } from './lib/api.ts'
 import { DEFAULT_STYLE, isStyleId, type StyleId } from './lib/styles.ts'
 import { KIND_LABEL } from './lib/kinds.ts'
 import { formatWhen } from './lib/when.ts'
-import { castingIdIn, hashFor } from './lib/route.ts'
+import { castKindIn, castingIdIn, hashFor } from './lib/route.ts'
+import { KINDS } from './types.ts'
 import type { Casting, CastingSummary, Config, Kind, Profile } from './types.ts'
 
 /** The shortcut buttons: what one tap casts, anew each time. */
@@ -108,6 +109,12 @@ export default function App() {
     api.config().then(setConfig).catch((e: Error) => setError(e.message))
     refreshRecent()
     openAddressed()
+    // A shortcut straight to casting: the popup opens, and the address is cleared so a reload does not reopen it.
+    const kind = castKindIn(window.location.hash)
+    if (kind && (KINDS as string[]).includes(kind)) {
+      setPending(kind as Kind)
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
     // The browser's Back or Forward: go where the address now says.
     const onPop = () => {
       if (castingIdIn(window.location.hash)) openAddressed()

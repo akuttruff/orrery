@@ -182,6 +182,14 @@ describe('App', () => {
     expect(screen.getByText(/^Cast /)).toHaveTextContent("· Gentle · I'm going through some anxiety today")
   })
 
+  it('opens the popup straight from a cast address, then clears the address', async () => {
+    serve([])
+    window.history.replaceState(null, '', '/#/cast/week')
+    render(<App />)
+    expect(await screen.findByRole('dialog', { name: 'Cast Week' })).toBeInTheDocument()
+    await waitFor(() => expect(window.location.hash).toBe(''))
+  })
+
   it('puts the tile back untouched when the popup is closed', async () => {
     const castings: Casting[] = []
     serve(castings)

@@ -272,8 +272,15 @@ input, select { font: inherit; }
 .cast-section { margin-top: 16px; }
 .cast-foot { display: flex; justify-content: flex-end; gap: 10px; }
 .cast-foot .primary { width: auto; min-width: 140px; }
+/* A wide window: a dialog in the middle of the page, over a dimmed backdrop. (Doubled class: the sheet's own edges would win otherwise.) */
 @media (min-width: 900px) {
-  .cast-sheet { inset: auto; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(600px, calc(100vw - 32px)); max-height: min(80vh, 760px); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5); --gutter: 20px; }
+  .sheet.cast-sheet {
+    inset: auto; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: min(600px, calc(100vw - 32px)); max-height: min(85vh, 780px);
+    padding-top: 0; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    --gutter: 20px;
+  }
+  .sheet.cast-sheet .sheet-head { padding-top: 14px; }
 }
 .frame-box { display: block; width: 100%; font-size: 15px; }
 .frame-styles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
