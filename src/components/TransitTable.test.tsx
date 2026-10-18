@@ -20,17 +20,17 @@ describe('ActiveTransits', () => {
 
     const aspect = screen.getByRole('button', { name: 'Aspect' })
     await user.click(aspect)
-    expect(screen.getByRole('columnheader', { name: /Aspect/ })).toHaveAttribute('aria-sort', 'ascending')
+    expect(screen.getByRole('columnheader', { name: /^Aspect/ })).toHaveAttribute('aria-sort', 'ascending')
     const up = orbs()
     expect(up).toEqual(sortRows(rows, { key: 'orb', dir: 'asc' }).map((r) => `orb ${orbText(r.orb)}`))
     expect(up).not.toEqual(own)
 
     await user.click(screen.getByRole('button', { name: /^Aspect/ }))
-    expect(screen.getByRole('columnheader', { name: /Aspect/ })).toHaveAttribute('aria-sort', 'descending')
+    expect(screen.getByRole('columnheader', { name: /^Aspect/ })).toHaveAttribute('aria-sort', 'descending')
     expect(orbs()).toEqual([...up].reverse())
 
     await user.click(screen.getByRole('button', { name: /^Aspect/ }))
-    expect(screen.getByRole('columnheader', { name: /Aspect/ })).toHaveAttribute('aria-sort', 'none')
+    expect(screen.getByRole('columnheader', { name: /^Aspect/ })).toHaveAttribute('aria-sort', 'none')
     expect(orbs()).toEqual(own)
 
     await user.click(screen.getByRole('button', { name: 'Transit' }))
@@ -44,9 +44,10 @@ describe('ActiveTransits', () => {
   it('shows each transit\'s weight and sorts by it, the heaviest first on a second click', async () => {
     const user = userEvent.setup()
     render(<ActiveTransits wheel={wheel} />)
-    const weights = () => within(screen.getByRole('table')).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[4]!.textContent!)
+    const weights = () => within(screen.getByRole('table')).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[4]!.childNodes[0]!.textContent!)
     expect(weights()).toEqual(rows.map((r) => (r.weight === null ? '—' : String(r.weight))))
-    expect(screen.getByRole('button', { name: 'Weight' })).toHaveAccessibleDescription(/doubled on the Sun, Moon, Ascendant, MC or chart ruler/)
+    expect(screen.getByRole('button', { name: 'Weight' })).toHaveAccessibleDescription(/weight = slowness × aspect, doubled on a key point/)
+    expect(screen.getByText('Jupiter 3 × square 0.9 × 2 on the Sun = 5.4')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Weight' }))
     await user.click(screen.getByRole('button', { name: /^Weight/ }))
     expect(screen.getByRole('columnheader', { name: /Weight/ })).toHaveAttribute('aria-sort', 'descending')

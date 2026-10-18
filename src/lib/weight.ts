@@ -41,3 +41,30 @@ export function transitWeight(from: string, to: string, type: string, ruler: str
 
 /** "5.4", "0.35": the number as the tool writes it, without trailing zeros. */
 export const weightText = (weight: number): string => String(Math.round(weight * 100) / 100)
+
+/** One transit's working: the three factors and what they come to. */
+export interface WeightParts {
+  slowness: number
+  aspect: number
+  /** Why it is doubled: the key point it lands on, 'chart ruler', or null when it is not. */
+  doubled: string | null
+  weight: number
+}
+
+/**
+ * The working behind a weight. With the chart ruler known (a transit
+ * chart) the doubling is read off the point; with only the tool's number
+ * (a forecast, which names no ruler) it is read off the number, and the
+ * rest is the same arithmetic.
+ */
+export function weightParts(from: string, to: string, type: string, ruler: string | null, given: number | null = null): WeightParts | null {
+  const slowness = SLOWNESS[from]
+  const aspect = ASPECT_WEIGHT[type]
+  if (slowness === undefined || aspect === undefined) return null
+  const base = slowness * aspect
+  const doubled = KEY_POINTS.has(to) ? to
+    : ruler !== null ? (to === ruler ? 'chart ruler' : null)
+    : given !== null && Math.abs(given - base * 2) < Math.abs(given - base) ? 'chart ruler' : null
+  const weight = given ?? Math.round(base * (doubled ? 2 : 1) * 100) / 100
+  return { slowness, aspect, doubled, weight }
+}

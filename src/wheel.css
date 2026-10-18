@@ -31,12 +31,18 @@
 .tt-help { display: none; }
 @media (hover: hover) and (pointer: fine) {
   .tt-th-help:hover .tt-help, .tt-th-help:focus-within .tt-help {
-    display: block; position: absolute; top: 100%; right: 0; z-index: 70; width: 290px; margin-top: 4px;
+    display: block; position: absolute; top: 100%; right: 0; z-index: 70; width: 340px; margin-top: 4px;
     padding: 8px 11px; border-radius: 8px; text-align: left; white-space: normal; font-weight: 400;
     background: var(--bg-raised); border: 1px solid var(--line); color: var(--paper);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); font-size: 12.5px; line-height: 1.45;
   }
   .tt-help p { margin: 4px 0 0; }
+  .tt-formula { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--moss); }
+  .tt-scale { margin: 6px 0 0; }
+  .tt-scale dt { margin-top: 5px; font-weight: 600; color: var(--paper-dim); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .tt-scale dd { margin: 1px 0 0; }
+  /* A row's own working, under its number. */
+  .tt-th-help:hover .tt-working, .tt-th-help:focus-within .tt-working { width: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 }
 .tt-bar { height: 3px; margin-top: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .tt-bar-fill { height: 100%; border-radius: 2px; background: var(--moss); }

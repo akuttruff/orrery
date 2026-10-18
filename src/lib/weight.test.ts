@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chartRuler, transitWeight, weightText } from './weight.ts'
+import { chartRuler, transitWeight, weightParts, weightText } from './weight.ts'
 
 describe('transit weight', () => {
   it('names the chart ruler from the Ascendant', () => {
@@ -19,6 +19,15 @@ describe('transit weight', () => {
     expect(transitWeight('Moon', 'Mars', 'Opposition', null)).toBe(0.2)
     expect(transitWeight('True North Node', 'Sun', 'Square', null)).toBeNull()
     expect(transitWeight('Mars', 'Sun', 'Quincunx', null)).toBeNull()
+  })
+
+  it('shows the working, reading the doubling off the point or, for a forecast, off the number', () => {
+    expect(weightParts('Jupiter', 'Sun', 'Square', 'Mars')).toEqual({ slowness: 3, aspect: 0.9, doubled: 'Sun', weight: 5.4 })
+    expect(weightParts('Mercury', 'Chiron', 'Sextile', 'Chiron')).toEqual({ slowness: 0.5, aspect: 0.5, doubled: 'chart ruler', weight: 0.5 })
+    expect(weightParts('Mercury', 'Chiron', 'Sextile', 'Mars')).toEqual({ slowness: 0.5, aspect: 0.5, doubled: null, weight: 0.25 })
+    expect(weightParts('Uranus', 'Mercury', 'Opposition', null, 8)).toEqual({ slowness: 4, aspect: 1, doubled: 'chart ruler', weight: 8 })
+    expect(weightParts('Uranus', 'Mercury', 'Opposition', null, 4)).toEqual({ slowness: 4, aspect: 1, doubled: null, weight: 4 })
+    expect(weightParts('True North Node', 'Sun', 'Square', null)).toBeNull()
   })
 
   it('writes the number plainly', () => {

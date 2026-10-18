@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
-import { type Wheel, ordinal } from '../lib/chartWheel.ts'
+import { type Wheel, displayName, ordinal } from '../lib/chartWheel.ts'
 import { activeTransits, aspectCell, bodyCell, dayParts, dayText, orbText, windowText } from '../lib/transitTable.ts'
 import { type ForecastTable, keyTransits, periodText } from '../lib/forecastTable.ts'
 import { nextSort, sortRows, type Sort, type SortKey, type Sortable } from '../lib/sortRows.ts'
-import { MAX_WEIGHT, weightText } from '../lib/weight.ts'
+import { ASPECT_WEIGHT, MAX_WEIGHT, SLOWNESS, weightParts, weightText } from '../lib/weight.ts'
 
 /** The five columns, each sortable: a click sorts up, another down, a third goes back to the table's own order. */
 const COLUMNS: { key: SortKey; label: string; hint: string }[] = [
@@ -89,17 +89,37 @@ function Natal({ name, retrograde = false, house }: { name: string; retrograde?:
   )
 }
 
-/** What the Weight column means, in a popup over its header on a pointer; a phone goes without. */
+/** "Mercury 0.5 · Venus 0.7 · …": a scale's numbers in a line. */
+const scaleText = (scale: Record<string, number>): string => Object.entries(scale).map(([name, n]) => `${displayName(name)} ${n}`).join(' · ')
+
+/** How the Weight column is worked out, in a popup over its header on a pointer; a phone goes without. */
 function WeightHelp() {
   return (
     <div className="tt-help" role="tooltip" id="tt-weight-help">
-      <div className="wheel-tip-title">Weight</div>
-      <p>How much a transit shapes its period, as the forecasts rank theirs.</p>
-      <p>
-        The transiting planet's slowness (Moon 0.2, Mercury 0.5, Venus 0.7, Sun 0.8, Mars 1, Jupiter and Chiron 3, Saturn and Uranus 4, Neptune and Pluto 5),
-        doubled on the Sun, Moon, Ascendant, MC or chart ruler, times the aspect (conjunction and opposition 1, square 0.9, trine 0.7, sextile 0.5).
-      </p>
-      <p className="wheel-tip-sub">Pluto on the Sun is 10 and fills the bar. Click to sort by it.</p>
+      <div className="wheel-tip-title">How weight is calculated</div>
+      <p className="tt-formula">weight = slowness × aspect, doubled on a key point</p>
+      <dl className="tt-scale">
+        <dt>Slowness</dt>
+        <dd>The transiting planet: the slower it moves, the rarer and longer the transit. {scaleText(SLOWNESS)}.</dd>
+        <dt>Aspect</dt>
+        <dd>{scaleText(ASPECT_WEIGHT)}.</dd>
+        <dt>Key point</dt>
+        <dd>×2 when the natal point is the Sun, Moon, Ascendant, MC or the chart ruler (the ruler of the rising sign).</dd>
+      </dl>
+      <p className="wheel-tip-sub">So Jupiter square the Sun is 3 × 0.9 × 2 = 5.4, and Pluto on the Sun is the most, 10, filling the bar. Click to sort by it.</p>
+    </div>
+  )
+}
+
+/** One row's own working: "Jupiter 3 × square 0.9 × 2 on the Sun = 5.4". */
+function Working({ from, to, type, ruler, weight }: { from: string; to: string; type: string; ruler: string | null; weight: number }) {
+  const p = weightParts(from, to, type, ruler, ruler === null ? weight : null)
+  if (!p) return null
+  return (
+    <div className="tt-help tt-working" role="tooltip">
+      {displayName(from)} {p.slowness} × {type.toLowerCase()} {p.aspect}
+      {p.doubled && <> × 2 on {p.doubled === 'chart ruler' ? 'the chart ruler' : `the ${displayName(p.doubled)}`}</>}
+      {' '}= {weightText(p.weight)}
     </div>
   )
 }
@@ -108,13 +128,14 @@ function WeightHelp() {
  * How much the transit weighs, as the number over a bar of it: the slower
  * the planet and the more central the natal point, the longer the bar.
  */
-function Weight({ weight }: { weight: number | null }) {
+function Weight({ weight, from, to, type, ruler }: { weight: number | null; from: string; to: string; type: string; ruler: string | null }) {
   if (weight === null) return <td className="tt-num"><span className="tt-house" title="not on the scale: a point or an aspect the forecasts never rank">—</span></td>
   const share = Math.min(1, weight / MAX_WEIGHT)
   return (
-    <td className="tt-num tt-weight" title="the transiting planet's slowness, doubled on the Sun, Moon, Ascendant, MC or chart ruler, times the aspect: Pluto on the Sun is 10">
+    <td className="tt-num tt-weight tt-th-help">
       {weightText(weight)}
       <div className="tt-bar" aria-hidden="true"><div className="tt-bar-fill" style={{ width: `${Math.round(share * 100)}%` }} /></div>
+      <Working from={from} to={to} type={type} ruler={ruler} weight={weight} />
     </td>
   )
 }
@@ -184,7 +205,7 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
                 <Natal name={r.to} retrograde={r.toRetrograde} house={r.toHouse} />
                 {r.toPosition && <div className="tt-pos">{r.toPosition}</div>}
               </td>
-              <Weight weight={r.weight} />
+              <Weight weight={r.weight} from={r.from} to={r.to} type={r.type} ruler={r.ruler} />
             </tr>
           ))}
         </tbody>
@@ -235,7 +256,7 @@ export function ForecastTransits({ table }: { table: ForecastTable }) {
                 <Natal name={r.to} house={r.toHouse} />
                 {r.toPosition && <div className="tt-pos">{r.toPosition}</div>}
               </td>
-              <Weight weight={r.weight} />
+              <Weight weight={r.weight} from={r.from} to={r.to} type={r.type} ruler={null} />
             </tr>
           ))}
         </tbody>

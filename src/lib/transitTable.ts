@@ -9,6 +9,8 @@
 import { type Wheel, aspectFamily, aspectGlyph, type AspectFamily, GLYPHS, displayName, signDegrees, signName } from './chartWheel.ts'
 import { chartRuler, transitWeight } from './weight.ts'
 
+export { chartRuler }
+
 export interface TransitRow {
   /** The transiting body, and the natal point. */
   from: string
@@ -31,6 +33,8 @@ export interface TransitRow {
   pass: string | null
   /** How much it weighs on the forecasts' scale (see weight.ts); null when the scale has no number for it. */
   weight: number | null
+  /** The chart ruler, for the working behind the weight. */
+  ruler: string
 }
 
 const movementOf = (v: unknown): TransitRow['movement'] =>
@@ -69,6 +73,7 @@ export function activeTransits(wheel: Wheel): TransitRow[] {
         passes: a.passes,
         pass: a.pass,
         weight: transitWeight(a.from, a.to, a.type, ruler),
+        ruler,
       }
     })
     .sort((a, b) => (a.exact && b.exact ? a.exact.localeCompare(b.exact) : a.exact ? -1 : b.exact ? 1 : a.orb - b.orb))
