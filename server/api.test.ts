@@ -8,17 +8,21 @@ import { createApiState, createMiddleware, profilePatch } from './api.ts'
 import { Readings } from './readings.ts'
 import { Store } from './store.ts'
 import type { ApiState } from './api.ts'
-import type { WriteRequest } from './model.ts'
-import type { Casting, FollowUp, Memory, ToolUse } from '../src/types.ts'
+import type { Reply, WriteOptions, WriteRequest, writeWithModel } from './model.ts'
+import type { Casting, FollowUp, Memory, Step, Written } from '../src/types.ts'
 
 /** The API on a real socket, with fake tools and a fake model, in a scratch data dir. */
-function serve(write: (req: WriteRequest, onDelta: (t: string) => void, onTools?: (uses: ToolUse[]) => void) => Promise<string>) {
+const plain = (text: string): Reply => ({ text, trail: [], stats: null })
+
+/** A test's writer may return the text alone; the real one returns the text with its trail and numbers. */
+function serve(write: (req: WriteRequest, onDelta: (t: string) => void, opts?: WriteOptions) => Promise<Reply | string>) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orrery-'))
   const store = new Store(dir, '/nonexistent/lm-chat.sqlite')
   const call = vi.fn(async (name: string, args: Record<string, unknown>) => JSON.stringify({ tool: name, args }))
-  const readings = new Readings(store, (_config, req, onDelta, _signal, _fetch, onTools) => write(req, onDelta, onTools))
+  const model: typeof writeWithModel = async (_config, req, onDelta, opts) => { const r = await write(req, onDelta, opts); return typeof r === 'string' ? plain(r) : r }
+  const readings = new Readings(store, model)
   // The memory pool lives in the scratch dir too, never in ~/.lm-memory.
-  const state: ApiState = createApiState({ store, call, readings, memoryDb: path.join(dir, 'memory.sqlite'), write: (_config, req, onDelta) => write(req, onDelta) })
+  const state: ApiState = createApiState({ store, call, readings, memoryDb: path.join(dir, 'memory.sqlite'), write: model })
   const server = http.createServer((req, res) => createMiddleware(state)(req, res, () => { res.writeHead(404); res.end() }))
   return new Promise<{ base: string; call: typeof call; close: () => void }>((resolve) => {
     server.listen(0, '127.0.0.1', () => {
@@ -33,12 +37,12 @@ const post = (url: string, body?: unknown) => fetch(url, { method: 'POST', heade
 let ctx: Awaited<ReturnType<typeof serve>>
 // Writes a word at a time with a pause between, so a stream opened right after the start sees the deltas.
 const tick = () => new Promise((r) => setTimeout(r, 25))
-let writer = async (_req: WriteRequest, onDelta: (t: string) => void, _onTools?: (uses: ToolUse[]) => void): Promise<string> => { await tick(); onDelta('Hello'); await tick(); onDelta(' there'); return 'Hello there' }
+let writer = async (_req: WriteRequest, onDelta: (t: string) => void, _opts?: WriteOptions): Promise<Reply | string> => { await tick(); onDelta('Hello'); await tick(); onDelta(' there'); return plain('Hello there') }
 
 beforeEach(async () => {
   // The shared setup stubs fetch for page tests; these talk to a real socket.
   vi.unstubAllGlobals()
-  ctx = await serve((req, onDelta, onTools) => writer(req, onDelta, onTools))
+  ctx = await serve((req, onDelta, opts) => writer(req, onDelta, opts))
 })
 afterEach(() => ctx.close())
 
@@ -107,14 +111,14 @@ describe('castings', () => {
     const kept = await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json() as Casting
     expect(kept.readingState).toBe('failed')
     expect(kept.readingError).toContain('boom')
-    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return 'ok' }
+    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return plain('ok') }
   })
 })
 
 describe('questions under a reading', () => {
   const readAll = async (url: string) => {
     const events = await (await fetch(url)).text()
-    return events.split('\n\n').filter(Boolean).map((f) => JSON.parse(f.slice(5)) as { type: string; reading?: string; tools?: ToolUse[] })
+    return events.split('\n\n').filter(Boolean).map((f) => JSON.parse(f.slice(5)) as { type: string; reading?: string; trail?: Step[]; written?: Written })
   }
   const castAndRead = async (): Promise<Casting> => {
     const c = await (await post(`${ctx.base}/api/castings`, { kind: 'month' })).json() as Casting
@@ -133,16 +137,25 @@ describe('questions under a reading', () => {
 
   it('answers on the server with the reading and the thread so far in the prompt, streams it and keeps it', async () => {
     const seen: WriteRequest[] = []
-    writer = async (req, onDelta, onTools) => {
+    const thought: Step = { kind: 'reasoning', text: 'Check Saturn.', done: true, seconds: 0.3 }
+    writer = async (req, onDelta, opts) => {
       seen.push(req)
       await tick()
-      onTools?.([{ name: 'verify_claim', ok: null }])
+      opts?.onTrail?.([{ kind: 'reasoning', text: '', done: false }])
+      opts?.onThinking?.('Check Saturn.')
+      opts?.onTrail?.([thought, { kind: 'tool', name: 'verify_claim', ok: null }])
       await tick()
-      onTools?.([{ name: 'verify_claim', ok: true }])
-      onDelta('Because '); await tick(); onDelta('Saturn.'); return 'Because Saturn.'
+      const trail: Step[] = [thought, { kind: 'tool', name: 'verify_claim', ok: true }]
+      opts?.onTrail?.(trail)
+      onDelta('Because '); await tick(); onDelta('Saturn.')
+      return { text: 'Because Saturn.', trail, stats: { model: 'm', inputTokens: 10, outputTokens: 5, reasoningTokens: 2, tokensPerSecond: 20, firstTokenSeconds: 0.5 } }
     }
     const c = await castAndRead()
     expect(c.reading).toBe('Because Saturn.')
+    // When the reading was written, how long it took and what it cost are kept with it.
+    expect(c.written.startedAt).toBeGreaterThan(0)
+    expect(c.written.finishedAt).toBeGreaterThanOrEqual(c.written.startedAt!)
+    expect(c.written.stats).toMatchObject({ model: 'm', tokensPerSecond: 20 })
 
     const started = await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'Which day is best for the move?' })
     expect(started.status).toBe(202)
@@ -155,10 +168,11 @@ describe('questions under a reading', () => {
     const types = events.map((e) => e.type)
     expect(types[0]).toBe('snapshot')
     expect(types.at(-1)).toBe('done')
-    // The tool calls LM Studio ran for the answer are streamed (in the snapshot, when a listener comes late) and kept with it.
-    expect(events.filter((e) => e.tools).at(-1)).toMatchObject({ tools: [{ name: 'verify_claim', ok: true }] })
+    // The model's trail (its thinking, the tool calls LM Studio ran) is streamed and kept with the answer, with the turn's numbers.
+    expect(events.at(-1)).toMatchObject({ type: 'done', written: { trail: [thought, { kind: 'tool', name: 'verify_claim', ok: true }], stats: { tokensPerSecond: 20 } } })
     const kept = await (await fetch(`${ctx.base}/api/followups/${f1.id}`)).json() as FollowUp
-    expect(kept).toMatchObject({ state: 'done', answer: 'Because Saturn.', tools: [{ name: 'verify_claim', ok: true }] })
+    expect(kept).toMatchObject({ state: 'done', answer: 'Because Saturn.', written: { trail: [thought, { kind: 'tool', name: 'verify_claim', ok: true }], stats: { model: 'm', inputTokens: 10 } } })
+    expect(kept.written.finishedAt).toBeGreaterThanOrEqual(kept.written.startedAt!)
 
     // The answer may call astro-mcp through LM Studio; the reading itself does not.
     expect(seen[0]!.tools).toBeUndefined()
@@ -181,7 +195,7 @@ describe('questions under a reading', () => {
     // Removing the casting takes its questions with it.
     await fetch(`${ctx.base}/api/castings/${c.id}`, { method: 'DELETE' })
     expect((await fetch(`${ctx.base}/api/followups/${f1.id}`)).status).toBe(404)
-    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return 'ok' }
+    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return plain('ok') }
   })
 
   it('keeps a failed answer with its reason and can ask again', async () => {
@@ -279,7 +293,7 @@ describe('memories', () => {
     await readAll(`${ctx.base}/api/castings/${c.id}/events`)
     expect(seen.at(-1)!.system).not.toContain('WHAT YOU KNOW')
     expect(((await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json()) as Casting).memoriesUsed).toEqual([])
-    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return 'ok' }
+    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return plain('ok') }
   })
 
   it('leaves the memories a casting unticks out of its reading and answers, and notes which went in', async () => {
@@ -319,6 +333,6 @@ describe('memories', () => {
     await readAll(`${ctx.base}/api/followups/${f.id}/events`)
     expect(seen.at(-1)!.system).toContain('- The user has a cat.')
     expect(((await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json()) as FollowUp).memoriesUsed.sort()).toEqual([cat.id, nights.id].sort())
-    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return 'ok' }
+    writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return plain('ok') }
   })
 })

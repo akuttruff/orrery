@@ -4,6 +4,7 @@ import CastingView from './components/CastingView'
 import Settings from './components/Settings'
 import MemoriesSheet from './components/MemoriesSheet'
 import { api } from './lib/api.ts'
+import { formatWhen } from './lib/when.ts'
 import { castingIdIn, hashFor } from './lib/route.ts'
 import type { Casting, CastingSummary, Config, Kind, Profile } from './types.ts'
 
@@ -173,7 +174,7 @@ export default function App() {
                   <button key={c.id} type="button" className="writing-row" onClick={() => void open(c.id)}>
                     <span className="pulse" aria-hidden="true" />
                     <span className="writing-text"><b>{KIND_LABEL[c.kind]}</b> · {c.title}</span>
-                    <span className="writing-state">Writing…</span>
+                    <span className="writing-state">Writing{c.written.startedAt ? ` since ${formatWhen(c.written.startedAt)}` : ''}…</span>
                     <ChevronRight size={16} aria-hidden="true" />
                   </button>
                 ))}
@@ -197,7 +198,7 @@ export default function App() {
                       <button type="button" onClick={() => void open(c.id)}>
                         <span className="recent-kind">{KIND_LABEL[c.kind]}</span>
                         <span className="recent-title">{c.title}</span>
-                        <span className="recent-state">{c.readingState === 'done' ? 'read' : c.readingState === 'failed' ? 'failed' : 'cast'}</span>
+                        <span className="recent-state">{c.readingState === 'done' ? 'read' : c.readingState === 'failed' ? 'failed' : 'cast'} · {formatWhen(c.createdAt)}</span>
                       </button>
                     </li>
                   ))}

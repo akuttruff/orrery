@@ -105,7 +105,7 @@ export function createMiddleware(state: ApiState): Handler {
   const rememberFrom = async (followUp: FollowUp): Promise<void> => {
     try {
       const known = memories.list()
-      const text = await state.write(store.getConfig(), rememberRequest(followUp.question, known, store.getProfile()), () => {})
+      const { text } = await state.write(store.getConfig(), rememberRequest(followUp.question, known, store.getProfile()), () => {})
       const kept: Remembered[] = []
       for (const fact of parseFacts(text)) {
         try {

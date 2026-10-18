@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App, { WRITING_POLL_MS } from './App'
+import { NOT_WRITTEN } from './types.ts'
 import type { Casting, CastingSummary } from './types.ts'
 
 const casting = (id: string, over: Partial<Casting> = {}): Casting => ({
   id, kind: 'today', period: '2026-10-16', title: `Casting ${id}`, result: '{}', reading: '', readingState: 'writing', readingError: null,
-  createdAt: 1, memory: null, memoriesUsed: [], memoryExcluded: [], ...over,
+  createdAt: 1, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, ...over,
 })
 const summary = ({ result: _r, reading: _g, ...rest }: Casting): CastingSummary => rest
 
@@ -80,7 +81,7 @@ describe('App', () => {
     expect(await screen.findByText('Writing…')).toBeInTheDocument()
     castings[0] = casting('c1', { readingState: 'done', reading: 'Done.' })
     await act(async () => { await vi.advanceTimersByTimeAsync(WRITING_POLL_MS + 50) })
-    expect(await screen.findByText('read')).toBeInTheDocument()
+    expect(await screen.findByText(/^read · /)).toBeInTheDocument()
     expect(screen.queryByText('Writing…')).not.toBeInTheDocument()
   })
 })

@@ -2,9 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Brain, RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
-import ToolCard from './ToolCard'
+import Trail from './Trail'
+import WrittenMeta from './WrittenMeta'
 import { useAnswer } from '../hooks/useReading.ts'
 import { api } from '../lib/api.ts'
+import { toolLabel } from '../lib/toolFormat.ts'
+import { pendingTools, thinking } from '../lib/trail.ts'
+import { formatWhen } from '../lib/when.ts'
 import type { FollowUp, ReadingState } from '../types.ts'
 
 /** The note-taking beside an answer is a model call of its own; look for its result this often, this many times. */
@@ -136,33 +140,32 @@ interface FollowUpItemProps {
 }
 
 function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget }: FollowUpItemProps) {
-  const { text, state, error, tools } = useAnswer(followUp, onSettled)
-  const pending = tools.filter((t) => t.ok === null)
+  const { text, state, error, written } = useAnswer(followUp, onSettled)
+  const pending = pendingTools(written.trail)
+  const status = thinking(written.trail) ? 'Thinking…' : pending.length ? `Looking up ${pending.map((t) => toolLabel(t.name)).join(', ')}…` : written.trail.length ? 'Writing…' : 'Starting…'
   return (
     <li className="followup">
       <div className="followup-q">
         <p>{followUp.question}</p>
+        <span className="followup-when">{formatWhen(followUp.createdAt)}</span>
         {state !== 'writing' && (
           <button type="button" className="icon-btn small" aria-label="Remove question" onClick={onRemove}><X size={15} aria-hidden="true" /></button>
         )}
       </div>
       <div className="followup-a" aria-live="polite">
-        {tools.length > 0 && (
-          <div className="answer-tools" aria-label="Tools the answer used">
-            {tools.map((t, i) => <ToolCard key={i} use={t} />)}
-          </div>
-        )}
+        <Trail trail={written.trail} />
         {text && (
           <div className={`reading-body${state === 'writing' ? ' writing' : ''}`}>
             <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
           </div>
         )}
-        {state === 'writing' && !text && <p className="reading-status">{pending.length ? `Looking up ${pending.map((t) => t.name || 'the ephemeris').join(', ')}…` : tools.length ? 'Writing…' : 'Thinking…'}</p>}
+        {state === 'writing' && !text && <p className="reading-status">{status}</p>}
         {state === 'failed' && <p className="reading-status error">{error ?? 'The answer failed.'}</p>}
         <div className="followup-actions">
           {state === 'writing' && <button type="button" className="chip" onClick={onStop}><Square size={13} aria-hidden="true" /> Stop</button>}
           {state === 'failed' && <button type="button" className="chip" onClick={onAgain}><RefreshCw size={13} aria-hidden="true" /> Try again</button>}
         </div>
+        <WrittenMeta written={written} state={state} label="Answered" />
         {(state === 'done' || state === 'failed') && (
           <p className="followup-memory">
             {followUp.memoriesUsed.length

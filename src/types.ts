@@ -49,6 +49,44 @@ export interface ToolUse {
   output?: string
 }
 
+/** A stretch of the model's thinking, as LM Studio streams it; done once the model moved on. */
+export interface ReasoningStep {
+  kind: 'reasoning'
+  text: string
+  done: boolean
+  /** How long it thought, in seconds, once done. */
+  seconds?: number
+}
+
+export interface ToolStep extends ToolUse {
+  kind: 'tool'
+}
+
+/** What the model did on the way to its text, in order: thought, called a tool, thought again. */
+export type Step = ReasoningStep | ToolStep
+
+/** LM Studio's own numbers for one turn, from its final chat.end event; token counts cover every tool round. */
+export interface ReplyStats {
+  model: string
+  inputTokens: number
+  outputTokens: number
+  /** Of outputTokens, how many were thinking. */
+  reasoningTokens: number
+  tokensPerSecond: number
+  /** Seconds before the first token: prompt reading, or a wait in LM Studio's queue. */
+  firstTokenSeconds: number
+}
+
+/** How a reading or answer was written: the model's trail, what it cost, and when. */
+export interface Written {
+  trail: Step[]
+  stats: ReplyStats | null
+  startedAt: number | null
+  finishedAt: number | null
+}
+
+export const NOT_WRITTEN: Written = { trail: [], stats: null, startedAt: null, finishedAt: null }
+
 /**
  * One cast: a tool result (the chart or forecast, as the tool's JSON text)
  * and the reading the model wrote over it. Cast once per period and kept,
@@ -72,6 +110,8 @@ export interface Casting {
   memoriesUsed: string[]
   /** Memories this casting leaves out of its reading and answers, by id, chosen by the person. */
   memoryExcluded: string[]
+  /** How the reading was written. A casting in a list carries no trail. */
+  written: Written
 }
 
 /** A casting in the recent list: everything but the bodies. */
@@ -94,14 +134,15 @@ export interface FollowUp {
   remembered: Remembered[] | null
   /** The saved memories the answer was written with, by id; empty when written without. */
   memoriesUsed: string[]
-  /** The astrology tools the model called for this answer, in order. */
-  tools: ToolUse[]
+  /** How the answer was written: thinking and tool calls in order, cost and timing. */
+  written: Written
 }
 
-/** What the reading stream sends. */
+/** What the reading stream sends: the text as pieces, the thinking as pieces, the trail whenever its shape changes. */
 export type ReadingEvent =
-  | { type: 'snapshot'; reading: string; state: ReadingState; error: string | null; tools?: ToolUse[] }
+  | { type: 'snapshot'; reading: string; state: ReadingState; error: string | null; written: Written }
   | { type: 'delta'; text: string }
-  | { type: 'tools'; tools: ToolUse[] }
-  | { type: 'done'; reading: string }
-  | { type: 'error'; message: string }
+  | { type: 'thinking'; text: string }
+  | { type: 'trail'; trail: Step[] }
+  | { type: 'done'; reading: string; written: Written }
+  | { type: 'error'; message: string; written: Written }

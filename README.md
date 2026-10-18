@@ -39,6 +39,15 @@ the transit tables), copied rather than shared.
   questions answered so far are replayed in the prompt each time
   (`followUpRequest` in `server/prompt.ts`). One answer at a time per
   casting; deleting the casting deletes its questions.
+- **The trail, the cost, the time.** Everything the model does on the way to
+  its text is kept in order with it (`written.trail`): each stretch of
+  thinking LM Studio streams (shown as lm-chat shows it, a dashed "Thought
+  for 4.2s" row that opens to the text) and each tool call (a card with its
+  arguments and result). Under the text, as under a reply in lm-chat: when
+  it was finished and how long it took, the model, and LM Studio's numbers
+  for the turn from its `chat.end` event (tokens per second, tokens in and
+  out, thinking tokens, time to first token). Castings, questions, readings
+  and answers all carry their times.
 
 ## Memory
 

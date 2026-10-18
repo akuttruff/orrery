@@ -2,7 +2,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ToolUse } from '../src/types.ts'
+import type { Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ReplyStats, Step, ToolUse, Written } from '../src/types.ts'
+import { NOT_WRITTEN } from '../src/types.ts'
 
 export interface ServerConfig extends Omit<Config, 'hasToken'> {
   apiToken: string
@@ -59,7 +60,12 @@ CREATE TABLE IF NOT EXISTS follow_ups (
 CREATE INDEX IF NOT EXISTS follow_ups_casting ON follow_ups (casting_id, created_at);
 `
 
-interface CastingRow {
+/** The columns a reading or answer's trail, numbers and timing are kept in. */
+interface WrittenRow {
+  trail: string | null; stats: string | null; started_at: number | null; finished_at: number | null
+}
+
+interface CastingRow extends WrittenRow {
   id: string; kind: string; period: string; title: string; result: string; reading: string
   reading_state: string; reading_error: string | null; created_at: number
   memory: number | null; memories_used: string | null; memory_excluded: string | null
@@ -70,13 +76,36 @@ const parseIds = (text: string | null): string[] => {
   try { const v = JSON.parse(text) as unknown; return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [] } catch { return [] }
 }
 
+const parseTrail = (text: string | null): Step[] | null => {
+  if (!text) return null
+  try {
+    const v = JSON.parse(text) as unknown
+    return Array.isArray(v) ? v.filter((x): x is Step => !!x && typeof x === 'object' && ((x as Step).kind === 'reasoning' || (x as Step).kind === 'tool')) : []
+  } catch { return [] }
+}
+
+const parseStats = (text: string | null): ReplyStats | null => {
+  if (!text) return null
+  try {
+    const v = JSON.parse(text) as ReplyStats | null
+    return v && typeof v === 'object' && typeof v.tokensPerSecond === 'number' ? v : null
+  } catch { return null }
+}
+
+/** How a row's text was written. An answer kept before trails were, with its tools in their own column, gets a trail of those. */
+const parseWritten = (r: WrittenRow & { tools?: string | null }): Written => ({
+  trail: parseTrail(r.trail) ?? parseTools(r.tools ?? null).map((t) => ({ kind: 'tool' as const, ...t })),
+  stats: parseStats(r.stats), startedAt: r.started_at, finishedAt: r.finished_at,
+})
+
 const fromRow = (r: CastingRow): Casting => ({
   id: r.id, kind: r.kind as Kind, period: r.period, title: r.title, result: r.result, reading: r.reading,
   readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at,
   memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
+  written: parseWritten(r),
 })
 
-interface FollowUpRow {
+interface FollowUpRow extends WrittenRow {
   id: string; casting_id: string; question: string; answer: string; state: string; error: string | null; created_at: number
   remembered: string | null; memories_used: string | null; tools: string | null
 }
@@ -100,7 +129,7 @@ const parseRemembered = (text: string | null): Remembered[] | null => {
 const followUpFromRow = (r: FollowUpRow): FollowUp => ({
   id: r.id, castingId: r.casting_id, question: r.question, answer: r.answer,
   state: r.state as ReadingState, error: r.error, createdAt: r.created_at, remembered: parseRemembered(r.remembered),
-  memoriesUsed: parseIds(r.memories_used), tools: parseTools(r.tools),
+  memoriesUsed: parseIds(r.memories_used), written: parseWritten(r),
 })
 
 export const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -129,6 +158,12 @@ export class Store {
     if (!has('castings', 'memory_excluded')) this.db.exec('ALTER TABLE castings ADD COLUMN memory_excluded TEXT')
     if (!has('follow_ups', 'memories_used')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN memories_used TEXT')
     if (!has('follow_ups', 'tools')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN tools TEXT')
+    for (const table of ['castings', 'follow_ups']) {
+      if (!has(table, 'trail')) this.db.exec(`ALTER TABLE ${table} ADD COLUMN trail TEXT`)
+      if (!has(table, 'stats')) this.db.exec(`ALTER TABLE ${table} ADD COLUMN stats TEXT`)
+      if (!has(table, 'started_at')) this.db.exec(`ALTER TABLE ${table} ADD COLUMN started_at INTEGER`)
+      if (!has(table, 'finished_at')) this.db.exec(`ALTER TABLE ${table} ADD COLUMN finished_at INTEGER`)
+    }
   }
 
   private seed(seedFrom: string): void {
@@ -174,12 +209,13 @@ export class Store {
 
   listCastings(limit = 40): CastingSummary[] {
     const rows = this.db.prepare(
-      'SELECT id, kind, period, title, reading_state, reading_error, created_at, memory, memories_used, memory_excluded FROM castings ORDER BY created_at DESC LIMIT ?',
-    ).all(limit) as unknown as Omit<CastingRow, 'result' | 'reading'>[]
+      'SELECT id, kind, period, title, reading_state, reading_error, created_at, memory, memories_used, memory_excluded, stats, started_at, finished_at FROM castings ORDER BY created_at DESC LIMIT ?',
+    ).all(limit) as unknown as Omit<CastingRow, 'result' | 'reading' | 'trail'>[]
     return rows.map((r) => ({
       id: r.id, kind: r.kind as Kind, period: r.period, title: r.title,
       readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at,
       memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
+      written: parseWritten({ ...r, trail: null }),
     }))
   }
 
@@ -198,14 +234,28 @@ export class Store {
   addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'>): Casting {
     const casting: Casting = {
       id: newId(), ...input, reading: '', readingState: 'none', readingError: null, createdAt: Date.now(), memory: null, memoriesUsed: [], memoryExcluded: [],
+      written: { ...NOT_WRITTEN },
     }
     this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, casting.createdAt)
     return casting
   }
 
-  setReading(id: string, reading: string, state: ReadingState, error: string | null = null): void {
-    this.db.prepare('UPDATE castings SET reading = ?, reading_state = ?, reading_error = ? WHERE id = ?').run(reading, state, error, id)
+  /** The reading is being written from now: nothing on the page, nothing on the trail. */
+  beginReading(id: string): void {
+    this.db.prepare("UPDATE castings SET reading = '', reading_state = 'writing', reading_error = NULL, trail = '[]', stats = NULL, started_at = ?, finished_at = NULL WHERE id = ?")
+      .run(Date.now(), id)
+  }
+
+  /** The model's trail for the reading so far. */
+  setReadingTrail(id: string, trail: Step[]): void {
+    this.db.prepare('UPDATE castings SET trail = ? WHERE id = ?').run(JSON.stringify(trail), id)
+  }
+
+  /** The reading is written, or failed: the text, the whole trail, LM Studio's numbers, and the time. */
+  finishReading(id: string, reading: string, state: 'done' | 'failed', error: string | null, written: Pick<Written, 'trail' | 'stats'>): void {
+    this.db.prepare('UPDATE castings SET reading = ?, reading_state = ?, reading_error = ?, trail = ?, stats = ?, finished_at = ? WHERE id = ?')
+      .run(reading, state, error, JSON.stringify(written.trail), written.stats ? JSON.stringify(written.stats) : null, Date.now(), id)
   }
 
   /** The casting's own memory switch: on, off, or null to follow Settings. */
@@ -242,7 +292,7 @@ export class Store {
   }
 
   addFollowUp(castingId: string, question: string, memoriesUsed: string[] = []): FollowUp {
-    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now(), remembered: null, memoriesUsed, tools: [] }
+    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now(), remembered: null, memoriesUsed, written: { ...NOT_WRITTEN } }
     this.db.prepare('INSERT INTO follow_ups (id, casting_id, question, answer, state, error, created_at, memories_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .run(f.id, f.castingId, f.question, '', 'none', null, f.createdAt, JSON.stringify(memoriesUsed))
     return f
@@ -253,13 +303,21 @@ export class Store {
     this.db.prepare('UPDATE follow_ups SET memories_used = ? WHERE id = ?').run(JSON.stringify(ids), id)
   }
 
-  /** The tools the model has called for the answer so far. */
-  setAnswerTools(id: string, tools: ToolUse[]): void {
-    this.db.prepare('UPDATE follow_ups SET tools = ? WHERE id = ?').run(JSON.stringify(tools), id)
+  /** The answer is being written from now: nothing on the page, nothing on the trail. */
+  beginAnswer(id: string): void {
+    this.db.prepare("UPDATE follow_ups SET answer = '', state = 'writing', error = NULL, trail = '[]', stats = NULL, started_at = ?, finished_at = NULL WHERE id = ?")
+      .run(Date.now(), id)
   }
 
-  setAnswer(id: string, answer: string, state: ReadingState, error: string | null = null): void {
-    this.db.prepare('UPDATE follow_ups SET answer = ?, state = ?, error = ? WHERE id = ?').run(answer, state, error, id)
+  /** The model's trail for the answer so far: its thinking and the tools it has called. */
+  setAnswerTrail(id: string, trail: Step[]): void {
+    this.db.prepare('UPDATE follow_ups SET trail = ? WHERE id = ?').run(JSON.stringify(trail), id)
+  }
+
+  /** The answer is written, or failed: the text, the whole trail, LM Studio's numbers, and the time. */
+  finishAnswer(id: string, answer: string, state: 'done' | 'failed', error: string | null, written: Pick<Written, 'trail' | 'stats'>): void {
+    this.db.prepare('UPDATE follow_ups SET answer = ?, state = ?, error = ?, trail = ?, stats = ?, finished_at = ? WHERE id = ?')
+      .run(answer, state, error, JSON.stringify(written.trail), written.stats ? JSON.stringify(written.stats) : null, Date.now(), id)
   }
 
   setRemembered(id: string, remembered: Remembered[]): void {
@@ -273,8 +331,9 @@ export class Store {
   /** A reading or answer left 'writing' by a server that stopped mid-sentence is failed, not forever pending. */
   settleInterrupted(): number {
     const why = 'The server restarted while this was being written.'
-    const readings = this.db.prepare("UPDATE castings SET reading_state = 'failed', reading_error = ? WHERE reading_state = 'writing'").run(why).changes
-    const answers = this.db.prepare("UPDATE follow_ups SET state = 'failed', error = ? WHERE state = 'writing'").run(why).changes
+    const now = Date.now()
+    const readings = this.db.prepare("UPDATE castings SET reading_state = 'failed', reading_error = ?, finished_at = COALESCE(finished_at, ?) WHERE reading_state = 'writing'").run(why, now).changes
+    const answers = this.db.prepare("UPDATE follow_ups SET state = 'failed', error = ?, finished_at = COALESCE(finished_at, ?) WHERE state = 'writing'").run(why, now).changes
     return Number(readings) + Number(answers)
   }
 

@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { ToolTrail, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
+import { Trail, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
 import type { ServerConfig } from './store.ts'
-import type { ToolUse } from '../src/types.ts'
+import type { Step } from '../src/types.ts'
 
 const config: ServerConfig = { lmStudioUrl: 'http://lm', apiToken: 't', model: 'm', reasoning: 'low', memoryDefault: 'off' }
 
@@ -18,8 +18,12 @@ function lmStudio(events: object[]) {
 }
 
 describe('writeWithModel', () => {
-  it('names the integrations and reports each tool call as it starts, is named and returns', async () => {
+  it('names the integrations and reports the thinking, each tool call as it starts, is named and returns, and the turn\'s numbers', async () => {
     const lm = lmStudio([
+      { type: 'reasoning.start' },
+      { type: 'reasoning.delta', content: 'Let me check ' },
+      { type: 'reasoning.delta', content: 'the ephemeris.' },
+      { type: 'reasoning.end' },
       { type: 'tool_call.start' },
       { type: 'tool_call.name', tool_name: 'verify_claim', provider_info: { plugin_id: 'mcp/astrology-v2' } },
       { type: 'tool_call.arguments', tool_name: 'verify_claim', arguments: { claim: 'x' } },
@@ -27,26 +31,35 @@ describe('writeWithModel', () => {
       { type: 'tool_call.start', tool: 'mcp/astrology-v2' },
       { type: 'tool_call.name', tool_name: 'forecast_week' },
       { type: 'tool_call.failure', reason: 'timed out' },
+      { type: 'message.start' },
       { type: 'message.delta', content: 'Exact on ' },
       { type: 'message.delta', content: 'Thursday.' },
-      { type: 'chat.end', result: {} },
+      { type: 'chat.end', result: { stats: { input_tokens: 3100, total_output_tokens: 820, reasoning_output_tokens: 210, tokens_per_second: 21.34, time_to_first_token_seconds: 2.41 } } },
     ])
-    const seen: ToolUse[][] = []
-    const text = await writeWithModel(config, { system: 's', input: 'i', tools: ['mcp/astrology-v2'] }, () => {}, undefined, lm.fetchImpl, (uses) => seen.push(uses))
-    expect(text).toBe('Exact on Thursday.')
+    const trails: Step[][] = []
+    const thought: string[] = []
+    const reply = await writeWithModel(config, { system: 's', input: 'i', tools: ['mcp/astrology-v2'] }, () => {}, { fetchImpl: lm.fetchImpl, onTrail: (t) => trails.push(t), onThinking: (p) => thought.push(p) })
+    expect(reply.text).toBe('Exact on Thursday.')
     expect(lm.body().integrations).toEqual([{ type: 'plugin', id: 'mcp/astrology-v2' }])
-    expect(seen.at(-1)).toEqual([
-      { name: 'verify_claim', ok: true, plugin: 'mcp/astrology-v2', args: { claim: 'x' }, output: 'yes, exact Thursday' },
-      { name: 'forecast_week', ok: false, plugin: 'mcp/astrology-v2', output: 'timed out' },
+    expect(thought).toEqual(['Let me check ', 'the ephemeris.'])
+    expect(reply.trail).toEqual([
+      { kind: 'reasoning', text: 'Let me check the ephemeris.', done: true, seconds: expect.any(Number) },
+      { kind: 'tool', name: 'verify_claim', ok: true, plugin: 'mcp/astrology-v2', args: { claim: 'x' }, output: 'yes, exact Thursday' },
+      { kind: 'tool', name: 'forecast_week', ok: false, plugin: 'mcp/astrology-v2', output: 'timed out' },
     ])
+    expect(reply.stats).toEqual({ model: 'm', inputTokens: 3100, outputTokens: 820, reasoningTokens: 210, tokensPerSecond: 21.3, firstTokenSeconds: 2.4 })
     // Each report is its own copy: a later change does not rewrite what a listener already got.
-    expect(seen[1]).toEqual([{ name: 'verify_claim', ok: null, plugin: 'mcp/astrology-v2' }])
+    expect(trails[0]).toEqual([{ kind: 'reasoning', text: '', done: false }])
+    expect(trails.at(-1)).toEqual(reply.trail)
   })
 
-  it('sends no integrations when the request names no tools', async () => {
-    const lm = lmStudio([{ type: 'message.delta', content: 'ok' }])
-    await writeWithModel(config, { system: 's', input: 'i' }, () => {}, undefined, lm.fetchImpl)
+  it('sends no integrations when the request names no tools, and opens a thinking step from a bare delta', async () => {
+    const lm = lmStudio([{ type: 'reasoning.delta', content: 'hm' }, { type: 'message.delta', content: 'ok' }, { type: 'chat.end', result: {} }])
+    const reply = await writeWithModel(config, { system: 's', input: 'i' }, () => {}, { fetchImpl: lm.fetchImpl })
     expect(lm.body()).not.toHaveProperty('integrations')
+    expect(reply.text).toBe('ok')
+    expect(reply.trail).toEqual([{ kind: 'reasoning', text: 'hm', done: true, seconds: expect.any(Number) }])
+    expect(reply.stats).toBeNull()
   })
 })
 
@@ -75,17 +88,29 @@ describe('tool results', () => {
   })
 })
 
-describe('ToolTrail', () => {
+describe('Trail', () => {
   it('matches a nameless result to the oldest call still waiting', () => {
-    const t = new ToolTrail()
+    const t = new Trail()
     t.take({ type: 'tool_call.start' })
     t.take({ type: 'tool_call.name', tool_name: 'a' })
     t.take({ type: 'tool_call.start' })
     t.take({ type: 'tool_call.name', tool_name: 'b' })
-    expect(t.take({ type: 'tool_call.success' })).toBe(true)
-    expect(t.uses).toEqual([{ name: 'a', ok: true, output: '' }, { name: 'b', ok: null }])
-    expect(t.take({ type: 'tool_call.success' })).toBe(true)
-    expect(t.take({ type: 'tool_call.success' })).toBe(false)
-    expect(t.take({ type: 'message.delta' })).toBe(false)
+    expect(t.take({ type: 'tool_call.success' })).toBe('steps')
+    expect(t.steps).toEqual([{ kind: 'tool', name: 'a', ok: true, output: '' }, { kind: 'tool', name: 'b', ok: null }])
+    expect(t.take({ type: 'tool_call.success' })).toBe('steps')
+    expect(t.take({ type: 'tool_call.success' })).toBe('none')
+    expect(t.take({ type: 'message.delta' })).toBe('none')
+  })
+
+  it('times the thinking and closes it when a tool call or the message starts', () => {
+    const t = new Trail()
+    expect(t.take({ type: 'reasoning.start' }, 1000)).toBe('steps')
+    expect(t.take({ type: 'reasoning.delta', content: 'a' }, 1100)).toBe('thinking')
+    expect(t.take({ type: 'tool_call.start' }, 3500)).toBe('steps')
+    expect(t.steps[0]).toEqual({ kind: 'reasoning', text: 'a', done: true, seconds: 2.5 })
+    expect(t.take({ type: 'reasoning.delta', content: 'b' }, 4000)).toBe('steps')
+    expect(t.take({ type: 'message.start' }, 4200)).toBe('steps')
+    expect(t.steps[2]).toEqual({ kind: 'reasoning', text: 'b', done: true, seconds: 0.2 })
+    expect(t.take({ type: 'message.start' })).toBe('none')
   })
 })

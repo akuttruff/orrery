@@ -1,15 +1,17 @@
-import type { ToolUse } from '../src/types.ts'
+import type { ReplyStats, Step, ToolStep } from '../src/types.ts'
+import { appendThinking } from '../src/lib/trail.ts'
 import type { ServerConfig } from './store.ts'
 
 /**
- * One streamed reply from LM Studio's /api/v1/chat: the reading text as it
- * is written, reasoning left out. The same endpoint the chat app uses, so
- * the same models, token and reasoning levels apply. A request can name
- * LM Studio's MCP integrations; LM Studio then runs the tool calls itself,
- * and the stream reports each one.
+ * One streamed reply from LM Studio's /api/v1/chat: the text as it is
+ * written, the thinking as it is thought, and the tool calls as they run.
+ * The same endpoint the chat app uses, so the same models, token and
+ * reasoning levels apply. A request can name LM Studio's MCP integrations;
+ * LM Studio then runs the tool calls itself, and the stream reports each
+ * one. The stream's last event carries LM Studio's own numbers for the turn.
  */
 
-interface ChatEvent {
+export interface ChatEvent {
   type: string
   content?: string
   error?: { message?: string }
@@ -20,6 +22,16 @@ interface ChatEvent {
   arguments?: unknown
   output?: unknown
   reason?: string
+  /** chat.end: the turn's stats. */
+  result?: {
+    stats?: {
+      input_tokens?: number
+      total_output_tokens?: number
+      reasoning_output_tokens?: number
+      tokens_per_second?: number
+      time_to_first_token_seconds?: number
+    }
+  }
 }
 
 /** A result is kept whole (a year of transits is ~20 KB); this stops only a runaway tool. */
@@ -56,6 +68,19 @@ export function toolArgs(raw: unknown): Record<string, unknown> | undefined {
   }))
 }
 
+/** LM Studio's turn stats in this app's shape, or null when it sent none. */
+export function replyStats(raw: NonNullable<ChatEvent['result']>['stats'], model: string): ReplyStats | null {
+  if (!raw || typeof raw.tokens_per_second !== 'number') return null
+  return {
+    model,
+    inputTokens: raw.input_tokens ?? 0,
+    outputTokens: raw.total_output_tokens ?? 0,
+    reasoningTokens: raw.reasoning_output_tokens ?? 0,
+    tokensPerSecond: Math.round(raw.tokens_per_second * 10) / 10,
+    firstTokenSeconds: Math.round((raw.time_to_first_token_seconds ?? 0) * 10) / 10,
+  }
+}
+
 export interface WriteRequest {
   system: string
   input: string
@@ -65,44 +90,108 @@ export interface WriteRequest {
   tools?: string[]
 }
 
-/** Follows LM Studio's tool events: a call starts, gets its name, then succeeds or fails. */
-export class ToolTrail {
-  readonly uses: ToolUse[] = []
+/** What one reply came to: the text, the trail behind it, and LM Studio's numbers. */
+export interface Reply {
+  text: string
+  trail: Step[]
+  stats: ReplyStats | null
+}
 
-  /** True when the event changed the trail. */
-  take(evt: ChatEvent): boolean {
+export interface WriteOptions {
+  signal?: AbortSignal
+  fetchImpl?: typeof fetch
+  /** The trail each time its shape changes (thinking opens or closes, a tool call starts, is named or returns): the whole trail, a copy. */
+  onTrail?: (trail: Step[]) => void
+  /** Each piece of thinking, for the open thinking step. */
+  onThinking?: (piece: string) => void
+}
+
+/** What an event did to the trail: nothing, changed its shape, or added a piece of thinking. */
+export type TrailChange = 'none' | 'steps' | 'thinking'
+
+/**
+ * Follows LM Studio's events into a trail: thinking opens, grows and
+ * closes; a tool call starts, gets its name and arguments, then succeeds
+ * or fails. The steps stay in the order they happened.
+ */
+export class Trail {
+  steps: Step[] = []
+  private thinkingSince = 0
+
+  take(evt: ChatEvent, now = Date.now()): TrailChange {
     switch (evt.type) {
+      case 'reasoning.start':
+        this.closeThinking(now)
+        this.steps.push({ kind: 'reasoning', text: '', done: false })
+        this.thinkingSince = now
+        return 'steps'
+      case 'reasoning.delta': {
+        const piece = evt.content || ''
+        if (!piece) return 'none'
+        const opened = !this.open()
+        this.steps = appendThinking(this.steps, piece)
+        if (opened) this.thinkingSince = now
+        return opened ? 'steps' : 'thinking'
+      }
+      case 'reasoning.end':
+      case 'message.start':
+        return this.closeThinking(now) ? 'steps' : 'none'
       case 'tool_call.start':
-        this.uses.push({ name: evt.tool_name || '', ok: null, ...(evt.tool ? { plugin: evt.tool } : {}) })
-        return true
+        this.closeThinking(now)
+        this.steps.push({ kind: 'tool', name: evt.tool_name || '', ok: null, ...(evt.tool ? { plugin: evt.tool } : {}) })
+        return 'steps'
       case 'tool_call.name':
       case 'tool_call.arguments': {
         const name = evt.tool_name
-        if (!name) return false
-        let use = this.uses.find((u) => u.ok === null && !u.name) ?? this.uses.find((u) => u.ok === null && u.name === name)
-        if (!use) { use = { name, ok: null }; this.uses.push(use) }
+        if (!name) return 'none'
+        let use = this.tools().find((u) => u.ok === null && !u.name) ?? this.tools().find((u) => u.ok === null && u.name === name)
+        if (!use) { use = { kind: 'tool', name, ok: null }; this.steps.push(use) }
         use.name = name
         const plugin = evt.provider_info?.plugin_id
         if (plugin) use.plugin = plugin
         const args = toolArgs(evt.arguments)
         if (args) use.args = args
-        return true
+        return 'steps'
       }
       case 'tool_call.success':
       case 'tool_call.failure': {
         const name = evt.tool_name
-        const use = (name && this.uses.find((u) => u.ok === null && u.name === name)) || this.uses.find((u) => u.ok === null)
-        if (!use) return false
+        const use = (name && this.tools().find((u) => u.ok === null && u.name === name)) || this.tools().find((u) => u.ok === null)
+        if (!use) return 'none'
         use.ok = evt.type === 'tool_call.success'
         if (name && !use.name) use.name = name
         const args = toolArgs(evt.arguments)
         if (args) use.args = args
         use.output = use.ok ? toolOutputText(evt.output).slice(0, MAX_TOOL_OUTPUT) : (evt.reason || 'Tool call failed')
-        return true
+        return 'steps'
       }
       default:
-        return false
+        return 'none'
     }
+  }
+
+  /** The trail as it stands, each step a copy, for a listener to keep. */
+  copy(): Step[] {
+    return this.steps.map((s) => ({ ...s }))
+  }
+
+  /** The open thinking step, if the model is thinking. */
+  private open(): Step | undefined {
+    const last = this.steps.at(-1)
+    return last?.kind === 'reasoning' && !last.done ? last : undefined
+  }
+
+  /** Closes the open thinking step with how long it took; false when none was open. */
+  private closeThinking(now: number): boolean {
+    const last = this.steps.at(-1)
+    if (!last || last.kind !== 'reasoning' || last.done) return false
+    last.done = true
+    last.seconds = Math.round(Math.max(0, now - this.thinkingSince) / 100) / 10
+    return true
+  }
+
+  private tools(): ToolStep[] {
+    return this.steps.filter((s): s is ToolStep => s.kind === 'tool')
   }
 }
 
@@ -124,11 +213,8 @@ export async function writeWithModel(
   config: ServerConfig,
   req: WriteRequest,
   onDelta: (text: string) => void,
-  signal?: AbortSignal,
-  fetchImpl: typeof fetch = fetch,
-  /** Each change to the tools called so far, the whole list each time. */
-  onTools?: (uses: ToolUse[]) => void,
-): Promise<string> {
+  { signal, fetchImpl = fetch, onTrail, onThinking }: WriteOptions = {},
+): Promise<Reply> {
   if (!config.model) throw new ModelError('No model chosen. Pick one in Settings.')
   const base = config.lmStudioUrl.replace(/\/+$/, '')
   const body: Record<string, unknown> = { model: config.model, input: req.input, system_prompt: req.system, stream: true }
@@ -154,7 +240,8 @@ export async function writeWithModel(
   if (!res.body) throw new ModelError('LM Studio returned no stream')
 
   let text = ''
-  const trail = new ToolTrail()
+  let stats: ReplyStats | null = null
+  const trail = new Trail()
   for await (const evt of sseEvents(res.body)) {
     if (evt.type === 'message.delta') {
       const piece = evt.content || ''
@@ -163,11 +250,16 @@ export async function writeWithModel(
       onDelta(piece)
     } else if (evt.type === 'error') {
       throw new ModelError(evt.error?.message || 'LM Studio reported an error')
-    } else if (evt.type.startsWith('tool_call.')) {
-      if (trail.take(evt)) onTools?.(trail.uses.map((u) => ({ ...u })))
+    } else if (evt.type === 'chat.end') {
+      stats = replyStats(evt.result?.stats, config.model)
+      if (trail.take({ type: 'message.start' }) === 'steps') onTrail?.(trail.copy())
+    } else {
+      const change = trail.take(evt)
+      if (change === 'steps') onTrail?.(trail.copy())
+      else if (change === 'thinking') onThinking?.(evt.content || '')
     }
   }
-  return text
+  return { text, trail: trail.copy(), stats }
 }
 
 async function describeHttpError(res: Response): Promise<string> {

@@ -213,8 +213,10 @@ input, select { font: inherit; }
 .memory-pick-used { flex: 0 0 auto; font-size: 11px; color: var(--moss); white-space: nowrap; margin-top: 2px; }
 .followup-memory { margin: 6px 0 0; font-size: 12px; color: var(--paper-dim); line-height: 1.4; }
 /* ====== Tool calls under an answer, as lm-chat shows them ====== */
-.answer-tools { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 10px; }
-.tool-card { display: block; width: 100%; padding: 10px 12px; border-radius: var(--radius); background: var(--bg-raised); border: 1px solid var(--line); color: var(--paper-dim); }
+.trail { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 10px; }
+.msg { display: flex; flex-direction: column; width: 100%; min-width: 0; }
+.msg.tool { flex: 1 1 auto; }
+.tool-card { display: block; width: 100%; max-width: 100%; padding: 10px 12px; border-radius: 10px; background: var(--bg-raised); border: 1px solid var(--line); color: var(--paper-dim); }
 .tool-card.failed { border-color: var(--rust); }
 .tool-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; background: none; border: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .tool-head:disabled { cursor: default; opacity: 1; }
@@ -364,3 +366,29 @@ input, select { font: inherit; }
   font-weight: 700;
   font-size: 16px;
 }
+
+/* ====== the model's thinking, as lm-chat shows it: a dashed row, the text unfolding under it ====== */
+.msg.reasoning { margin: 2px 0; align-items: flex-start; }
+.reasoning-toggle {
+  display: flex; align-items: center; gap: 7px; padding: 6px 10px;
+  background: none; border: 1px dashed var(--paper-dim); border-radius: 10px;
+  color: var(--paper); font-size: 12px; cursor: pointer;
+}
+.reasoning-toggle svg { color: var(--moss); }
+.reasoning-toggle .chev { display: grid; transition: transform 0.15s; }
+.reasoning-toggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
+/* Unfolds from nothing: a grid row growing from 0fr to 1fr is how CSS animates to an unknown height. */
+.reasoning-body { display: grid; overflow: hidden; width: 100%; animation: unfold 0.18s ease-out; }
+.reasoning-body > * { min-height: 0; overflow: hidden; }
+@keyframes unfold { from { grid-template-rows: 0fr; opacity: 0; } to { grid-template-rows: 1fr; opacity: 1; } }
+.reasoning-text {
+  margin-top: 8px; padding: 10px 12px; max-width: 100%;
+  background: var(--bg); border-left: 2px solid var(--moss-dim); border-radius: 0 10px 10px 0;
+  color: var(--paper-dim); font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) { .reasoning-body { animation: none; } .reasoning-toggle .chev, .tc-chevron { transition: none; } }
+
+/* ====== when and what it cost: the footer under a reading or answer ====== */
+.meta { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; color: var(--paper-dim); margin: 5px 3px 0; line-height: 1.5; }
+.meta-stats { opacity: 0.8; }
+.followup-when { flex: 0 0 auto; font-size: 11px; color: var(--paper-dim); white-space: nowrap; padding-top: 4px; }

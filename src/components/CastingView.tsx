@@ -9,6 +9,7 @@ import FollowUps from './FollowUps'
 import { useReading } from '../hooks/useReading.ts'
 import { parseWheel } from '../lib/chartWheel.ts'
 import { parseForecast } from '../lib/forecastTable.ts'
+import { formatWhen } from '../lib/when.ts'
 import type { Casting } from '../types.ts'
 
 interface CastingViewProps {
@@ -38,13 +39,12 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
   const reading = useReading(casting, onSettled)
   const wheel = useMemo(() => (casting.kind === 'today' || casting.kind === 'natal' ? parseWheel(casting.result) : null), [casting])
   const forecast = useMemo(() => (casting.kind === 'week' || casting.kind === 'month' || casting.kind === 'year' ? parseForecast(casting.result) : null), [casting])
-  const castAt = new Date(casting.createdAt)
 
   return (
     <article className="casting">
       <header className="casting-head">
         <h2>{casting.title}</h2>
-        <p className="casting-sub">Cast {castAt.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+        <p className="casting-sub">Cast {formatWhen(casting.createdAt)}</p>
       </header>
       {wheel && <ChartWheel wheel={wheel} castingId={casting.id} readings={NO_READINGS} />}
       {wheel?.kind === 'transit' && <ActiveTransits wheel={wheel} />}

@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { followUpRequest, memoryBlock, readingRequest, trimmedData } from './prompt.ts'
 import transit from '../src/test/fixtures/transit-chart.json?raw'
 import week from '../src/test/fixtures/forecast-week.json?raw'
+import { NOT_WRITTEN } from '../src/types.ts'
 import type { Casting, FollowUp, Profile } from '../src/types.ts'
 
 const amie: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
 const casting = (over: Partial<Casting>): Casting => ({
   id: 'c1', kind: 'today', period: '2026-10-13', title: 'Today · Oct 13', result: transit,
-  reading: '', readingState: 'none', readingError: null, createdAt: 0, memory: null, memoriesUsed: [], memoryExcluded: [], ...over,
+  reading: '', readingState: 'none', readingError: null, createdAt: 0, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, ...over,
 })
 
 describe('readingRequest', () => {
@@ -40,7 +41,7 @@ describe('readingRequest', () => {
 
 describe('followUpRequest', () => {
   const read = casting({ kind: 'week', result: week, title: 'Week of Oct 12', period: '2026-10-12', reading: '### Monday\nSaturn leans in.', readingState: 'done' })
-  const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], tools: [], ...over })
+  const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], written: NOT_WRITTEN, ...over })
 
   it('puts the data and the reading behind the question, in the same voice', () => {
     const req = followUpRequest(read, [], 'Is Thursday any good?', amie, new Date(2026, 9, 13))
