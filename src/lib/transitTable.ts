@@ -7,6 +7,7 @@
  * meaningful, so don't add it back.)
  */
 import { type Wheel, aspectFamily, aspectGlyph, type AspectFamily, GLYPHS, displayName, signDegrees, signName } from './chartWheel.ts'
+import { chartRuler, transitWeight } from './weight.ts'
 
 export interface TransitRow {
   /** The transiting body, and the natal point. */
@@ -28,6 +29,8 @@ export interface TransitRow {
   /** Every exact moment of the contact's run, and which of them `exact` is: "1 of 3" when a retrograde brings it back. */
   passes: string[]
   pass: string | null
+  /** How much it weighs on the forecasts' scale (see weight.ts); null when the scale has no number for it. */
+  weight: number | null
 }
 
 const movementOf = (v: unknown): TransitRow['movement'] =>
@@ -42,11 +45,13 @@ export function positionText(longitude: number): string {
 /**
  * The aspects on a transit wheel as rows: what is in play at that moment,
  * in date order of their exact moments (those with none last, tightest
- * first), each with both bodies' positions read off the rings.
+ * first), each with both bodies' positions read off the rings and its
+ * weight, with the chart ruler read off the Ascendant.
  */
 export function activeTransits(wheel: Wheel): TransitRow[] {
   if (wheel.kind !== 'transit') return []
   const point = (ring: 'inner' | 'outer', name: string) => wheel[ring].find((p) => p.name === name)
+  const ruler = chartRuler(wheel.angles.Asc)
   return wheel.aspects
     .map((a): TransitRow => {
       const from = point('outer', a.from)
@@ -63,6 +68,7 @@ export function activeTransits(wheel: Wheel): TransitRow[] {
         movement: movementOf(a.movement),
         passes: a.passes,
         pass: a.pass,
+        weight: transitWeight(a.from, a.to, a.type, ruler),
       }
     })
     .sort((a, b) => (a.exact && b.exact ? a.exact.localeCompare(b.exact) : a.exact ? -1 : b.exact ? 1 : a.orb - b.orb))

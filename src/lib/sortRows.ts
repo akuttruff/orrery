@@ -1,12 +1,12 @@
 /**
  * Sorting a transit table by a column: the moment it is exact, the
- * transiting body, how close the orb is, or the natal point. A click on a
+ * transiting body, how close the orb is, the natal point, or its weight. A click on a
  * header sorts ascending, another descending, a third puts the table back
  * in its own order. Ties keep that order, so sorting by planet groups the
  * rows without shuffling them.
  */
 
-export type SortKey = 'when' | 'from' | 'orb' | 'to'
+export type SortKey = 'when' | 'from' | 'orb' | 'to' | 'weight'
 export type SortDir = 'asc' | 'desc'
 export interface Sort { key: SortKey; dir: SortDir }
 
@@ -17,6 +17,8 @@ export interface Sortable {
   orb: number
   exact: string | null
   nearestExact?: string | null
+  /** Null when the scale has no number for the row; it sorts last either way. */
+  weight?: number | null
 }
 
 /** The sort a click on `key` leads to from `current`: up, then down, then none. */
@@ -38,8 +40,16 @@ function compare(a: Sortable, b: Sortable, key: SortKey): number {
     case 'from': return a.from.localeCompare(b.from)
     case 'to': return a.to.localeCompare(b.to)
     case 'orb': return a.orb - b.orb
+    case 'weight': {
+      const x = a.weight ?? null; const y = b.weight ?? null
+      if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1
+      return x - y
+    }
   }
 }
+
+/** Whether the row has nothing to sort by under the key: no moment, or no weight. */
+const blank = (r: Sortable, key: SortKey): boolean => key === 'when' ? whenOf(r) === null : key === 'weight' ? (r.weight ?? null) === null : false
 
 /** The rows in the sort's order (a new array), or as given when there is no sort. */
 export function sortRows<T extends Sortable>(rows: T[], sort: Sort | null): T[] {
@@ -47,8 +57,8 @@ export function sortRows<T extends Sortable>(rows: T[], sort: Sort | null): T[] 
   const sign = sort.dir === 'asc' ? 1 : -1
   return rows.map((row, i) => ({ row, i })).sort((a, b) => {
     const c = compare(a.row, b.row, sort.key)
-    // A row with no moment stays last whichever way the dates run.
-    if (sort.key === 'when' && c !== 0 && (whenOf(a.row) === null || whenOf(b.row) === null)) return c
+    // A row with no moment, or no weight, stays last whichever way the rest run.
+    if (c !== 0 && (blank(a.row, sort.key) || blank(b.row, sort.key))) return c
     return c !== 0 ? c * sign : a.i - b.i
   }).map((x) => x.row)
 }

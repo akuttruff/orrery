@@ -22,6 +22,14 @@ the transit tables), copied rather than shared.
   from the day of the cast: seven on a Sunday, one on a Saturday. The tool
   always gives seven days from its start, so the days past Saturday are
   trimmed off (`trimWeek` in `server/cast.ts`).
+- **Every transit has a weight.** The tables' last column is the
+  forecasts' own ranking (astro-mcp's `forecast.py`): the transiting
+  planet's slowness (Mercury 0.5 up to Pluto 5), doubled on the Sun, Moon,
+  Ascendant, MC or chart ruler, times the aspect (conjunction and
+  opposition 1, square 0.9, trine 0.7, sextile 0.5). A forecast's rows
+  carry the tool's number; a day's transit chart comes unweighted, so
+  `src/lib/weight.ts` works it out the same way, with the Moon at 0.2
+  since the tool never ranks her. Pluto on the Sun is 10 and fills the bar.
 - **The model writes.** The tool's own result goes to LM Studio's
   `/api/v1/chat` with a brief (`server/prompt.ts`) that asks for a full
   paragraph per contact, explained in plain words and tied to the person's

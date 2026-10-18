@@ -40,4 +40,17 @@ describe('ActiveTransits', () => {
     await user.click(screen.getByRole('button', { name: 'default order' }))
     expect(orbs()).toEqual(own)
   })
+
+  it('shows each transit\'s weight and sorts by it, the heaviest first on a second click', async () => {
+    const user = userEvent.setup()
+    render(<ActiveTransits wheel={wheel} />)
+    const weights = () => within(screen.getByRole('table')).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[4]!.textContent!)
+    expect(weights()).toEqual(rows.map((r) => (r.weight === null ? '—' : String(r.weight))))
+    await user.click(screen.getByRole('button', { name: 'Weight' }))
+    await user.click(screen.getByRole('button', { name: /^Weight/ }))
+    expect(screen.getByRole('columnheader', { name: /Weight/ })).toHaveAttribute('aria-sort', 'descending')
+    const shown = weights().filter((w) => w !== '—').map(Number)
+    expect(shown).toEqual([...shown].sort((a, b) => b - a))
+    expect(shown[0]).toBe(Math.max(...rows.map((r) => r.weight ?? 0)))
+  })
 })

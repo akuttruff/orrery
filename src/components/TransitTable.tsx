@@ -4,13 +4,15 @@ import { type Wheel, ordinal } from '../lib/chartWheel.ts'
 import { activeTransits, aspectCell, bodyCell, dayParts, dayText, orbText, windowText } from '../lib/transitTable.ts'
 import { type ForecastTable, keyTransits, periodText } from '../lib/forecastTable.ts'
 import { nextSort, sortRows, type Sort, type SortKey, type Sortable } from '../lib/sortRows.ts'
+import { MAX_WEIGHT, weightText } from '../lib/weight.ts'
 
-/** The four columns, each sortable: a click sorts up, another down, a third goes back to the table's own order. */
+/** The five columns, each sortable: a click sorts up, another down, a third goes back to the table's own order. */
 const COLUMNS: { key: SortKey; label: string; hint: string }[] = [
   { key: 'when', label: 'When', hint: 'by the moment it is exact' },
   { key: 'from', label: 'Transit', hint: 'by the transiting body' },
   { key: 'orb', label: 'Aspect', hint: 'by how close the orb is' },
   { key: 'to', label: 'Natal', hint: 'by the natal point' },
+  { key: 'weight', label: 'Weight', hint: 'by how much it shapes the period' },
 ]
 
 function SortHead({ sort, onSort }: { sort: Sort | null; onSort: (key: SortKey) => void }) {
@@ -80,6 +82,21 @@ function Natal({ name, retrograde = false, house }: { name: string; retrograde?:
   )
 }
 
+/**
+ * How much the transit weighs, as the number over a bar of it: the slower
+ * the planet and the more central the natal point, the longer the bar.
+ */
+function Weight({ weight }: { weight: number | null }) {
+  if (weight === null) return <td className="tt-num"><span className="tt-house" title="not on the scale: a point or an aspect the forecasts never rank">—</span></td>
+  const share = Math.min(1, weight / MAX_WEIGHT)
+  return (
+    <td className="tt-num tt-weight" title="the transiting planet's slowness, doubled on the Sun, Moon, Ascendant, MC or chart ruler, times the aspect: Pluto on the Sun is 10">
+      {weightText(weight)}
+      <div className="tt-bar" aria-hidden="true"><div className="tt-bar-fill" style={{ width: `${Math.round(share * 100)}%` }} /></div>
+    </td>
+  )
+}
+
 /** "Oct 6 16:36" on top; dim when it has passed. Over the movement, or the days in orb. */
 /** A moment as "Dec 7, 2025 16:36", breakable only between the day and the time. */
 function Day({ iso, on }: { iso: string; on: string | null }) {
@@ -118,7 +135,7 @@ function Run({ pass, others, on }: { pass: string; others: string[]; on: string 
  * The transits in play at the wheel's moment, under the wheel: each aspect
  * on it as a row in date order of its exact moment, past ones dimmed, with
  * whether it is applying or separating, each body over its position, the
- * natal house, and the aspect over its orb.
+ * natal house, the aspect over its orb, and its weight.
  */
 export function ActiveTransits({ wheel }: { wheel: Wheel }) {
   const all = useMemo(() => activeTransits(wheel), [wheel])
@@ -145,6 +162,7 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
                 <Natal name={r.to} retrograde={r.toRetrograde} house={r.toHouse} />
                 {r.toPosition && <div className="tt-pos">{r.toPosition}</div>}
               </td>
+              <Weight weight={r.weight} />
             </tr>
           ))}
         </tbody>
@@ -195,6 +213,7 @@ export function ForecastTransits({ table }: { table: ForecastTable }) {
                 <Natal name={r.to} house={r.toHouse} />
                 {r.toPosition && <div className="tt-pos">{r.toPosition}</div>}
               </td>
+              <Weight weight={r.weight} />
             </tr>
           ))}
         </tbody>
