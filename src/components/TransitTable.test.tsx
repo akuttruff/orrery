@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { ActiveTransits } from './TransitTable'
+import { ActiveTransits, BACKDROP_SHOWN, ForecastTransits } from './TransitTable'
 import { parseWheel } from '../lib/chartWheel.ts'
 import { activeTransits, orbText } from '../lib/transitTable.ts'
 import { sortRows } from '../lib/sortRows.ts'
+import { parseForecast } from '../lib/forecastTable.ts'
+import { fullWeek } from '../lib/forecastTable.test.ts'
 import transit from '../test/fixtures/transit-chart.json?raw'
 
 const wheel = parseWheel(transit)!
@@ -54,5 +56,31 @@ describe('ActiveTransits', () => {
     const shown = weights().filter((w) => w !== '—').map(Number)
     expect(shown).toEqual([...shown].sort((a, b) => b - a))
     expect(shown[0]).toBe(Math.max(...rows.map((r) => r.weight ?? 0)))
+  })
+})
+
+describe('ForecastTransits', () => {
+  it('shows a scanned week in its two groups, folds the backdrop, and flattens for a sort', async () => {
+    const user = userEvent.setup()
+    const table = parseForecast(fullWeek)!
+    render(<ForecastTransits table={table} />)
+    expect(screen.getByText(/^Transits in orb · Oct 18–24/)).toBeInTheDocument()
+    const heads = () => screen.getAllByRole('rowgroup').map((g) => g.textContent)
+    expect(screen.getByText('Exact this week · 9')).toBeInTheDocument()
+    expect(screen.getByText('In orb all week, not exact in it · 9')).toBeInTheDocument()
+    const dataRows = () => screen.getAllByRole('row').filter((r) => r.querySelector('td.tt-when'))
+    expect(dataRows()).toHaveLength(9 + BACKDROP_SHOWN)
+    await user.click(screen.getByRole('button', { name: `Show ${9 - BACKDROP_SHOWN} more` }))
+    expect(dataRows()).toHaveLength(18)
+    expect(heads()[2]).toContain('Uranus')
+
+    // A sort runs over every row at once; the table's own order brings the groups back.
+    await user.click(screen.getByRole('button', { name: 'Weight' }))
+    await user.click(screen.getByRole('button', { name: /^Weight/ }))
+    expect(screen.queryByText('Exact this week · 9')).not.toBeInTheDocument()
+    expect(dataRows()).toHaveLength(18)
+    expect(dataRows()[0]!.textContent).toContain('Uranus')
+    await user.click(screen.getByRole('button', { name: 'default order' }))
+    expect(screen.getByText('Exact this week · 9')).toBeInTheDocument()
   })
 })

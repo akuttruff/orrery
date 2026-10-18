@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { followUpRequest, memoryBlock, readingRequest, trimmedData } from './prompt.ts'
 import transit from '../src/test/fixtures/transit-chart.json?raw'
 import week from '../src/test/fixtures/forecast-week.json?raw'
+import { withWeekTransits } from './cast.ts'
+import weekOct18 from '../src/test/fixtures/forecast-week-oct18.json?raw'
+import scan from '../src/test/fixtures/scan-week.json?raw'
 import { NOT_WRITTEN } from '../src/types.ts'
 import type { Casting, FollowUp, Profile } from '../src/types.ts'
 
@@ -37,6 +40,13 @@ describe('readingRequest', () => {
     expect(req.input).not.toContain('left_out')
     expect(req.input).toContain('headline_note')
     expect(req.input).toContain('week of Oct 12, Sunday to Saturday. It covers 2026-10-12 to 2026-10-18, the days left in the week.')
+    expect(req.input).toContain('Take every headline transit in order')
+    expect(req.input).not.toContain('week_transits')
+    // With the scan folded in, the brief asks for every contact: the events, then the backdrop.
+    const full = readingRequest(casting({ kind: 'week', result: withWeekTransits(weekOct18, scan), title: 'Week of Oct 18', period: '2026-10-18' }), amie)
+    expect(full.input).toContain('Under week_transits is every contact in orb over these days, 18 in all')
+    expect(full.input).toContain('"week_transits":{"range"')
+    expect(full.input).toContain('"from_object":"Uranus"')
   })
 
   it('speaks in the kind of reading chosen, and takes up what the person asked for', () => {

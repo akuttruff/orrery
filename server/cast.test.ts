@@ -1,8 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { addDays, castResult, localDate, periodFor, shortDate, sundayOf, titleFor, trimWeek, weekSpan } from './cast.ts'
+import { addDays, castResult, localDate, periodFor, shortDate, sundayOf, titleFor, trimWeek, weekSpan, withWeekTransits, WEEK_SCAN_OBJECTS } from './cast.ts'
 import type { Profile } from '../src/types.ts'
 import week from '../src/test/fixtures/forecast-week.json?raw'
+import weekOct18 from '../src/test/fixtures/forecast-week-oct18.json?raw'
+import scan from '../src/test/fixtures/scan-week.json?raw'
 
 const amie: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
 const oct15 = new Date(2026, 9, 15, 22, 8)
@@ -40,9 +42,31 @@ describe('castResult', () => {
     expect(call).toHaveBeenCalledWith('create_transit_chart', { date_time: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' })
     await castResult('month', '2026-10', amie, call)
     expect(call).toHaveBeenLastCalledWith('forecast_month', expect.objectContaining({ month: '2026-10' }))
-    // The week's forecast starts on the day it is cast, not on its Sunday.
+    // The week's forecast starts on the day it is cast, not on its Sunday; the scan covers the same days, Moon left out.
     await castResult('week', '2026-10-11', amie, call, oct15)
-    expect(call).toHaveBeenLastCalledWith('forecast_week', expect.objectContaining({ start_date: '2026-10-15' }))
+    expect(call).toHaveBeenCalledWith('forecast_week', expect.objectContaining({ start_date: '2026-10-15' }))
+    expect(call).toHaveBeenLastCalledWith('list_upcoming_transits', expect.objectContaining({ start_date: '2026-10-15', end_date: '2026-10-17', object_filter: WEEK_SCAN_OBJECTS, date_time: '1990-06-15 14:30' }))
+  })
+
+  it('folds the week\'s scan into its forecast, and casts the week without it when the scan fails', async () => {
+    const call = vi.fn(async (name: string) => (name === 'forecast_week' ? weekOct18 : scan))
+    const result = JSON.parse(await castResult('week', '2026-10-18', amie, call, new Date(2026, 9, 18, 9))) as { forecast: string; week_transits: { range: unknown; total: number; transits: { from_object: string; exact: string | null }[] } }
+    expect(result.forecast).toBe('week')
+    expect(result.week_transits.range).toEqual({ start: '2026-10-18', end: '2026-10-24' })
+    expect(result.week_transits.total).toBe(18)
+    expect(result.week_transits.transits).toHaveLength(18)
+    expect(result.week_transits.transits.some((t) => t.from_object === 'Uranus' && t.exact === null)).toBe(true)
+
+    const failing = vi.fn(async (name: string) => { if (name === 'forecast_week') return weekOct18; throw new Error('scan timed out') })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const alone = JSON.parse(await castResult('week', '2026-10-18', amie, failing, new Date(2026, 9, 18, 9))) as Record<string, unknown>
+    expect(alone.forecast).toBe('week')
+    expect(alone.week_transits).toBeUndefined()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('scan failed'))
+    warn.mockRestore()
+    // Anything that is not a scan is left out rather than folded in.
+    expect(withWeekTransits(weekOct18, '{"tool":"x"}')).toBe(weekOct18)
+    expect(withWeekTransits('not json', scan)).toBe('not json')
   })
 
   it('anchors the week to Sunday and covers the days left in it, seven at most and one at least', () => {

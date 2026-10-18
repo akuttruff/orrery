@@ -22,6 +22,15 @@ the transit tables), copied rather than shared.
   from the day of the cast: seven on a Sunday, one on a Saturday. The tool
   always gives seven days from its start, so the days past Saturday are
   trimmed off (`trimWeek` in `server/cast.ts`).
+- **A week lists every transit.** The forecast tool picks eight headlines
+  for a week, the contacts exact inside it first, so the slow planets in
+  orb all week fall off a busy one. A week casting therefore also runs the
+  ephemeris scan (`list_upcoming_transits`) over the same days, every
+  planet but the Moon, and keeps it on the result as `week_transits`. The
+  table shows all of them in two groups, the week's events (exact inside
+  it, in date order) and its backdrop (in orb without perfecting, heaviest
+  first, folded past the first four), and the brief asks the model for the
+  same. A week still casts if the scan fails.
 - **Read it again as.** Under the questions, the kinds of reading again:
   a tap casts the same kind anew in that tone, with the note and memory
   choices carried over, and the earlier casting stays beside it.

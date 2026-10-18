@@ -52,7 +52,7 @@ export function trimmedData(result: string): string {
 
 /** Room to write: a full paragraph per contact, so a day's reading runs to several hundred words and a year's to over a thousand. */
 const WORDS: Record<Casting['kind'], string> = {
-  today: '500 to 700 words', week: '600 to 800 words', month: '700 to 900 words', year: '900 to 1200 words',
+  today: '500 to 700 words', week: '700 to 1000 words', month: '700 to 900 words', year: '900 to 1200 words',
   natal: '800 to 1000 words', moon: '300 to 450 words',
 }
 
@@ -75,11 +75,18 @@ function ask(casting: Casting): { task: string; data: string } {
     case 'week': {
       // The week is Sunday to Saturday; the data covers the days left in it from the day it was cast.
       let span = ''
+      let scanned = 0
       try {
-        const r = (JSON.parse(casting.result) as { range?: { start?: string; end?: string } }).range
+        const d = JSON.parse(casting.result) as { range?: { start?: string; end?: string }; week_transits?: { total?: number } }
+        const r = d.range
         if (r?.start && r.end) span = r.start === r.end ? ` It covers one day, ${r.start}.` : ` It covers ${r.start} to ${r.end}, the days left in the week.`
+        scanned = d.week_transits?.total ?? 0
       } catch { /* no span */ }
-      return { task: `Write the forecast for the week of ${shortDate(casting.period)}, Sunday to Saturday.${span} Take every headline transit in order with its dates, a full paragraph each, then the week's lunations, stations and ingresses that touch the chart, then one line to carry. ${WORDS.week}.`, data: trimmedData(casting.result) }
+      // With the scan, the model sees every contact in orb, not the tool's eight headlines; the headlines still carry more on each.
+      const transits = scanned
+        ? `Under week_transits is every contact in orb over these days, ${scanned} in all: those whose exact moment falls inside the range are the week's events, the rest its backdrop, in orb without perfecting (headline_transits is the tool's own pick of the same contacts, with each one's movement and passes). Take every event in date order with a full paragraph each. Then the backdrop: a paragraph for each slow planet on the Sun, Moon, Ascendant, MC or chart ruler, and the rest in a table, each with a line on what it colours.`
+        : 'Take every headline transit in order with its dates, a full paragraph each.'
+      return { task: `Write the forecast for the week of ${shortDate(casting.period)}, Sunday to Saturday.${span} ${transits} Then the week's lunations, stations and ingresses that touch the chart, then one line to carry. ${WORDS.week}.`, data: trimmedData(casting.result) }
     }
     case 'month':
       return { task: `Write the forecast for ${casting.title}. Take every headline transit in order with its dates, a full paragraph each, then the month's lunations and eclipses in their natal houses, then stations and ingresses worth knowing, then one line to carry. ${WORDS.month}.`, data: trimmedData(casting.result) }
