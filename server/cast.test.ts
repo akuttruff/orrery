@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { addDays, castResult, localDate, periodFor, shortDate, sundayOf, titleFor, trimWeek, weekSpan, withWeekTransits, WEEK_SCAN_OBJECTS } from './cast.ts'
+import { addDays, castResult, localDate, monthSpan, periodFor, shortDate, sundayOf, titleFor, trimWeek, weekSpan, withScan, SCAN_OBJECTS, WEEK_SCAN_OBJECTS } from './cast.ts'
 import type { Profile } from '../src/types.ts'
 import week from '../src/test/fixtures/forecast-week.json?raw'
 import weekOct18 from '../src/test/fixtures/forecast-week-oct18.json?raw'
 import scan from '../src/test/fixtures/scan-week.json?raw'
+import month from '../src/test/fixtures/forecast-month.json?raw'
+import scanMonth from '../src/test/fixtures/scan-month.json?raw'
 
 const amie: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
 const oct15 = new Date(2026, 9, 15, 22, 8)
@@ -40,8 +42,11 @@ describe('castResult', () => {
     const call = vi.fn(async (name: string) => `{"tool":"${name}"}`)
     await castResult('today', '2026-10-15', amie, call)
     expect(call).toHaveBeenCalledWith('create_transit_chart', { date_time: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' })
+    // The month's forecast and its scan over the calendar month, Mars outward, as the forecast itself ranks.
     await castResult('month', '2026-10', amie, call)
-    expect(call).toHaveBeenLastCalledWith('forecast_month', expect.objectContaining({ month: '2026-10' }))
+    expect(call).toHaveBeenCalledWith('forecast_month', expect.objectContaining({ month: '2026-10' }))
+    expect(call).toHaveBeenLastCalledWith('list_upcoming_transits', expect.objectContaining({ start_date: '2026-10-01', end_date: '2026-10-31', object_filter: SCAN_OBJECTS.month, date_time: '1990-06-15 14:30' }))
+    expect(SCAN_OBJECTS.month).not.toContain('Venus')
     // The week's forecast starts on the day it is cast, not on its Sunday; the scan covers the same days, Moon left out.
     await castResult('week', '2026-10-11', amie, call, oct15)
     expect(call).toHaveBeenCalledWith('forecast_week', expect.objectContaining({ start_date: '2026-10-15' }))
@@ -65,8 +70,21 @@ describe('castResult', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('scan failed'))
     warn.mockRestore()
     // Anything that is not a scan is left out rather than folded in.
-    expect(withWeekTransits(weekOct18, '{"tool":"x"}')).toBe(weekOct18)
-    expect(withWeekTransits('not json', scan)).toBe('not json')
+    expect(withScan('week', weekOct18, '{"tool":"x"}')).toBe(weekOct18)
+    expect(withScan('week', 'not json', scan)).toBe('not json')
+  })
+
+  it('folds the month\'s scan into its forecast under its own key', async () => {
+    const call = vi.fn(async (name: string) => (name === 'forecast_month' ? month : scanMonth))
+    const result = JSON.parse(await castResult('month', '2026-10', amie, call)) as { forecast: string; week_transits?: unknown; month_transits: { range: unknown; total: number; transits: { from_object: string; exact: string | null }[] } }
+    expect(result.forecast).toBe('month')
+    expect(result.week_transits).toBeUndefined()
+    expect(result.month_transits.range).toEqual({ start: '2026-10-01', end: '2026-10-31' })
+    expect(result.month_transits.total).toBe(19)
+    // The six Mars contacts the twelve headlines had no room for, every one exact in the month.
+    const mars = result.month_transits.transits.filter((t) => t.from_object === 'Mars')
+    expect(mars).toHaveLength(6)
+    expect(mars.every((t) => t.exact?.startsWith('2026-10'))).toBe(true)
   })
 
   it('anchors the week to Sunday and covers the days left in it, seven at most and one at least', () => {
@@ -75,6 +93,8 @@ describe('castResult', () => {
     expect(weekSpan('2026-10-11', new Date(2026, 9, 17, 23, 50))).toEqual({ start: '2026-10-17', end: '2026-10-17', days: 1 })
     expect(sundayOf(new Date(2026, 9, 18, 0, 5))).toBe('2026-10-18')
     expect(sundayOf(new Date(2026, 9, 24, 12))).toBe('2026-10-18')
+    expect(monthSpan('2026-10')).toEqual({ start: '2026-10-01', end: '2026-10-31' })
+    expect(monthSpan('2028-02')).toEqual({ start: '2028-02-01', end: '2028-02-29' })
   })
 
   it('trims a week forecast to the days asked for', () => {

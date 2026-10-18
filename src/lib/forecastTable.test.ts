@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { KEY_WEIGHT, keyTransits, looksLikeForecast, parseForecast, periodText, weekGroups } from './forecastTable.ts'
+import { KEY_WEIGHT, keyTransits, looksLikeForecast, parseForecast, periodText, scanGroups } from './forecastTable.ts'
 import { windowText } from './transitTable.ts'
 import week from '../test/fixtures/forecast-week.json?raw'
 import month from '../test/fixtures/forecast-month.json?raw'
@@ -7,9 +7,13 @@ import year from '../test/fixtures/forecast-year.json?raw'
 import transit from '../test/fixtures/transit-chart.json?raw'
 import weekOct18 from '../test/fixtures/forecast-week-oct18.json?raw'
 import scan from '../test/fixtures/scan-week.json?raw'
+import scanMonth from '../test/fixtures/scan-month.json?raw'
 
+const transitsOf = (text: string): unknown[] => (JSON.parse(text) as { transits: unknown[] }).transits
 /** A week as the server stores it: the forecast with the scan folded in. */
-export const fullWeek = JSON.stringify({ ...JSON.parse(weekOct18) as object, week_transits: { range: { start: '2026-10-18', end: '2026-10-24' }, total: 18, transits: (JSON.parse(scan) as { transits: unknown[] }).transits } })
+export const fullWeek = JSON.stringify({ ...JSON.parse(weekOct18) as object, week_transits: { range: { start: '2026-10-18', end: '2026-10-24' }, total: 18, transits: transitsOf(scan) } })
+/** October 2026 the same way, under the month's key. */
+export const fullMonth = JSON.stringify({ ...JSON.parse(month) as object, month_transits: { range: { start: '2026-10-01', end: '2026-10-31' }, total: 19, transits: transitsOf(scanMonth) } })
 
 describe('a forecast as rows', () => {
   it('tells a forecast from a chart or anything else', () => {
@@ -81,7 +85,7 @@ describe('a forecast as rows', () => {
     expect(t.ruler).toBe('Jupiter')
     expect(t.scan).toHaveLength(18)
     expect(t.rows).toHaveLength(8)
-    const g = weekGroups(t)!
+    const g = scanGroups(t)!
     expect(g.events.length + g.backdrop.length).toBe(18)
     // The events are exact inside the week, in date order.
     expect(g.events.every((r) => r.exact && r.exact >= '2026-10-18' && r.exact < '2026-10-25')).toBe(true)
@@ -99,8 +103,31 @@ describe('a forecast as rows', () => {
     expect(g.backdrop[0]).toMatchObject({ fromRetrograde: true, movement: null })
     // The table takes every one of them, events first; without the scan it is the headlines over the bar.
     expect(keyTransits(t)).toEqual([...g.events, ...g.backdrop])
-    expect(weekGroups(parseForecast(weekOct18)!)).toBeNull()
+    expect(scanGroups(parseForecast(weekOct18)!)).toBeNull()
     expect(keyTransits(parseForecast(weekOct18)!).length).toBeLessThanOrEqual(8)
+  })
+
+  it('reads a month\'s scan the same way, its Mars events back among the slow backdrop', () => {
+    const t = parseForecast(fullMonth)!
+    expect(t.horizon).toBe('month')
+    expect(t.scan).toHaveLength(19)
+    expect(t.rows).toHaveLength(12)
+    const g = scanGroups(t)!
+    // Eight events, six of them Mars, which the twelve headlines ranked by weight alone had dropped; two of them are headlines too.
+    expect(g.events).toHaveLength(8)
+    expect(g.events.filter((r) => r.from === 'Mars')).toHaveLength(6)
+    expect(g.events.map((r) => r.exact)).toEqual(g.events.map((r) => r.exact).sort())
+    expect(g.events[0]).toMatchObject({ from: 'Mars', to: 'Chiron', type: 'Sextile', exact: '2026-10-01 08:26', weight: 0.5 })
+    expect(g.events.find((r) => r.from === 'Jupiter' && r.to === 'Sun')).toMatchObject({ exact: '2026-10-06 16:36', weight: 5.4, passes: expect.arrayContaining(['2026-10-06 16:36']) })
+    expect(t.rows.some((r) => r.from === 'Mars')).toBe(false)
+    // The backdrop is the slow planets, heaviest first, with the headlines' movement where they carry it.
+    expect(g.backdrop).toHaveLength(11)
+    expect(g.backdrop.slice(0, 3).map((r) => [r.from, r.type, r.to, r.weight])).toEqual([['Uranus', 'Opposition', 'Asc', 8], ['Saturn', 'Square', 'Jupiter', 7.2], ['Neptune', 'Trine', 'Asc', 7]])
+    expect(g.backdrop[0]).toMatchObject({ movement: 'applying', nearestExact: '2026-11-23 03:37' })
+    expect(keyTransits(t)).toEqual([...g.events, ...g.backdrop])
+    // A week's key does not stand in for a month's, and a year never has a scan.
+    expect(parseForecast(JSON.stringify({ ...JSON.parse(month) as object, week_transits: (JSON.parse(fullMonth) as { month_transits: unknown }).month_transits }))!.scan).toBeNull()
+    expect(parseForecast(JSON.stringify({ ...JSON.parse(year) as object, year_transits: { transits: [] } }))!.scan).toBeNull()
   })
 
   it('names the period for the caption', () => {

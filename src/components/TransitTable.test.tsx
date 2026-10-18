@@ -6,7 +6,7 @@ import { parseWheel } from '../lib/chartWheel.ts'
 import { activeTransits, orbText } from '../lib/transitTable.ts'
 import { sortRows } from '../lib/sortRows.ts'
 import { parseForecast } from '../lib/forecastTable.ts'
-import { fullWeek } from '../lib/forecastTable.test.ts'
+import { fullMonth, fullWeek } from '../lib/forecastTable.test.ts'
 import transit from '../test/fixtures/transit-chart.json?raw'
 
 const wheel = parseWheel(transit)!
@@ -82,5 +82,18 @@ describe('ForecastTransits', () => {
     expect(dataRows()[0]!.textContent).toContain('Uranus')
     await user.click(screen.getByRole('button', { name: 'default order' }))
     expect(screen.getByText('Exact this week · 9')).toBeInTheDocument()
+  })
+
+  it('names a month\'s groups for the month', async () => {
+    const user = userEvent.setup()
+    render(<ForecastTransits table={parseForecast(fullMonth)!} />)
+    expect(screen.getByText(/^Transits in orb · October 2026/)).toBeInTheDocument()
+    expect(screen.getByText('Exact this month · 8')).toBeInTheDocument()
+    expect(screen.getByText('In orb all month, not exact in it · 11')).toBeInTheDocument()
+    const dataRows = () => screen.getAllByRole('row').filter((r) => r.querySelector('td.tt-when'))
+    expect(dataRows()).toHaveLength(8 + BACKDROP_SHOWN)
+    expect(dataRows()[0]!.textContent).toContain('Mars')
+    await user.click(screen.getByRole('button', { name: `Show ${11 - BACKDROP_SHOWN} more` }))
+    expect(dataRows()).toHaveLength(19)
   })
 })

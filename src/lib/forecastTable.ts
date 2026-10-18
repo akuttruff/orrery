@@ -8,11 +8,12 @@
  * ones whose weight reaches the horizon's bar, in date order, with the
  * moment each is exact and both positions. TransitTable.tsx draws it.
  *
- * A week also carries `week_transits` (server/cast.ts): every contact in
- * orb over its days from the ephemeris scan, with no cap. Then the table
- * shows all of them in two groups, the week's events (exact inside it, in
- * date order) and its backdrop (in orb without perfecting, heaviest
- * first), each weighed here the way the forecasts weigh theirs.
+ * A week also carries `week_transits`, and a month `month_transits`
+ * (server/cast.ts): every contact in orb over its days from the ephemeris
+ * scan, with no cap. Then the table shows all of them in two groups, the
+ * period's events (exact inside it, in date order) and its backdrop (in
+ * orb without perfecting, heaviest first), each weighed here the way the
+ * forecasts weigh theirs.
  */
 import { transitWeight } from './weight.ts'
 
@@ -52,12 +53,12 @@ export interface ForecastTable {
   rows: ForecastRow[]
   /** The chart ruler, as the tool names it, for the weights. */
   ruler: string | null
-  /** A week's scan: every contact in orb over its days, as rows; null for a month, a year, or a week cast without one. */
+  /** A week's or a month's scan: every contact in orb over its days, as rows; null for a year, or a period cast without one. */
   scan: ForecastRow[] | null
 }
 
-/** A week's rows in their two groups: exact inside the week in date order, then the rest heaviest first. */
-export interface WeekGroups { events: ForecastRow[]; backdrop: ForecastRow[] }
+/** A scanned period's rows in their two groups: exact inside the period in date order, then the rest heaviest first. */
+export interface ScanGroups { events: ForecastRow[]; backdrop: ForecastRow[] }
 
 /**
  * A contact is key when its weight reaches this: the house rule, by weight
@@ -117,7 +118,7 @@ export function parseForecast(text: string): ForecastTable | null {
       weight: num(h.weight) ?? 0,
     })
   }
-  return { horizon, start, end, rows, ruler, scan: horizon === 'week' ? scanRows(data.week_transits, rows, start, end, ruler) : null }
+  return { horizon, start, end, rows, ruler, scan: horizon === 'year' ? null : scanRows(data[`${horizon}_transits`], rows, start, end, ruler) }
 }
 
 const contactKey = (r: { from: string; to: string; type: string }): string => `${r.from}|${r.type}|${r.to}`
@@ -125,14 +126,14 @@ const contactKey = (r: { from: string; to: string; type: string }): string => `$
 /**
  * The scan's contacts as rows. A contact the headlines also carry takes
  * their movement, passes and weight, which the scan does not give; the
- * rest are weighed here. An exact moment outside the week's days (the
+ * rest are weighed here. An exact moment outside the period's days (the
  * scan looks a little past them) counts as the nearest one, not an event.
  */
-function scanRows(week: unknown, headlines: ForecastRow[], start: string, end: string, ruler: string | null): ForecastRow[] | null {
-  if (!isRecord(week) || !Array.isArray(week.transits)) return null
+function scanRows(scan: unknown, headlines: ForecastRow[], start: string, end: string, ruler: string | null): ForecastRow[] | null {
+  if (!isRecord(scan) || !Array.isArray(scan.transits)) return null
   const byKey = new Map(headlines.map((h) => [contactKey(h), h]))
   const rows: ForecastRow[] = []
-  for (const t of week.transits) {
+  for (const t of scan.transits) {
     if (!isRecord(t)) continue
     const from = str(t.from_object)
     const to = str(t.to_object)
@@ -162,8 +163,8 @@ function scanRows(week: unknown, headlines: ForecastRow[], start: string, end: s
   return rows
 }
 
-/** A week's two groups, or null when the week has no scan. */
-export function weekGroups(table: ForecastTable): WeekGroups | null {
+/** A scanned period's two groups, or null when it has no scan. */
+export function scanGroups(table: ForecastTable): ScanGroups | null {
   if (!table.scan) return null
   const events = table.scan.filter((r) => r.exact).sort((a, b) => a.exact!.localeCompare(b.exact!))
   const backdrop = table.scan.filter((r) => !r.exact).sort((a, b) => b.weight - a.weight || a.orb - b.orb)
@@ -179,7 +180,7 @@ const moment = (r: ForecastRow): string => r.exact ?? r.start
  * order, the weightier first on the same moment.
  */
 export function keyTransits(table: ForecastTable): ForecastRow[] {
-  const groups = weekGroups(table)
+  const groups = scanGroups(table)
   if (groups) return [...groups.events, ...groups.backdrop]
   return table.rows
     .filter((r) => r.weight >= KEY_WEIGHT[table.horizon])

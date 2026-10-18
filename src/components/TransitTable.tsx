@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { type Wheel, displayName, ordinal } from '../lib/chartWheel.ts'
 import { activeTransits, aspectCell, bodyCell, dayParts, dayText, orbText, windowText } from '../lib/transitTable.ts'
-import { type ForecastRow, type ForecastTable, keyTransits, periodText, weekGroups } from '../lib/forecastTable.ts'
+import { type ForecastRow, type ForecastTable, keyTransits, periodText, scanGroups } from '../lib/forecastTable.ts'
 import { nextSort, sortRows, type Sort, type SortKey, type Sortable } from '../lib/sortRows.ts'
 import { ASPECT_WEIGHT, MAX_WEIGHT, SLOWNESS, weightParts, weightText } from '../lib/weight.ts'
 
@@ -246,16 +246,17 @@ function ForecastRowView({ r, table }: { r: ForecastRow; table: ForecastTable })
 
 const rowKey = (r: ForecastRow, i: number): string => `${r.from}|${r.type}|${r.to}|${r.start}|${i}`
 
-/** How much of a week's backdrop shows before the rest is asked for. */
+/** How much of a backdrop shows before the rest is asked for. */
 export const BACKDROP_SHOWN = 4
 
 /**
- * The transits of a forecast, under the result. For a month or a year, the
- * headlines that reach KEY_WEIGHT in date order. For a week with a scan,
- * every contact in orb, in two groups: the week's events, exact inside it
- * in date order, then its backdrop, in orb without perfecting, heaviest
- * first and folded past the first few. A sort runs over all the rows at
- * once; the table's own order brings the groups back.
+ * The transits of a forecast, under the result. For a year, or a period
+ * cast without its scan, the headlines that reach KEY_WEIGHT in date
+ * order. For a week or a month with a scan, every contact in orb, in two
+ * groups: the period's events, exact inside it in date order, then its
+ * backdrop, in orb without perfecting, heaviest first and folded past the
+ * first few. A sort runs over all the rows at once; the table's own order
+ * brings the groups back.
  *
  * Five columns, each with a dim second line so the table fits a phone:
  * the moment it is exact over the days it is in orb (when it never
@@ -266,7 +267,7 @@ export const BACKDROP_SHOWN = 4
  */
 export function ForecastTransits({ table }: { table: ForecastTable }) {
   const all = useMemo(() => keyTransits(table), [table])
-  const groups = useMemo(() => weekGroups(table), [table])
+  const groups = useMemo(() => scanGroups(table), [table])
   const { rows, sort, onSort, reset } = useSorted(all)
   const [unfolded, setUnfolded] = useState(false)
   if (rows.length === 0) return null
@@ -284,6 +285,7 @@ export function ForecastTransits({ table }: { table: ForecastTable }) {
   }
   const hidden = unfolded ? 0 : Math.max(0, groups.backdrop.length - BACKDROP_SHOWN)
   const backdrop = hidden ? groups.backdrop.slice(0, BACKDROP_SHOWN) : groups.backdrop
+  const period = table.horizon === 'month' ? 'month' : 'week'
   return (
     <div className="tt-wrap">
       <table className="tt">
@@ -291,13 +293,13 @@ export function ForecastTransits({ table }: { table: ForecastTable }) {
         <SortHead sort={sort} onSort={onSort} />
         {groups.events.length > 0 && (
           <tbody>
-            <tr className="tt-group"><th colSpan={5} scope="rowgroup">Exact this week · {groups.events.length}</th></tr>
+            <tr className="tt-group"><th colSpan={5} scope="rowgroup">Exact this {period} · {groups.events.length}</th></tr>
             {groups.events.map((r, i) => <ForecastRowView key={rowKey(r, i)} r={r} table={table} />)}
           </tbody>
         )}
         {groups.backdrop.length > 0 && (
           <tbody>
-            <tr className="tt-group"><th colSpan={5} scope="rowgroup">In orb all week, not exact in it · {groups.backdrop.length}</th></tr>
+            <tr className="tt-group"><th colSpan={5} scope="rowgroup">In orb all {period}, not exact in it · {groups.backdrop.length}</th></tr>
             {backdrop.map((r, i) => <ForecastRowView key={rowKey(r, i)} r={r} table={table} />)}
             {hidden > 0 && (
               <tr className="tt-more"><td colSpan={5}><button type="button" className="link" onClick={() => setUnfolded(true)}>Show {hidden} more</button></td></tr>

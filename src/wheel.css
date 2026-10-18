@@ -22,7 +22,7 @@
 .tt td:last-child, .tt th:last-child { padding-right: 0; }
 .tt-body, .tt-aspect, .tt-num { white-space: nowrap; }
 .tt tr:last-child td { border-bottom: 0; }
-/* A week's two groups: a heading row over each, and the fold at the backdrop's foot. */
+/* A week's or a month's two groups: a heading row over each, and the fold at the backdrop's foot. */
 .tt-group th { padding: 12px 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: color-mix(in srgb, var(--paper-dim) 72%, transparent); }
 .tt tbody:first-of-type .tt-group th { padding-top: 6px; }
 .tt-more td { padding: 6px 0; font-size: 12px; border-bottom: 0; }

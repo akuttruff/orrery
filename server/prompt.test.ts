@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { followUpRequest, memoryBlock, readingRequest, trimmedData } from './prompt.ts'
 import transit from '../src/test/fixtures/transit-chart.json?raw'
 import week from '../src/test/fixtures/forecast-week.json?raw'
-import { withWeekTransits } from './cast.ts'
+import { withScan } from './cast.ts'
 import weekOct18 from '../src/test/fixtures/forecast-week-oct18.json?raw'
 import scan from '../src/test/fixtures/scan-week.json?raw'
+import month from '../src/test/fixtures/forecast-month.json?raw'
+import scanMonth from '../src/test/fixtures/scan-month.json?raw'
 import { NOT_WRITTEN } from '../src/types.ts'
 import type { Casting, FollowUp, Profile } from '../src/types.ts'
 
@@ -43,10 +45,24 @@ describe('readingRequest', () => {
     expect(req.input).toContain('Take every headline transit in order')
     expect(req.input).not.toContain('week_transits')
     // With the scan folded in, the brief asks for every contact: the events, then the backdrop.
-    const full = readingRequest(casting({ kind: 'week', result: withWeekTransits(weekOct18, scan), title: 'Week of Oct 18', period: '2026-10-18' }), amie)
+    const full = readingRequest(casting({ kind: 'week', result: withScan('week', weekOct18, scan), title: 'Week of Oct 18', period: '2026-10-18' }), amie)
     expect(full.input).toContain('Under week_transits is every contact in orb over these days, 18 in all')
+    expect(full.input).toContain("the week's events")
     expect(full.input).toContain('"week_transits":{"range"')
     expect(full.input).toContain('"from_object":"Uranus"')
+  })
+
+  it('asks for the month\'s every contact when it was cast with its scan, and its headlines when not', () => {
+    const alone = readingRequest(casting({ kind: 'month', result: month, title: 'October 2026', period: '2026-10' }), amie)
+    expect(alone.input).toContain('Write the forecast for October 2026. Take every headline transit in order')
+    expect(alone.input).not.toContain('month_transits')
+    expect(alone.input).toContain('800 to 1100 words')
+    const full = readingRequest(casting({ kind: 'month', result: withScan('month', month, scanMonth), title: 'October 2026', period: '2026-10' }), amie)
+    expect(full.input).toContain('Under month_transits is every contact in orb over these days, 19 in all')
+    expect(full.input).toContain("the month's events")
+    expect(full.input).toContain("Then the month's lunations and eclipses")
+    expect(full.input).toContain('"month_transits":{"range"')
+    expect(full.input).toContain('"from_object":"Mars"')
   })
 
   it('speaks in the kind of reading chosen, and takes up what the person asked for', () => {

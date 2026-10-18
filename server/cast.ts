@@ -68,8 +68,29 @@ const birth = (p: Profile): Record<string, unknown> => ({
   date_time: p.dateTime, city: p.city, state: p.state || undefined, country: p.country || undefined,
 })
 
-/** What a week's scan covers: every planet but the Moon, whose contacts last hours and belong to the day. */
-export const WEEK_SCAN_OBJECTS = 'Sun,Mercury,Venus,Mars,Jupiter,Saturn,Uranus,Neptune,Pluto,Chiron'
+/** The horizons whose forecast is cast with an ephemeris scan beside it. */
+export type Scanned = 'week' | 'month'
+/**
+ * What each scan covers, as the forecast's own headlines do: a week every
+ * planet but the Moon, whose contacts last hours and belong to the day; a
+ * month Mars outward, the Sun, Mercury and Venus being a week's material.
+ */
+export const SCAN_OBJECTS: Record<Scanned, string> = {
+  week: 'Sun,Mercury,Venus,Mars,Jupiter,Saturn,Uranus,Neptune,Pluto,Chiron',
+  month: 'Mars,Jupiter,Saturn,Uranus,Neptune,Pluto,Chiron',
+}
+export const WEEK_SCAN_OBJECTS = SCAN_OBJECTS.week
+
+/** The first and last day of a month given as 'YYYY-MM'. */
+export function monthSpan(period: string): { start: string; end: string } {
+  const [y, m] = period.split('-').map(Number)
+  return { start: `${period}-01`, end: `${period}-${pad(new Date(y ?? 1970, m ?? 1, 0).getDate())}` }
+}
+
+/** Every contact in orb over the days, with no cap; null when the scan fails, so the forecast still casts alone. */
+const scanOf = (horizon: Scanned, profile: Profile, call: ToolCaller, start: string, end: string): Promise<string | null> =>
+  call('list_upcoming_transits', { ...birth(profile), start_date: start, end_date: end, object_filter: SCAN_OBJECTS[horizon] })
+    .catch((e: Error) => { console.warn(`orrery: the ${horizon}'s transit scan failed: ${e.message}`); return null })
 
 /** Run the tools behind a kind and return the result text to keep. */
 export async function castResult(kind: Kind, period: string, profile: Profile, call: ToolCaller, now = new Date()): Promise<string> {
@@ -84,13 +105,20 @@ export async function castResult(kind: Kind, period: string, profile: Profile, c
       const span = weekSpan(period, now)
       const [forecast, scan] = await Promise.all([
         call('forecast_week', { ...birth(profile), start_date: span.start }),
-        call('list_upcoming_transits', { ...birth(profile), start_date: span.start, end_date: span.end, object_filter: WEEK_SCAN_OBJECTS })
-          .catch((e: Error) => { console.warn(`orrery: the week's transit scan failed: ${e.message}`); return null }),
+        scanOf('week', profile, call, span.start, span.end),
       ])
-      return withWeekTransits(trimWeek(forecast, span.start, span.end), scan)
+      return withScan('week', trimWeek(forecast, span.start, span.end), scan)
     }
-    case 'month':
-      return call('forecast_month', { ...birth(profile), month: period })
+    case 'month': {
+      // The forecast keeps twelve headlines by weight alone, so the slow planets in orb all month take the slots
+      // and the month's dated events, mostly Mars, fall off. The scan over the calendar month lists them all.
+      const span = monthSpan(period)
+      const [forecast, scan] = await Promise.all([
+        call('forecast_month', { ...birth(profile), month: period }),
+        scanOf('month', profile, call, span.start, span.end),
+      ])
+      return withScan('month', forecast, scan)
+    }
     case 'year':
       return call('forecast_year', { ...birth(profile), start_date: period })
     case 'natal':
@@ -121,27 +149,28 @@ const dayOf = (r: Row): string | null => {
 }
 
 /**
- * A week forecast cut down to the days from `start` to `end`: the range
- * itself, the headline transits (those in orb on any of the days, their
- * windows clipped, an exact moment outside the days dropped so the nearest
- * one stands), and the lunations, ingresses and stations that fall inside.
- * Text that is not a forecast is left as it is.
+ * The scan folded into its forecast as `week_transits` or
+ * `month_transits`: the range, how many contacts, and each as the scan
+ * gave it. Left out when either is not what it should be, so a forecast
+ * alone is still a week or a month.
  */
-/**
- * The week's scan folded into its forecast as `week_transits`: the range,
- * how many contacts, and each as the scan gave it. Left out when either
- * is not what it should be, so a forecast alone is still a week.
- */
-export function withWeekTransits(forecastText: string, scanText: string | null): string {
+export function withScan(horizon: Scanned, forecastText: string, scanText: string | null): string {
   if (scanText === null) return forecastText
   let forecast: unknown
   let scan: unknown
   try { forecast = JSON.parse(forecastText); scan = JSON.parse(scanText) } catch { return forecastText }
   if (!isRow(forecast) || !isRow(scan) || !Array.isArray(scan.transits)) return forecastText
   const transits = scan.transits.filter(isRow)
-  return JSON.stringify({ ...forecast, week_transits: { range: isRow(scan.transit_range) ? scan.transit_range : null, total: transits.length, transits } })
+  return JSON.stringify({ ...forecast, [`${horizon}_transits`]: { range: isRow(scan.transit_range) ? scan.transit_range : null, total: transits.length, transits } })
 }
 
+/**
+ * A week forecast cut down to the days from `start` to `end`: the range
+ * itself, the headline transits (those in orb on any of the days, their
+ * windows clipped, an exact moment outside the days dropped so the nearest
+ * one stands), and the lunations, ingresses and stations that fall inside.
+ * Text that is not a forecast is left as it is.
+ */
 export function trimWeek(text: string, start: string, end: string): string {
   let data: unknown
   try { data = JSON.parse(text) } catch { return text }
