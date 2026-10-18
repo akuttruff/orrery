@@ -9,8 +9,8 @@ interface MemoryChoiceProps {
   onToggle: (on: boolean) => void
   onExclude: (ids: string[]) => void
   onManage: () => void
-  /** Sidebar: a shorter note. */
-  compact?: boolean
+  /** No line under the chips about what the switch means. */
+  quiet?: boolean
 }
 
 /**
@@ -18,10 +18,10 @@ interface MemoryChoiceProps {
  * the tap that casts it, and which of them. The switch is Settings' default,
  * so it stays as set; the choice of memories is kept on this device.
  */
-export default function MemoryChoice({ on, excluded, onToggle, onExclude, onManage, compact = false }: MemoryChoiceProps) {
+export default function MemoryChoice({ on, excluded, onToggle, onExclude, onManage, quiet = false }: MemoryChoiceProps) {
   const [picking, setPicking] = useState(false)
   return (
-    <div className={`memory-choice${compact ? ' compact' : ''}`}>
+    <div className="memory-choice">
       <div className="memory-switch">
         <button type="button" role="switch" aria-checked={on} className={`chip${on ? ' on' : ''}`} onClick={() => onToggle(!on)}>
           <Brain size={13} aria-hidden="true" /> Memory {on ? 'on' : 'off'}
@@ -31,9 +31,11 @@ export default function MemoryChoice({ on, excluded, onToggle, onExclude, onMana
             <ListChecks size={13} aria-hidden="true" /> Choose{excluded.length ? ` · ${excluded.length} out` : ''}
           </button>
         )}
-        <span className="memory-note">
-          {on ? 'The reading draws on what the model knows about you.' : 'The reading is written from the chart alone.'}
-        </span>
+        {!quiet && (
+          <span className="memory-note">
+            {on ? 'The reading draws on what the model knows about you.' : 'The reading is written from the chart alone.'}
+          </span>
+        )}
       </div>
       {on && picking && <MemoryPicker excluded={excluded} used={[]} onChange={onExclude} onManage={onManage} />}
     </div>

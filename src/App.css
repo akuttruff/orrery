@@ -268,8 +268,9 @@ input, select { font: inherit; }
 /* The popup a tile opens: what the reading is for, what kind, and with what memory, then the button that casts. */
 .cast-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.55); }
 .cast-sheet { z-index: 21; }
-.cast-hint { margin: 2px 0 0; font-size: 12px; color: var(--paper-dim); }
-.cast-section { margin-top: 16px; }
+.cast-body { padding-top: 16px; }
+.cast-body .frame-styles { margin-top: 14px; }
+.cast-body .memory-choice { margin-top: 14px; }
 .cast-foot { display: flex; justify-content: flex-end; gap: 10px; }
 .cast-foot .primary { width: auto; min-width: 140px; }
 /* A wide window: a dialog in the middle of the page, over a dimmed backdrop. (Doubled class: the sheet's own edges would win otherwise.) */

@@ -7,8 +7,6 @@ import type { Kind } from '../types.ts'
 
 interface CastSheetProps {
   kind: Kind
-  /** The tile's own line about what the kind covers. */
-  hint: string
   note: string
   style: StyleId
   memoryOn: boolean
@@ -29,7 +27,7 @@ interface CastSheetProps {
  * casts. Nothing is cast until that button; the X or Escape puts the tile
  * back untouched.
  */
-export default function CastSheet({ kind, hint, note, style, memoryOn, excluded, busy, onNote, onStyle, onMemory, onExclude, onManage, onCast, onClose }: CastSheetProps) {
+export default function CastSheet({ kind, note, style, memoryOn, excluded, busy, onNote, onStyle, onMemory, onExclude, onManage, onCast, onClose }: CastSheetProps) {
   const box = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
     box.current?.focus()
@@ -41,17 +39,14 @@ export default function CastSheet({ kind, hint, note, style, memoryOn, excluded,
     <div className="cast-backdrop" onClick={onClose}>
       <div className="sheet cast-sheet" role="dialog" aria-label={`Cast ${KIND_LABEL[kind]}`} onClick={(e) => e.stopPropagation()}>
         <header className="sheet-head">
-          <div>
-            <h2>{KIND_LABEL[kind]}</h2>
-            <p className="cast-hint">{hint}</p>
-          </div>
+          <h2>{KIND_LABEL[kind]}</h2>
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}><X size={20} aria-hidden="true" /></button>
         </header>
-        <div className="sheet-body">
-          <label className="ask-label" htmlFor="cast-note">What do you want from this reading?</label>
+        <div className="sheet-body cast-body">
           <textarea
             id="cast-note"
             ref={box}
+            aria-label="What do you want from this reading?"
             className="ask-box frame-box"
             rows={3}
             maxLength={NOTE_MAX}
@@ -60,7 +55,6 @@ export default function CastSheet({ kind, hint, note, style, memoryOn, excluded,
             onChange={(e) => onNote(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onCast() } }}
           />
-          <p className="ask-label cast-section">Kind of reading</p>
           <div className="frame-styles" role="radiogroup" aria-label="Kind of reading">
             {READING_STYLES.map((s) => (
               <button key={s.id} type="button" role="radio" aria-checked={style === s.id} className={`chip${style === s.id ? ' on' : ''}`} title={s.hint} onClick={() => onStyle(s.id)}>
@@ -68,8 +62,7 @@ export default function CastSheet({ kind, hint, note, style, memoryOn, excluded,
               </button>
             ))}
           </div>
-          <p className="ask-label cast-section">Memory</p>
-          <MemoryChoice on={memoryOn} excluded={excluded} onToggle={onMemory} onExclude={onExclude} onManage={onManage} />
+          <MemoryChoice on={memoryOn} excluded={excluded} onToggle={onMemory} onExclude={onExclude} onManage={onManage} quiet />
         </div>
         <footer className="sheet-foot cast-foot">
           <button type="button" className="chip" onClick={onClose}>Cancel</button>

@@ -275,7 +275,6 @@ export default function App() {
       {pending && config && (
         <CastSheet
           kind={pending}
-          hint={SHORTCUTS.find((s) => s.kind === pending)?.hint ?? ''}
           note={note}
           style={style}
           memoryOn={memoryOn}
