@@ -32,8 +32,7 @@ export default function MemoryChoice({ on, excluded, onToggle, onExclude, onMana
           </button>
         )}
         <span className="memory-note">
-          {on ? (compact ? 'The next casting draws on what the model knows about you.' : 'The next casting is read with what the model knows about you. Tap a tile to cast it.')
-            : (compact ? 'The next casting is read from the chart alone.' : 'The next casting is read from the chart alone. Tap a tile to cast it.')}
+          {on ? 'The reading draws on what the model knows about you.' : 'The reading is written from the chart alone.'}
         </span>
       </div>
       {on && picking && <MemoryPicker excluded={excluded} used={[]} onChange={onExclude} onManage={onManage} />}

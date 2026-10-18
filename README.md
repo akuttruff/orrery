@@ -33,9 +33,9 @@ the transit tables), copied rather than shared.
   lists what is in progress above the shortcuts, and another cast can be
   started meanwhile. A casting is `#/c/<id>` in the address, so the
   browser's Back and a reload both land where expected.
-- **Every tap casts anew.** A tile casts the chart afresh and starts its
-  reading at once, with the choices made in one panel above the tiles
-  beforehand: what the reading is for, in the person's words ("I'm going
+- **Every tap casts anew.** A tile opens a popup for the choices a reading
+  is made with, and its button casts the chart afresh and starts the reading
+  at once: what the reading is for, in the person's words ("I'm going
   through some anxiety today"), the kind of reading (`src/lib/styles.ts`:
   balanced, companion, coach, strategist, gentle, plain, each a sentence or
   two at the seam of the brief where the tone lives), and memory (the

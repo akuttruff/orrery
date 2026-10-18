@@ -5,8 +5,7 @@ import Recent from './components/Recent'
 import Settings from './components/Settings'
 import Sidebar from './components/Sidebar'
 import MemoriesSheet from './components/MemoriesSheet'
-import MemoryChoice from './components/MemoryChoice'
-import ReadingFrame from './components/ReadingFrame'
+import CastSheet from './components/CastSheet'
 import useMediaQuery, { WIDE } from './hooks/useMediaQuery.ts'
 import { api } from './lib/api.ts'
 import type { CastOptions } from './lib/api.ts'
@@ -71,12 +70,9 @@ export default function App() {
     try { localStorage.setItem('orrery.style', s) } catch { /* a preference, not a record */ }
   }
   const choice: CastOptions = { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, note: note.trim() }
-  // Every choice for the next reading in one place: the note, the kind under it, and memory under that.
-  const memoryChoice = config && (
-    <ReadingFrame note={note} style={style} onNote={setNote} onStyle={setStyle} compact={sidebar}>
-      <MemoryChoice on={memoryOn} excluded={excluded} onToggle={(on) => void setMemoryOn(on)} onExclude={exclude} onManage={() => setMemoriesOpen(true)} compact={sidebar} />
-    </ReadingFrame>
-  )
+  // A tile opens the popup for these choices; the cast waits for its button.
+  const [pending, setPending] = useState<Kind | null>(null)
+  const closeSheet = useCallback(() => setPending(null), [])
 
   const refreshRecent = useCallback(() => { api.castings().then(setRecent).catch(() => { /* the list is a convenience */ }) }, [])
 
@@ -199,12 +195,10 @@ export default function App() {
           activeId={current?.id ?? null}
           busy={busy}
           onOpen={(id) => void open(id)}
-          onCast={(kind) => void cast(kind, choice)}
+          onCast={setPending}
           onSettings={() => setSettingsOpen(true)}
           onCollapse={() => setSidebar(false)}
-        >
-          {memoryChoice}
-        </Sidebar>
+        />
       )}
       <div className="main">
       <header className="app-header">
@@ -256,10 +250,9 @@ export default function App() {
                 ))}
               </section>
             )}
-            {!sidebar && memoryChoice}
             <div className="shortcuts" role="list">
               {SHORTCUTS.map(({ kind, label, hint, Icon }) => (
-                <button key={kind} type="button" role="listitem" className={`shortcut${busy === kind ? ' busy' : ''}`} disabled={busy !== null} onClick={() => void cast(kind, choice)}>
+                <button key={kind} type="button" role="listitem" className={`shortcut${busy === kind ? ' busy' : ''}`} disabled={busy !== null} onClick={() => setPending(kind)}>
                   <Icon size={22} aria-hidden="true" />
                   <span className="shortcut-label">{busy === kind ? 'Casting…' : label}</span>
                   <span className="shortcut-hint">{hint}</span>
@@ -272,6 +265,24 @@ export default function App() {
       </main>
       </div>
 
+      {pending && config && (
+        <CastSheet
+          kind={pending}
+          hint={SHORTCUTS.find((s) => s.kind === pending)?.hint ?? ''}
+          note={note}
+          style={style}
+          memoryOn={memoryOn}
+          excluded={excluded}
+          busy={busy !== null}
+          onNote={setNote}
+          onStyle={setStyle}
+          onMemory={(on) => void setMemoryOn(on)}
+          onExclude={exclude}
+          onManage={() => setMemoriesOpen(true)}
+          onCast={() => { const kind = pending; setPending(null); void cast(kind, choice) }}
+          onClose={closeSheet}
+        />
+      )}
       {settingsOpen && profile && config && (
         <Settings
           profile={profile}

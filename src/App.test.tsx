@@ -107,8 +107,13 @@ describe('App', () => {
     expect(screen.getByRole('region', { name: 'Birth chart' })).toHaveTextContent('Birth chart')
     expect(screen.queryByRole('region', { name: 'Week' })).not.toBeInTheDocument()
 
+    // A tile opens the popup; nothing is cast until its button.
     await user.click(screen.getByText('Transits now, over the birth chart').closest('button')!)
+    const sheet = await screen.findByRole('dialog', { name: 'Cast Today' })
+    expect(castings).toHaveLength(3)
+    await user.click(within(sheet).getByRole('button', { name: 'Cast today' }))
     expect(await screen.findByRole('heading', { name: 'Casting new4' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Cast Today' })).not.toBeInTheDocument()
     expect(castings).toHaveLength(4)
     expect(castings[3]!.readingState).toBe('writing')
   })
@@ -128,6 +133,7 @@ describe('App', () => {
     expect(screen.getByText('Transits now, over the birth chart')).toBeInTheDocument()
 
     await user.click(within(side).getByRole('button', { name: 'Cast week' }))
+    await user.click(within(await screen.findByRole('dialog', { name: 'Cast Week' })).getByRole('button', { name: 'Cast week' }))
     expect(await screen.findByRole('heading', { name: 'Casting new3' })).toBeInTheDocument()
     expect(castings[2]).toMatchObject({ kind: 'week', readingState: 'writing' })
     expect(within(side).getByRole('button', { name: /Casting new3/ })).toHaveAttribute('aria-current', 'true')
@@ -149,42 +155,42 @@ describe('App', () => {
     expect(screen.getByRole('navigation', { name: 'Castings' })).toBeInTheDocument()
   })
 
-  it('lets memory be switched on, and some memories left out, before the tap that casts', async () => {
+  it('opens a popup from a tile where memory, the memories, the kind and a note are chosen, then casts with them', async () => {
     const castings: Casting[] = []
     serve(castings)
     const user = userEvent.setup()
     render(<App />)
-    const memory = await screen.findByRole('switch', { name: 'Memory off' })
-    expect(screen.getByText(/read from the chart alone/)).toBeInTheDocument()
+    await user.click((await screen.findByText('Void windows and lunations, two weeks')).closest('button')!)
+    const sheet = await screen.findByRole('dialog', { name: 'Cast Moon' })
+    const memory = within(sheet).getByRole('switch', { name: 'Memory off' })
+    expect(within(sheet).getByText(/written from the chart alone/)).toBeInTheDocument()
     await user.click(memory)
-    expect(await screen.findByRole('switch', { name: 'Memory on' })).toBeInTheDocument()
+    expect(await within(sheet).findByRole('switch', { name: 'Memory on' })).toBeInTheDocument()
     // Settings' default changed with it, so the choice stays.
-    expect(await screen.findByText(/what the model knows about you/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Choose' }))
-    await user.click(await screen.findByRole('checkbox', { name: /Has a cat/ }))
-    expect(screen.getByRole('button', { name: 'Choose · 1 out' })).toBeInTheDocument()
+    expect(await within(sheet).findByText(/what the model knows about you/)).toBeInTheDocument()
+    await user.click(within(sheet).getByRole('button', { name: 'Choose' }))
+    await user.click(await within(sheet).findByRole('checkbox', { name: /Has a cat/ }))
+    expect(within(sheet).getByRole('button', { name: 'Choose · 1 out' })).toBeInTheDocument()
+    await user.type(within(sheet).getByLabelText('What do you want from this reading?'), "I'm going through some anxiety today")
+    await user.click(within(sheet).getByRole('radio', { name: 'Gentle' }))
+    expect(localStorage.getItem('orrery.style')).toBe('gentle')
 
-    await user.click(screen.getByText('Void windows and lunations, two weeks').closest('button')!)
+    await user.click(within(sheet).getByRole('button', { name: 'Cast moon' }))
     expect(await screen.findByRole('heading', { name: 'Casting new1' })).toBeInTheDocument()
-    expect(castings[0]).toMatchObject({ kind: 'moon', memory: true, memoryExcluded: ['m2'] })
+    expect(castings[0]).toMatchObject({ kind: 'moon', memory: true, memoryExcluded: ['m2'], style: 'gentle', note: "I'm going through some anxiety today" })
     expect(JSON.parse(localStorage.getItem('orrery.memoryExcluded')!)).toEqual(['m2'])
+    expect(screen.getByText(/^Cast /)).toHaveTextContent("· Gentle · I'm going through some anxiety today")
   })
 
-  it('carries what the person wants from the reading, and the kind, on the tap that casts', async () => {
+  it('puts the tile back untouched when the popup is closed', async () => {
     const castings: Casting[] = []
     serve(castings)
     const user = userEvent.setup()
     render(<App />)
-    await user.type(await screen.findByLabelText('What do you want from the next reading?'), "I'm going through some anxiety today")
-    await user.click(screen.getByRole('radio', { name: 'Gentle' }))
-    expect(screen.getByRole('radio', { name: 'Gentle' })).toHaveAttribute('aria-checked', 'true')
-    expect(localStorage.getItem('orrery.style')).toBe('gentle')
-    // The memory switch sits in the same panel.
-    expect(within(screen.getByLabelText('What do you want from the next reading?').closest('.frame') as HTMLElement).getByRole('switch', { name: 'Memory off' })).toBeInTheDocument()
-    await user.click(screen.getByText('Transits now, over the birth chart').closest('button')!)
-    expect(await screen.findByRole('heading', { name: 'Casting new1' })).toBeInTheDocument()
-    expect(castings[0]).toMatchObject({ kind: 'today', style: 'gentle', note: "I'm going through some anxiety today" })
-    expect(screen.getByText(/^Cast /)).toHaveTextContent("· Gentle · I'm going through some anxiety today")
+    await user.click((await screen.findByText('Transits now, over the birth chart')).closest('button')!)
+    await user.click(within(screen.getByRole('dialog', { name: 'Cast Today' })).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(castings).toHaveLength(0)
   })
 
   it('shows a long group in part, and the rest on request', async () => {

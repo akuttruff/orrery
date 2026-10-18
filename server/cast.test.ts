@@ -65,7 +65,7 @@ describe('castResult', () => {
     for (const h of trimmed.headline_transits) {
       expect(h.start >= '2026-10-15').toBe(true)
       expect(h.end <= '2026-10-17').toBe(true)
-      if (h.exact) expect(h.exact.slice(0, 10) >= '2026-10-15' && h.exact.slice(0, 10) <= '2026-10-17').toBe(true)
+      expect(!h.exact || (h.exact.slice(0, 10) >= '2026-10-15' && h.exact.slice(0, 10) <= '2026-10-17')).toBe(true)
     }
     // Mercury sextile MC was exact on the 13th: outside the days, so only its nearest moment stands.
     const mercury = trimmed.headline_transits.find((h) => h.transiting === 'Mercury' && h.natal === 'MC')!
