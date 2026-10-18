@@ -20,7 +20,8 @@ export const api = {
   saveConfig: (patch: Record<string, string>) => request<Config>('/api/config', jsonInit('PUT', patch)),
   models: () => request<{ models: string[]; loaded: string[]; error: string | null }>('/api/models'),
   castings: () => request<CastingSummary[]>('/api/castings'),
-  cast: (kind: Kind, fresh = false) => request<Casting>('/api/castings', jsonInit('POST', { kind, fresh })),
+  /** A new casting of the kind, cast now; the earlier ones stay in the list. */
+  cast: (kind: Kind) => request<Casting>('/api/castings', jsonInit('POST', { kind })),
   casting: (id: string) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`),
   /** The casting's memory switch (true, false, or null to follow Settings) and the memories it leaves out. */
   updateCasting: (id: string, patch: { memory?: boolean | null; memoryExcluded?: string[] }) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`, jsonInit('PATCH', patch)),

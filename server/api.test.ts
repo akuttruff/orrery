@@ -9,7 +9,7 @@ import { Readings } from './readings.ts'
 import { Store } from './store.ts'
 import type { ApiState } from './api.ts'
 import type { Reply, WriteOptions, WriteRequest, writeWithModel } from './model.ts'
-import type { Casting, FollowUp, Memory, Step, Written } from '../src/types.ts'
+import type { Casting, CastingSummary, FollowUp, Memory, Step, Written } from '../src/types.ts'
 
 /** The API on a real socket, with fake tools and a fake model, in a scratch data dir. */
 const plain = (text: string): Reply => ({ text, trail: [], stats: null })
@@ -65,21 +65,37 @@ describe('settings', () => {
 })
 
 describe('castings', () => {
-  it('casts once per period and hands the same casting back on the next tap', async () => {
-    const a = await (await post(`${ctx.base}/api/castings`, { kind: 'today' })).json() as Casting
+  it('casts anew on every tap and keeps the earlier castings', async () => {
+    const first = await post(`${ctx.base}/api/castings`, { kind: 'today' })
+    expect(first.status).toBe(201)
+    const a = await first.json() as Casting
     const b = await (await post(`${ctx.base}/api/castings`, { kind: 'today' })).json() as Casting
-    expect(b.id).toBe(a.id)
-    expect(ctx.call).toHaveBeenCalledTimes(1)
+    expect(b.id).not.toBe(a.id)
+    expect(a.updatedAt).toBe(a.createdAt)
+    expect(ctx.call).toHaveBeenCalledTimes(2)
     expect(ctx.call.mock.calls[0]![0]).toBe('create_transit_chart')
-    const list = await (await fetch(`${ctx.base}/api/castings`)).json() as { id: string }[]
-    expect(list.map((c) => c.id)).toEqual([a.id])
+    expect((await fetch(`${ctx.base}/api/castings/${a.id}`)).status).toBe(200)
+    const list = await (await fetch(`${ctx.base}/api/castings`)).json() as CastingSummary[]
+    expect(list.map((c) => c.id)).toEqual([b.id, a.id])
+    expect(list[0]!.questions).toBe(0)
   })
 
-  it('a fresh cast replaces the period\'s old one', async () => {
+  it('lists the casting that changed last first: a reading or a question moves it up', async () => {
     const a = await (await post(`${ctx.base}/api/castings`, { kind: 'natal' })).json() as Casting
-    const b = await (await post(`${ctx.base}/api/castings`, { kind: 'natal', fresh: true })).json() as Casting
-    expect(b.id).not.toBe(a.id)
-    expect((await fetch(`${ctx.base}/api/castings/${a.id}`)).status).toBe(404)
+    const b = await (await post(`${ctx.base}/api/castings`, { kind: 'moon' })).json() as Casting
+    let list = await (await fetch(`${ctx.base}/api/castings`)).json() as CastingSummary[]
+    expect(list.map((c) => c.id)).toEqual([b.id, a.id])
+    // The older one is read: it is the latest change now.
+    await post(`${ctx.base}/api/castings/${a.id}/reading`)
+    await (await fetch(`${ctx.base}/api/castings/${a.id}/events`)).text()
+    const read = await (await fetch(`${ctx.base}/api/castings/${a.id}`)).json() as Casting
+    expect(read.updatedAt).toBeGreaterThanOrEqual(read.written.finishedAt!)
+    list = await (await fetch(`${ctx.base}/api/castings`)).json() as CastingSummary[]
+    expect(list.map((c) => c.id)).toEqual([a.id, b.id])
+    // A question under it counts, and keeps it there.
+    await post(`${ctx.base}/api/castings/${a.id}/followups`, { question: 'And Venus?' })
+    list = await (await fetch(`${ctx.base}/api/castings`)).json() as CastingSummary[]
+    expect(list[0]).toMatchObject({ id: a.id, questions: 1 })
   })
 
   it('rejects a kind it does not know', async () => {

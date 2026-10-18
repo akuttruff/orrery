@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, CalendarDays, CalendarRange, ChevronRight, Moon, Orbit, Settings as SettingsIcon, Sun, Sunrise } from 'lucide-react'
 import CastingView from './components/CastingView'
+import Recent from './components/Recent'
 import Settings from './components/Settings'
 import MemoriesSheet from './components/MemoriesSheet'
 import { api } from './lib/api.ts'
+import { KIND_LABEL } from './lib/kinds.ts'
 import { formatWhen } from './lib/when.ts'
 import { castingIdIn, hashFor } from './lib/route.ts'
 import type { Casting, CastingSummary, Config, Kind, Profile } from './types.ts'
 
-/** The shortcut buttons: what one tap casts. */
+/** The shortcut buttons: what one tap casts, anew each time. */
 const SHORTCUTS: { kind: Kind; label: string; hint: string; Icon: typeof Sun }[] = [
   { kind: 'today', label: 'Today', hint: 'Transits now, over the birth chart', Icon: Sun },
   { kind: 'week', label: 'This week', hint: 'Seven days of headline transits', Icon: CalendarDays },
@@ -17,8 +19,6 @@ const SHORTCUTS: { kind: Kind; label: string; hint: string; Icon: typeof Sun }[]
   { kind: 'moon', label: 'Moon', hint: 'Void windows and lunations, two weeks', Icon: Moon },
   { kind: 'natal', label: 'Birth chart', hint: 'The chart itself, read', Icon: Sunrise },
 ]
-
-const KIND_LABEL: Record<Kind, string> = { today: 'Today', week: 'Week', month: 'Month', year: 'Year', moon: 'Moon', natal: 'Birth chart' }
 
 /** How often the home screen asks after readings still being written. */
 export const WRITING_POLL_MS = 3000
@@ -87,12 +87,12 @@ export default function App() {
     return () => window.clearInterval(timer)
   }, [current, writing.length, refreshRecent])
 
-  // Cast on a tap; when the result has no reading yet, ask for one straight away.
-  const cast = useCallback(async (kind: Kind, fresh = false) => {
+  // A tap casts anew and starts its reading straight away; the earlier castings of the kind stay in the list.
+  const cast = useCallback(async (kind: Kind) => {
     setBusy(kind)
     setError(null)
     try {
-      let casting = await api.cast(kind, fresh)
+      let casting = await api.cast(kind)
       if (casting.readingState === 'none') casting = await api.startReading(casting.id)
       show(casting)
       refreshRecent()
@@ -159,7 +159,7 @@ export default function App() {
             onMemories={() => setMemoriesOpen(true)}
             onWrite={(again) => void write(again)}
             onStop={() => void stop()}
-            onRecast={() => void cast(current.kind, true)}
+            onRecast={() => void cast(current.kind)}
             onDelete={() => void remove()}
             onSettled={settled}
           />
@@ -189,22 +189,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-            {recent.length > writing.length && (
-              <section className="recent">
-                <h3 className="section-title">Recent</h3>
-                <ul className="recent-list">
-                  {recent.filter((c) => c.readingState !== 'writing').map((c) => (
-                    <li key={c.id}>
-                      <button type="button" onClick={() => void open(c.id)}>
-                        <span className="recent-kind">{KIND_LABEL[c.kind]}</span>
-                        <span className="recent-title">{c.title}</span>
-                        <span className="recent-state">{c.readingState === 'done' ? 'read' : c.readingState === 'failed' ? 'failed' : 'cast'} · {formatWhen(c.createdAt)}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
+            <Recent castings={recent.filter((c) => c.readingState !== 'writing')} onOpen={(id) => void open(id)} />
           </>
         )}
       </main>

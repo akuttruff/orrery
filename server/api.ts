@@ -120,20 +120,15 @@ export function createMiddleware(state: ApiState): Handler {
     }
   }
 
-  const cast = async (kind: Kind, fresh: boolean): Promise<unknown> => {
+  /** A new casting of a kind, cast now; the earlier ones stay. Two taps while the tools run share the one cast. */
+  const cast = async (kind: Kind): Promise<unknown> => {
     const profile = store.getProfile()
     const period = periodFor(kind, new Date())
-    if (!fresh) {
-      const kept = store.findCasting(kind, period)
-      if (kept) return kept
-    }
     const key = `${kind}:${period}`
     let pending = state.casting.get(key)
     if (!pending) {
       pending = (async () => {
         const result = await castResult(kind, period, profile, call)
-        // A fresh cast replaces the period's old one; its reading was about the old data.
-        if (fresh) for (const old of store.listCastings(200)) if (old.kind === kind && old.period === period) store.removeCasting(old.id)
         return store.addCasting({ kind, period, title: titleFor(kind, period, profile), result })
       })().finally(() => state.casting.delete(key))
       state.casting.set(key, pending)
@@ -212,7 +207,7 @@ export function createMiddleware(state: ApiState): Handler {
     if (url === '/api/castings' && method === 'POST') {
       void readBody(req).then(async (body) => {
         if (!isKind(body.kind)) throw new Error(`Unknown kind: ${String(body.kind)}`)
-        json(res, 200, await cast(body.kind, body.fresh === true))
+        json(res, 201, await cast(body.kind))
       }).catch(fail)
       return undefined
     }

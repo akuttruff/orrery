@@ -25,8 +25,13 @@ the transit tables), copied rather than shared.
   lists what is in progress above the shortcuts, and another cast can be
   started meanwhile. A casting is `#/c/<id>` in the address, so the
   browser's Back and a reload both land where expected.
-- **One cast per period.** Today's chart is cast once a day and reopened
-  from the store; `Recast` throws it away and casts again.
+- **Every tap casts anew.** A tile casts the chart afresh and starts its
+  reading at once; the earlier castings of that kind stay, so a day can hold
+  several readings of the same kind and `Recast` adds one more. The home
+  screen's recent list groups them by kind in the tiles' order, with each
+  casting's time being its last change (`updated_at`): a reading written or a
+  question asked or answered moves it to the top of its group. Long groups
+  fold to four until asked.
 - **Ask about it.** Under every reading is a box for follow-up questions.
   Each answer is written on the server like the reading (`server/readings.ts`
   writes both) and kept with the casting (`follow_ups` table). An answer may

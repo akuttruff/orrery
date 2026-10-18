@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS castings (
   reading TEXT NOT NULL DEFAULT '',
   reading_state TEXT NOT NULL DEFAULT 'none',
   reading_error TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS castings_period ON castings (kind, period);
 CREATE TABLE IF NOT EXISTS follow_ups (
@@ -67,7 +68,7 @@ interface WrittenRow {
 
 interface CastingRow extends WrittenRow {
   id: string; kind: string; period: string; title: string; result: string; reading: string
-  reading_state: string; reading_error: string | null; created_at: number
+  reading_state: string; reading_error: string | null; created_at: number; updated_at: number | null
   memory: number | null; memories_used: string | null; memory_excluded: string | null
 }
 
@@ -100,7 +101,7 @@ const parseWritten = (r: WrittenRow & { tools?: string | null }): Written => ({
 
 const fromRow = (r: CastingRow): Casting => ({
   id: r.id, kind: r.kind as Kind, period: r.period, title: r.title, result: r.result, reading: r.reading,
-  readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at,
+  readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
   memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
   written: parseWritten(r),
 })
@@ -164,6 +165,13 @@ export class Store {
       if (!has(table, 'started_at')) this.db.exec(`ALTER TABLE ${table} ADD COLUMN started_at INTEGER`)
       if (!has(table, 'finished_at')) this.db.exec(`ALTER TABLE ${table} ADD COLUMN finished_at INTEGER`)
     }
+    if (!has('castings', 'updated_at')) this.db.exec('ALTER TABLE castings ADD COLUMN updated_at INTEGER')
+    this.db.exec('CREATE INDEX IF NOT EXISTS castings_updated ON castings (updated_at)')
+    // A casting from before this was kept: its last change is its reading's or its latest question's.
+    this.db.exec(`UPDATE castings SET updated_at = MAX(
+      COALESCE(finished_at, started_at, created_at),
+      COALESCE((SELECT MAX(COALESCE(f.finished_at, f.started_at, f.created_at)) FROM follow_ups f WHERE f.casting_id = castings.id), 0)
+    ) WHERE updated_at IS NULL`)
   }
 
   private seed(seedFrom: string): void {
@@ -207,15 +215,18 @@ export class Store {
     return next
   }
 
-  listCastings(limit = 40): CastingSummary[] {
+  /** The castings, the most recently changed first: a reading written or a question asked moves one up. */
+  listCastings(limit = 60): CastingSummary[] {
     const rows = this.db.prepare(
-      'SELECT id, kind, period, title, reading_state, reading_error, created_at, memory, memories_used, memory_excluded, stats, started_at, finished_at FROM castings ORDER BY created_at DESC LIMIT ?',
-    ).all(limit) as unknown as Omit<CastingRow, 'result' | 'reading' | 'trail'>[]
+      `SELECT id, kind, period, title, reading_state, reading_error, created_at, updated_at, memory, memories_used, memory_excluded, stats, started_at, finished_at,
+        (SELECT COUNT(*) FROM follow_ups f WHERE f.casting_id = castings.id) AS questions
+      FROM castings ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC LIMIT ?`,
+    ).all(limit) as unknown as (Omit<CastingRow, 'result' | 'reading' | 'trail'> & { questions: number })[]
     return rows.map((r) => ({
       id: r.id, kind: r.kind as Kind, period: r.period, title: r.title,
-      readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at,
+      readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
       memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
-      written: parseWritten({ ...r, trail: null }),
+      written: parseWritten({ ...r, trail: null }), questions: Number(r.questions),
     }))
   }
 
@@ -224,27 +235,32 @@ export class Store {
     return r ? fromRow(r) : undefined
   }
 
-  /** The newest casting of a kind for a period, if one was kept. */
-  findCasting(kind: Kind, period: string): Casting | undefined {
-    const r = this.db.prepare('SELECT * FROM castings WHERE kind = ? AND period = ? ORDER BY created_at DESC LIMIT 1')
-      .get(kind, period) as CastingRow | undefined
-    return r ? fromRow(r) : undefined
-  }
-
   addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'>): Casting {
+    const now = Date.now()
     const casting: Casting = {
-      id: newId(), ...input, reading: '', readingState: 'none', readingError: null, createdAt: Date.now(), memory: null, memoriesUsed: [], memoryExcluded: [],
+      id: newId(), ...input, reading: '', readingState: 'none', readingError: null, createdAt: now, updatedAt: now, memory: null, memoriesUsed: [], memoryExcluded: [],
       written: { ...NOT_WRITTEN },
     }
-    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, casting.createdAt)
+    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now)
     return casting
+  }
+
+  /** Something under the casting changed: it is the most recent one now. */
+  private touch(id: string, at = Date.now()): void {
+    this.db.prepare('UPDATE castings SET updated_at = ? WHERE id = ?').run(at, id)
+  }
+
+  /** The casting a question belongs to changed with it. */
+  private touchFor(followUpId: string, at = Date.now()): void {
+    this.db.prepare('UPDATE castings SET updated_at = ? WHERE id = (SELECT casting_id FROM follow_ups WHERE id = ?)').run(at, followUpId)
   }
 
   /** The reading is being written from now: nothing on the page, nothing on the trail. */
   beginReading(id: string): void {
-    this.db.prepare("UPDATE castings SET reading = '', reading_state = 'writing', reading_error = NULL, trail = '[]', stats = NULL, started_at = ?, finished_at = NULL WHERE id = ?")
-      .run(Date.now(), id)
+    const now = Date.now()
+    this.db.prepare("UPDATE castings SET reading = '', reading_state = 'writing', reading_error = NULL, trail = '[]', stats = NULL, started_at = ?, finished_at = NULL, updated_at = ? WHERE id = ?")
+      .run(now, now, id)
   }
 
   /** The model's trail for the reading so far. */
@@ -254,8 +270,9 @@ export class Store {
 
   /** The reading is written, or failed: the text, the whole trail, LM Studio's numbers, and the time. */
   finishReading(id: string, reading: string, state: 'done' | 'failed', error: string | null, written: Pick<Written, 'trail' | 'stats'>): void {
-    this.db.prepare('UPDATE castings SET reading = ?, reading_state = ?, reading_error = ?, trail = ?, stats = ?, finished_at = ? WHERE id = ?')
-      .run(reading, state, error, JSON.stringify(written.trail), written.stats ? JSON.stringify(written.stats) : null, Date.now(), id)
+    const now = Date.now()
+    this.db.prepare('UPDATE castings SET reading = ?, reading_state = ?, reading_error = ?, trail = ?, stats = ?, finished_at = ?, updated_at = ? WHERE id = ?')
+      .run(reading, state, error, JSON.stringify(written.trail), written.stats ? JSON.stringify(written.stats) : null, now, now, id)
   }
 
   /** The casting's own memory switch: on, off, or null to follow Settings. */
@@ -295,6 +312,7 @@ export class Store {
     const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now(), remembered: null, memoriesUsed, written: { ...NOT_WRITTEN } }
     this.db.prepare('INSERT INTO follow_ups (id, casting_id, question, answer, state, error, created_at, memories_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .run(f.id, f.castingId, f.question, '', 'none', null, f.createdAt, JSON.stringify(memoriesUsed))
+    this.touch(castingId, f.createdAt)
     return f
   }
 
@@ -305,8 +323,10 @@ export class Store {
 
   /** The answer is being written from now: nothing on the page, nothing on the trail. */
   beginAnswer(id: string): void {
+    const now = Date.now()
     this.db.prepare("UPDATE follow_ups SET answer = '', state = 'writing', error = NULL, trail = '[]', stats = NULL, started_at = ?, finished_at = NULL WHERE id = ?")
-      .run(Date.now(), id)
+      .run(now, id)
+    this.touchFor(id, now)
   }
 
   /** The model's trail for the answer so far: its thinking and the tools it has called. */
@@ -316,8 +336,10 @@ export class Store {
 
   /** The answer is written, or failed: the text, the whole trail, LM Studio's numbers, and the time. */
   finishAnswer(id: string, answer: string, state: 'done' | 'failed', error: string | null, written: Pick<Written, 'trail' | 'stats'>): void {
+    const now = Date.now()
     this.db.prepare('UPDATE follow_ups SET answer = ?, state = ?, error = ?, trail = ?, stats = ?, finished_at = ? WHERE id = ?')
-      .run(answer, state, error, JSON.stringify(written.trail), written.stats ? JSON.stringify(written.stats) : null, Date.now(), id)
+      .run(answer, state, error, JSON.stringify(written.trail), written.stats ? JSON.stringify(written.stats) : null, now, id)
+    this.touchFor(id, now)
   }
 
   setRemembered(id: string, remembered: Remembered[]): void {
@@ -325,6 +347,7 @@ export class Store {
   }
 
   removeFollowUp(id: string): boolean {
+    this.touchFor(id)
     return this.db.prepare('DELETE FROM follow_ups WHERE id = ?').run(id).changes > 0
   }
 

@@ -89,8 +89,8 @@ export const NOT_WRITTEN: Written = { trail: [], stats: null, startedAt: null, f
 
 /**
  * One cast: a tool result (the chart or forecast, as the tool's JSON text)
- * and the reading the model wrote over it. Cast once per period and kept,
- * so reopening today's forecast is instant.
+ * and the reading the model wrote over it. Every tap casts anew and the
+ * earlier castings are kept, so a day can hold several readings of a kind.
  */
 export interface Casting {
   id: string
@@ -104,6 +104,8 @@ export interface Casting {
   readingState: ReadingState
   readingError: string | null
   createdAt: number
+  /** When something last happened here: the reading written, a question asked or answered. */
+  updatedAt: number
   /** Per-casting memory switch; null inherits Settings' default (Config.memoryDefault). */
   memory: boolean | null
   /** The saved memories the reading was written with, by id; empty when written without. */
@@ -114,8 +116,8 @@ export interface Casting {
   written: Written
 }
 
-/** A casting in the recent list: everything but the bodies. */
-export type CastingSummary = Omit<Casting, 'result' | 'reading'>
+/** A casting in the recent list: everything but the bodies, and how many questions were asked under it. */
+export type CastingSummary = Omit<Casting, 'result' | 'reading'> & { questions: number }
 
 /**
  * A question asked under a reading and the model's answer, written on the
