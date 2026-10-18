@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App, { WRITING_POLL_MS } from './App'
 import { NOT_WRITTEN } from './types.ts'
@@ -131,6 +131,16 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Casting new3' })).toBeInTheDocument()
     expect(castings[2]).toMatchObject({ kind: 'week', readingState: 'writing' })
     expect(within(side).getByRole('button', { name: /Casting new3/ })).toHaveAttribute('aria-current', 'true')
+
+    // Its edge drags it wider, and the width is kept.
+    const edge = within(side).getByRole('separator', { name: 'Sidebar width' })
+    fireEvent.pointerDown(edge, { button: 0, clientX: 300 })
+    fireEvent.pointerMove(window, { clientX: 380 })
+    fireEvent.pointerUp(window, { clientX: 380 })
+    expect(side).toHaveStyle({ width: '380px' })
+    expect(localStorage.getItem('orrery.sidebarWidth')).toBe('380')
+    fireEvent.doubleClick(edge)
+    expect(side).toHaveStyle({ width: '300px' })
 
     // Tucked away, the list comes back from the header.
     await user.click(within(side).getByRole('button', { name: 'Hide the castings' }))

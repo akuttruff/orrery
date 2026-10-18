@@ -67,6 +67,7 @@ input, select { font: inherit; }
 .main { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .app.with-sidebar { flex-direction: row; }
 .sidebar {
+  position: relative;
   flex: 0 0 300px;
   display: flex; flex-direction: column;
   min-height: 0;
@@ -74,6 +75,14 @@ input, select { font: inherit; }
   border-right: 1px solid var(--line);
   background: var(--bg-raised);
 }
+/* The sidebar's edge: grab it to make the list wider or narrower. */
+.side-resize {
+  position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; z-index: 2;
+  cursor: col-resize; touch-action: none;
+}
+.side-resize::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background 0.15s ease; }
+.side-resize:hover::after, .side-resize:focus-visible::after { background: var(--moss-dim); }
+.side-resize:focus-visible { outline: none; }
 .side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 6px; }
 .side-title { margin: 0; font-size: 17px; font-weight: 600; }
 .side-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 16px; }

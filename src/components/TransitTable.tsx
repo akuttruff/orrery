@@ -1,6 +1,54 @@
+import { useMemo, useState } from 'react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { type Wheel, ordinal } from '../lib/chartWheel.ts'
 import { activeTransits, aspectCell, bodyCell, dayParts, dayText, orbText, windowText } from '../lib/transitTable.ts'
 import { type ForecastTable, keyTransits, periodText } from '../lib/forecastTable.ts'
+import { nextSort, sortRows, type Sort, type SortKey, type Sortable } from '../lib/sortRows.ts'
+
+/** The four columns, each sortable: a click sorts up, another down, a third goes back to the table's own order. */
+const COLUMNS: { key: SortKey; label: string; hint: string }[] = [
+  { key: 'when', label: 'When', hint: 'by the moment it is exact' },
+  { key: 'from', label: 'Transit', hint: 'by the transiting body' },
+  { key: 'orb', label: 'Aspect', hint: 'by how close the orb is' },
+  { key: 'to', label: 'Natal', hint: 'by the natal point' },
+]
+
+function SortHead({ sort, onSort }: { sort: Sort | null; onSort: (key: SortKey) => void }) {
+  return (
+    <thead>
+      <tr>
+        {COLUMNS.map(({ key, label, hint }) => {
+          const on = sort?.key === key ? sort.dir : null
+          return (
+            <th key={key} aria-sort={on === 'asc' ? 'ascending' : on === 'desc' ? 'descending' : 'none'}>
+              <button type="button" className={`tt-sort${on ? ' on' : ''}`} title={`Sort ${hint}`} onClick={() => onSort(key)}>
+                {label}
+                {on === 'asc' && <ArrowUp size={11} aria-label="ascending" />}
+                {on === 'desc' && <ArrowDown size={11} aria-label="descending" />}
+              </button>
+            </th>
+          )
+        })}
+      </tr>
+    </thead>
+  )
+}
+
+/** The rows in the chosen order, with the header to choose it and a way back to the table's own order. */
+function useSorted<T extends Sortable>(rows: T[]): { rows: T[]; sort: Sort | null; onSort: (key: SortKey) => void; reset: () => void } {
+  const [sort, setSort] = useState<Sort | null>(null)
+  const sorted = useMemo(() => sortRows(rows, sort), [rows, sort])
+  return { rows: sorted, sort, onSort: (key) => setSort((cur) => nextSort(cur, key)), reset: () => setSort(null) }
+}
+
+function Caption({ text, sort, onReset }: { text: string; sort: Sort | null; onReset: () => void }) {
+  return (
+    <caption>
+      {text}
+      {sort && <> · <button type="button" className="link tt-reset" onClick={onReset}>default order</button></>}
+    </caption>
+  )
+}
 
 function Body({ name, retrograde }: { name: string; retrograde: boolean }) {
   const cell = bodyCell(name, retrograde)
@@ -73,15 +121,14 @@ function Run({ pass, others, on }: { pass: string; others: string[]; on: string 
  * natal house, and the aspect over its orb.
  */
 export function ActiveTransits({ wheel }: { wheel: Wheel }) {
-  const rows = activeTransits(wheel)
+  const all = useMemo(() => activeTransits(wheel), [wheel])
+  const { rows, sort, onSort, reset } = useSorted(all)
   if (rows.length === 0) return null
   return (
     <div className="tt-wrap">
       <table className="tt">
-        <caption>Transits on {wheel.dateTime ? dayText(wheel.dateTime) : 'this day'}</caption>
-        <thead>
-          <tr><th>When</th><th>Transit</th><th>Aspect</th><th>Natal</th></tr>
-        </thead>
+        <Caption text={`Transits on ${wheel.dateTime ? dayText(wheel.dateTime) : 'this day'}`} sort={sort} onReset={reset} />
+        <SortHead sort={sort} onSort={onSort} />
         <tbody>
           {rows.map((r) => (
             <tr key={`${r.from}|${r.type}|${r.to}`}>
@@ -116,15 +163,14 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
  * brings the contact back, which pass this is.
  */
 export function ForecastTransits({ table }: { table: ForecastTable }) {
-  const rows = keyTransits(table)
+  const all = useMemo(() => keyTransits(table), [table])
+  const { rows, sort, onSort, reset } = useSorted(all)
   if (rows.length === 0) return null
   return (
     <div className="tt-wrap">
       <table className="tt">
-        <caption>Key transits · {periodText(table)}</caption>
-        <thead>
-          <tr><th>When</th><th>Transit</th><th>Aspect</th><th>Natal</th></tr>
-        </thead>
+        <Caption text={`Key transits · ${periodText(table)}`} sort={sort} onReset={reset} />
+        <SortHead sort={sort} onSort={onSort} />
         <tbody>
           {rows.map((r, i) => (
             <tr key={`${r.from}|${r.type}|${r.to}|${r.start}|${i}`}>

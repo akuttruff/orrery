@@ -1,8 +1,53 @@
-import type { ReactNode } from 'react'
+import { useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { PanelLeftClose, Plus, Settings as SettingsIcon } from 'lucide-react'
 import { KIND_LABEL, KIND_ORDER } from '../lib/kinds.ts'
 import { formatWhen } from '../lib/when.ts'
 import type { CastingSummary, Kind } from '../types.ts'
+
+/** How wide the sidebar may be dragged, and where it starts. */
+export const SIDEBAR_MIN = 220
+export const SIDEBAR_MAX = 520
+export const SIDEBAR_DEFAULT = 300
+const WIDTH_KEY = 'orrery.sidebarWidth'
+
+const clamp = (w: number): number => Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(w)))
+
+function storedWidth(): number {
+  try {
+    const w = Number(localStorage.getItem(WIDTH_KEY))
+    return w >= SIDEBAR_MIN && w <= SIDEBAR_MAX ? w : SIDEBAR_DEFAULT
+  } catch { return SIDEBAR_DEFAULT }
+}
+
+/** The sidebar's width, dragged at its edge and kept on this device; a double-click on the edge puts it back. */
+function useSidebarWidth(): { width: number; onPointerDown: (e: ReactPointerEvent) => void; onKeyDown: (e: ReactKeyboardEvent) => void; reset: () => void } {
+  const [width, setWidth] = useState(storedWidth)
+  const keep = (w: number): void => {
+    setWidth(w)
+    try { localStorage.setItem(WIDTH_KEY, String(w)) } catch { /* a preference, not a record */ }
+  }
+  const onPointerDown = (e: ReactPointerEvent): void => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = width
+    const move = (ev: PointerEvent): void => setWidth(clamp(startW + ev.clientX - startX))
+    const up = (ev: PointerEvent): void => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      keep(clamp(startW + ev.clientX - startX))
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+  }
+  const onKeyDown = (e: ReactKeyboardEvent): void => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); keep(clamp(width + (e.key === 'ArrowLeft' ? -16 : 16))) }
+    if (e.key === 'Home') { e.preventDefault(); keep(SIDEBAR_DEFAULT) }
+  }
+  return { width, onPointerDown, onKeyDown, reset: () => keep(SIDEBAR_DEFAULT) }
+}
 
 interface SidebarProps {
   castings: CastingSummary[]
@@ -24,8 +69,9 @@ interface SidebarProps {
  * changed casting is first. Settings waits at the foot.
  */
 export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onSettings, onCollapse, children }: SidebarProps) {
+  const { width, onPointerDown, onKeyDown, reset } = useSidebarWidth()
   return (
-    <nav className="sidebar" aria-label="Castings">
+    <nav className="sidebar" aria-label="Castings" style={{ flexBasis: width, width }}>
       <div className="side-head">
         <h2 className="side-title">Castings</h2>
         <button type="button" className="icon-btn small" aria-label="Hide the castings" onClick={onCollapse}><PanelLeftClose size={17} aria-hidden="true" /></button>
@@ -48,6 +94,20 @@ export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onSe
         })}
       </div>
       <button type="button" className="side-settings" onClick={onSettings}><SettingsIcon size={16} aria-hidden="true" /> Settings</button>
+      <div
+        className="side-resize"
+        role="separator"
+        aria-label="Sidebar width"
+        aria-orientation="vertical"
+        aria-valuemin={SIDEBAR_MIN}
+        aria-valuemax={SIDEBAR_MAX}
+        aria-valuenow={width}
+        tabIndex={0}
+        title="Drag to resize; double-click to reset"
+        onPointerDown={onPointerDown}
+        onDoubleClick={reset}
+        onKeyDown={onKeyDown}
+      />
     </nav>
   )
 }

@@ -13,6 +13,11 @@
 .tt { width: 100%; border-collapse: collapse; font-size: 12px; color: var(--paper); }
 .tt caption { text-align: left; padding: 0 0 6px; font-size: 12px; color: var(--paper-dim); }
 .tt th { font-weight: 500; font-size: 11px; color: var(--paper-dim); }
+/* A header is a button: a click sorts the column up, another down, a third puts the table back. */
+.tt-sort { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: none; background: none; color: inherit; font: inherit; cursor: pointer; }
+.tt-sort:hover, .tt-sort:focus-visible { color: var(--paper); }
+.tt-sort.on { color: var(--moss); }
+.tt-reset { font-size: 12px; }
 .tt th, .tt td { padding: 4px 5px 4px 0; border-bottom: 1px solid var(--line); text-align: left; vertical-align: baseline; }
 .tt td:last-child, .tt th:last-child { padding-right: 0; }
 .tt-body, .tt-aspect, .tt-num { white-space: nowrap; }
