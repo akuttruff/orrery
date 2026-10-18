@@ -139,8 +139,46 @@ The persistent instance is `com.amie.orrery` (launchd), served by Tailscale
 at `https://<your-machine>.<your-tailnet>.ts.net:8445`. Its data lives in
 `.data/orrery.sqlite`.
 
+## Local models
+
+Everything the model does happens on this machine, through
+[LM Studio](https://lmstudio.ai): no cloud service, no account.
+
+1. **LM Studio 0.4 or newer**, since Orrery talks to its `/api/v1/chat`
+   endpoint. In the **Developer** tab, start the server. It listens on
+   `http://127.0.0.1:1234`, which is Orrery's default address.
+2. **A model.** Orrery is written and tested against `qwen/qwen3.8-27b`
+   (Qwen3.8 27B, 8-bit, on a 128 GB M4 Max). Any chat model LM Studio can
+   load works; a smaller one writes faster and shallower. Load it in LM
+   Studio, then pick it in Settings, where the loaded models are listed
+   first. Give it a context length of at least 16K: a year's forecast with
+   its data runs to a few thousand tokens, and the model thinks before it
+   writes.
+3. **Reasoning.** Settings offers LM Studio's reasoning levels. `low` is
+   the default and the sweet spot: the model thinks for a few thousand
+   tokens before a reading, which the token ceilings in `server/prompt.ts`
+   leave room for. `off` is faster and flatter. The popup sentences for a
+   day's transits are always written without thinking.
+4. **A token**, only if LM Studio's **Require Authentication** is on.
+   Create one under **Manage Tokens** and paste it in Settings; it is kept
+   on the server and never sent to the browser. Authentication is required
+   for the follow-up questions' tool calls (below).
+5. **astro-mcp**, the ephemeris. Orrery starts it itself for every cast,
+   over stdio, using the command written for it in `~/.lmstudio/mcp.json`
+   under the name `astrology-v2` (falling back to
+   `~/Code/astro-mcp/start-server.sh`), so the one entry serves both LM
+   Studio and Orrery. Follow-up questions may also call it through LM
+   Studio: enable **Allow calling servers from mcp.json** in LM Studio's
+   Developer settings, and the answer can look up another day, a return
+   chart or a horary question on its own.
+
+What goes to the model is the tool's own JSON and a brief; the readings are
+written from that and nothing else. The first run copies the LM Studio
+address, token and model from LM Chat's database when it is on this
+machine, so there is nothing to type twice.
+
 ## Settings
 
 Whose chart (name, birth date and time, birthplace) and who writes (LM
-Studio address, API token, model, reasoning level). The first run copies the
-LM Studio settings from LM Chat's database when it is there.
+Studio address, API token, model, reasoning level), plus whether readings
+draw on memory by default.
