@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ReplyStats, Step, ToolUse, Written } from '../src/types.ts'
+import type { Brief, Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ReplyStats, Step, ToolUse, Written } from '../src/types.ts'
 import { NOT_WRITTEN } from '../src/types.ts'
 
 export interface ServerConfig extends Omit<Config, 'hasToken'> {
@@ -71,6 +71,7 @@ interface CastingRow extends WrittenRow {
   reading_state: string; reading_error: string | null; created_at: number; updated_at: number | null
   memory: number | null; memories_used: string | null; memory_excluded: string | null
   transit_readings: string | null
+  style: string | null; note: string | null; brief: string | null
 }
 
 const parseIds = (text: string | null): string[] => {
@@ -85,6 +86,14 @@ const parseReadingMap = (text: string | null): Record<string, string> | null => 
     const v = JSON.parse(text) as unknown
     if (!v || typeof v !== 'object' || Array.isArray(v)) return null
     return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === 'string'))
+  } catch { return null }
+}
+
+const parseBrief = (text: string | null): Brief | null => {
+  if (!text) return null
+  try {
+    const v = JSON.parse(text) as Brief
+    return v && typeof v === 'object' && typeof v.system === 'string' && typeof v.task === 'string' ? v : null
   } catch { return null }
 }
 
@@ -115,6 +124,7 @@ const fromRow = (r: CastingRow): Casting => ({
   readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
   memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
   written: parseWritten(r), transitReadings: parseReadingMap(r.transit_readings),
+  style: r.style, note: r.note ?? '', brief: parseBrief(r.brief),
 })
 
 interface FollowUpRow extends WrittenRow {
@@ -178,6 +188,9 @@ export class Store {
     }
     if (!has('castings', 'updated_at')) this.db.exec('ALTER TABLE castings ADD COLUMN updated_at INTEGER')
     if (!has('castings', 'transit_readings')) this.db.exec('ALTER TABLE castings ADD COLUMN transit_readings TEXT')
+    if (!has('castings', 'style')) this.db.exec('ALTER TABLE castings ADD COLUMN style TEXT')
+    if (!has('castings', 'note')) this.db.exec('ALTER TABLE castings ADD COLUMN note TEXT')
+    if (!has('castings', 'brief')) this.db.exec('ALTER TABLE castings ADD COLUMN brief TEXT')
     this.db.exec('CREATE INDEX IF NOT EXISTS castings_updated ON castings (updated_at)')
     // A casting from before this was kept: its last change is its reading's or its latest question's.
     this.db.exec(`UPDATE castings SET updated_at = MAX(
@@ -230,15 +243,15 @@ export class Store {
   /** The castings, the most recently changed first: a reading written or a question asked moves one up. */
   listCastings(limit = 60): CastingSummary[] {
     const rows = this.db.prepare(
-      `SELECT id, kind, period, title, reading_state, reading_error, created_at, updated_at, memory, memories_used, memory_excluded, stats, started_at, finished_at,
+      `SELECT id, kind, period, title, reading_state, reading_error, created_at, updated_at, memory, memories_used, memory_excluded, stats, started_at, finished_at, style, note,
         (SELECT COUNT(*) FROM follow_ups f WHERE f.casting_id = castings.id) AS questions
       FROM castings ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC LIMIT ?`,
-    ).all(limit) as unknown as (Omit<CastingRow, 'result' | 'reading' | 'trail'> & { questions: number })[]
+    ).all(limit) as unknown as (Omit<CastingRow, 'result' | 'reading' | 'trail' | 'transit_readings' | 'brief'> & { questions: number })[]
     return rows.map((r) => ({
       id: r.id, kind: r.kind as Kind, period: r.period, title: r.title,
       readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
       memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
-      written: parseWritten({ ...r, trail: null }), questions: Number(r.questions),
+      written: parseWritten({ ...r, trail: null }), questions: Number(r.questions), style: r.style, note: r.note ?? '',
     }))
   }
 
@@ -247,17 +260,25 @@ export class Store {
     return r ? fromRow(r) : undefined
   }
 
-  /** A casting, with the memory choice made before it was cast: its own switch (null follows Settings) and the memories it leaves out. */
-  addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'> & Partial<Pick<Casting, 'memory' | 'memoryExcluded'>>): Casting {
+  /** A casting, with the choices made before it was cast: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
+  addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'> & Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note'>>): Casting {
     const now = Date.now()
     const casting: Casting = {
-      memory: null, memoryExcluded: [], ...input,
+      memory: null, memoryExcluded: [], style: null, note: '', ...input,
       id: newId(), reading: '', readingState: 'none', readingError: null, createdAt: now, updatedAt: now, memoriesUsed: [],
-      written: { ...NOT_WRITTEN }, transitReadings: null,
+      written: { ...NOT_WRITTEN }, transitReadings: null, brief: null,
     }
-    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded))
+    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded, style, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded), casting.style, casting.note)
     return casting
+  }
+
+  /** The kind of reading and what it is for, changed before a Write again. */
+  setFrame(id: string, frame: Partial<Pick<Casting, 'style' | 'note'>>): Casting | undefined {
+    const cur = this.getCasting(id)
+    if (!cur) return undefined
+    this.db.prepare('UPDATE castings SET style = ?, note = ? WHERE id = ?').run(frame.style === undefined ? cur.style : frame.style, frame.note === undefined ? cur.note : frame.note, id)
+    return this.getCasting(id)
   }
 
   /** Something under the casting changed: it is the most recent one now. */
@@ -270,11 +291,11 @@ export class Store {
     this.db.prepare('UPDATE castings SET updated_at = ? WHERE id = (SELECT casting_id FROM follow_ups WHERE id = ?)').run(at, followUpId)
   }
 
-  /** The reading is being written from now: nothing on the page, nothing on the trail. */
-  beginReading(id: string): void {
+  /** The reading is being written from now, with this brief: nothing on the page, nothing on the trail. */
+  beginReading(id: string, brief: Brief | null = null): void {
     const now = Date.now()
-    this.db.prepare("UPDATE castings SET reading = '', reading_state = 'writing', reading_error = NULL, trail = '[]', stats = NULL, started_at = ?, finished_at = NULL, updated_at = ? WHERE id = ?")
-      .run(now, now, id)
+    this.db.prepare("UPDATE castings SET reading = '', reading_state = 'writing', reading_error = NULL, trail = '[]', stats = NULL, started_at = ?, finished_at = NULL, updated_at = ?, brief = COALESCE(?, brief) WHERE id = ?")
+      .run(now, now, brief ? JSON.stringify(brief) : null, id)
   }
 
   /** The model's trail for the reading so far. */

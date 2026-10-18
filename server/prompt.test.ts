@@ -9,7 +9,7 @@ import type { Casting, FollowUp, Profile } from '../src/types.ts'
 const amie: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'CA', country: 'USA' }
 const casting = (over: Partial<Casting>): Casting => ({
   id: 'c1', kind: 'today', period: '2026-10-13', title: 'Today · Oct 13', result: transit,
-  reading: '', readingState: 'none', readingError: null, createdAt: 0, updatedAt: 0, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: null, ...over,
+  reading: '', readingState: 'none', readingError: null, createdAt: 0, updatedAt: 0, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: null, style: null, note: '', brief: null, ...over,
 })
 
 describe('readingRequest', () => {
@@ -37,6 +37,22 @@ describe('readingRequest', () => {
     expect(req.input).not.toContain('left_out')
     expect(req.input).toContain('headline_note')
     expect(req.input).toContain('week starting 2026-10-12')
+  })
+
+  it('speaks in the kind of reading chosen, and takes up what the person asked for', () => {
+    const plain = readingRequest(casting({}), amie)
+    expect(plain.system).toContain('Warm, concrete and unhurried.')
+    expect(plain.system).not.toContain('ASKED FOR')
+    const req = readingRequest(casting({ style: 'gentle', note: "  I'm going through some anxiety today " }), amie)
+    expect(req.system).toContain('Assume they may be raw today.')
+    expect(req.system).not.toContain('Warm, concrete and unhurried.')
+    expect(req.system).toContain(`WHAT SAM ASKED FOR, in their words: "I'm going through some anxiety today"`)
+    // The same frame carries into the questions under the reading.
+    const follow = followUpRequest(casting({ style: 'coach', note: 'the job', reading: 'R' }), [], 'q', amie)
+    expect(follow.system).toContain('Be their coach.')
+    expect(follow.system).toContain('WHAT SAM ASKED FOR, in their words: "the job"')
+    // An unknown style is the balanced one.
+    expect(readingRequest(casting({ style: 'wizard' }), amie).system).toContain('Warm, concrete and unhurried.')
   })
 
   it('leaves text that is not JSON as it is', () => {

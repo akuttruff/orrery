@@ -4,15 +4,18 @@ import Trail from './Trail'
 import WrittenMeta from './WrittenMeta'
 import type { LiveReading } from '../hooks/useReading.ts'
 import { thinking } from '../lib/trail.ts'
+import type { Brief } from '../types.ts'
 
 interface ReadingProps {
   reading: LiveReading
+  /** The brief the reading was written with, for anyone who wants to see it. */
+  brief: Brief | null
   onWrite: () => void
   onStop: () => void
 }
 
 /** The model's reading under the chart: its thinking first, then the text streamed in and kept, then what it cost. */
-export default function Reading({ reading, onWrite, onStop }: ReadingProps) {
+export default function Reading({ reading, brief, onWrite, onStop }: ReadingProps) {
   const { text, state, error, written } = reading
   return (
     <section className="reading" aria-live="polite">
@@ -32,6 +35,13 @@ export default function Reading({ reading, onWrite, onStop }: ReadingProps) {
       {state === 'failed' && <p className="reading-status error">{error ?? 'The reading failed.'}</p>}
       {state === 'none' && <p className="reading-status">No reading yet.</p>}
       <WrittenMeta written={written} state={state} label="Written" />
+      {brief && state !== 'none' && (
+        <details className="brief">
+          <summary>The brief this was written with</summary>
+          <pre className="brief-text">{brief.system}{'\n\n'}{brief.task}</pre>
+          <p className="memory-note">The chart's data follows the task; it is what the tables above are drawn from.</p>
+        </details>
+      )}
     </section>
   )
 }

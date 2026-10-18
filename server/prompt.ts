@@ -1,6 +1,7 @@
 import type { Casting, FollowUp, Profile } from '../src/types.ts'
 import { parseWheel } from '../src/lib/chartWheel.ts'
 import { readingsInput } from '../src/lib/readings.ts'
+import { styleOf } from '../src/lib/styles.ts'
 import type { WriteRequest } from './model.ts'
 import { ASTRO_SERVER_NAME } from './astro.ts'
 
@@ -11,14 +12,30 @@ import { ASTRO_SERVER_NAME } from './astro.ts'
  * ephemeris said.
  */
 
-const VOICE = [
+/**
+ * The voice of a reading. The kind of reading the person chose sits at the
+ * seam where the tone lives (lib/styles.ts); the rest -- the data, the
+ * honesty, the format -- is the same for every style.
+ */
+export const voice = (style: string | null): string => [
   'You are an astrologer writing a private reading for one person, addressed as "you", who knows you and their chart well.',
-  'Warm, concrete and unhurried. Give every contact its own full paragraph: name it with both positions and its timing, say in plain words what that kind of contact tends to bring up, then how it is likely to show up for this person given the natal point it touches, the houses either end sits in, and what that point does in their chart. Explain as if they knew none of the symbols; the lived version matters more than the label.',
-  'Make it theirs: where a contact touches what you know of their life, say so in their own terms, and say what to do with it. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
+  styleOf(style).voice,
+  'Give every contact its own full paragraph: name it with both positions and its timing, say in plain words what that kind of contact tends to bring up, then how it is likely to show up for this person given the natal point it touches, the houses either end sits in, and what that point does in their chart. Explain as if they knew none of the symbols; the lived version matters more than the label.',
+  'Make it theirs: where a contact touches what you know of their life, say so in their own terms. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
   'Use only the transits, positions and dates in the data. Never add a transit the data does not list, and never work out positions yourself.',
   'Write a retrograde planet as "Saturn ℞" the first time it is named, only when the data says it is retrograde.',
   'Write in Markdown: a heading (###) per section or contact, full paragraphs, bold for the thing to remember. A table is fine for a backdrop of slower, wider contacts.',
 ].join(' ')
+
+/** What the person said they wanted from the reading, in their words, for the brief; nothing when they said nothing. */
+export function noteBlock(profile: Profile, note: string): string | null {
+  const text = note.trim()
+  if (!text) return null
+  return [
+    `WHAT ${profile.name.toUpperCase()} ASKED FOR, in their words: "${text}"`,
+    'Let this set what the reading is for. Lead with what in the chart bears on it and speak to it directly; say plainly where the chart does not touch it, and do not pretend it does.',
+  ].join('\n')
+}
 
 /** The parts of a result written for a model choosing tools, not reading data; the notes on how to read the fields stay. */
 const DROP = new Set(['how_to_read', 'left_out'])
@@ -100,7 +117,7 @@ export function memoryBlock(profile: Profile, lines: string[]): string | null {
 
 export function readingRequest(casting: Casting, profile: Profile, now = new Date(), memory: string[] = []): WriteRequest {
   const { task, data } = ask(casting)
-  const system = [VOICE, person(profile, now), memoryBlock(profile, memory)].filter(Boolean).join('\n\n')
+  const system = [voice(casting.style), person(profile, now), memoryBlock(profile, memory), noteBlock(profile, casting.note)].filter(Boolean).join('\n\n')
   return { system, input: `${task}\n\nDATA:\n${data}`, maxTokens: READING_MAX_TOKENS }
 }
 
@@ -124,8 +141,10 @@ export function followUpRequest(casting: Casting, earlier: FollowUp[], question:
   const { data } = ask(casting)
   const system = [
     ANSWER_VOICE,
+    `The reading was written as this kind: ${styleOf(casting.style).voice} Answer in the same spirit.`,
     person(profile, now),
     memoryBlock(profile, memory),
+    noteBlock(profile, casting.note),
     `THE CASTING: ${casting.title}.\nDATA:\n${data}`,
     `THE READING YOU WROTE:\n${casting.reading}`,
   ].filter(Boolean).join('\n\n')

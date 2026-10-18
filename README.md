@@ -29,9 +29,16 @@ the transit tables), copied rather than shared.
   started meanwhile. A casting is `#/c/<id>` in the address, so the
   browser's Back and a reload both land where expected.
 - **Every tap casts anew.** A tile casts the chart afresh and starts its
-  reading at once, with the memory choice made above the tiles beforehand
-  (the switch is Settings' default; the memories left out are remembered by
-  the browser); the earlier castings of that kind stay, so a day can hold
+  reading at once, with the choices made in one panel above the tiles
+  beforehand: what the reading is for, in the person's words ("I'm going
+  through some anxiety today"), the kind of reading (`src/lib/styles.ts`:
+  balanced, companion, coach, strategist, gentle, plain, each a sentence or
+  two at the seam of the brief where the tone lives), and memory (the
+  switch is Settings' default; the memories left out are remembered by the
+  browser). All of it stays on the casting, so Write again and the
+  questions under it keep the same frame, and the brief a reading was
+  written with is shown under it. The earlier castings of that kind stay,
+  so a day can hold
   several readings of the same kind and `Recast` adds one more. The home
   screen's recent list groups them by kind in the tiles' order, with each
   casting's time being its last change (`updated_at`): a reading written or a

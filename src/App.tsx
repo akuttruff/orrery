@@ -6,9 +6,11 @@ import Settings from './components/Settings'
 import Sidebar from './components/Sidebar'
 import MemoriesSheet from './components/MemoriesSheet'
 import MemoryChoice from './components/MemoryChoice'
+import ReadingFrame from './components/ReadingFrame'
 import useMediaQuery, { WIDE } from './hooks/useMediaQuery.ts'
 import { api } from './lib/api.ts'
-import type { MemoryChoice as MemoryChoiceOf } from './lib/api.ts'
+import type { CastOptions } from './lib/api.ts'
+import { DEFAULT_STYLE, isStyleId, type StyleId } from './lib/styles.ts'
 import { KIND_LABEL } from './lib/kinds.ts'
 import { formatWhen } from './lib/when.ts'
 import { castingIdIn, hashFor } from './lib/route.ts'
@@ -61,9 +63,19 @@ export default function App() {
     setExcluded(ids)
     try { localStorage.setItem('orrery.memoryExcluded', JSON.stringify(ids)) } catch { /* a preference, not a record */ }
   }
-  const choice: MemoryChoiceOf = { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [] }
+  // What the next reading is for, in their words (this visit only), and the kind of reading (kept on this device).
+  const [note, setNote] = useState('')
+  const [style, setStyleState] = useState<StyleId>(() => { try { const s = localStorage.getItem('orrery.style'); return isStyleId(s) ? s : DEFAULT_STYLE } catch { return DEFAULT_STYLE } })
+  const setStyle = (s: StyleId): void => {
+    setStyleState(s)
+    try { localStorage.setItem('orrery.style', s) } catch { /* a preference, not a record */ }
+  }
+  const choice: CastOptions = { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, note: note.trim() }
+  // Every choice for the next reading in one place: the note, the kind under it, and memory under that.
   const memoryChoice = config && (
-    <MemoryChoice on={memoryOn} excluded={excluded} onToggle={(on) => void setMemoryOn(on)} onExclude={exclude} onManage={() => setMemoriesOpen(true)} compact={sidebar} />
+    <ReadingFrame note={note} style={style} onNote={setNote} onStyle={setStyle} compact={sidebar}>
+      <MemoryChoice on={memoryOn} excluded={excluded} onToggle={(on) => void setMemoryOn(on)} onExclude={exclude} onManage={() => setMemoriesOpen(true)} compact={sidebar} />
+    </ReadingFrame>
   )
 
   const refreshRecent = useCallback(() => { api.castings().then(setRecent).catch(() => { /* the list is a convenience */ }) }, [])
@@ -118,11 +130,11 @@ export default function App() {
   }, [current, writing.length, refreshRecent])
 
   // A tap casts anew, with the memory choice made beforehand, and starts its reading straight away; the earlier castings of the kind stay.
-  const cast = useCallback(async (kind: Kind, memory: MemoryChoiceOf) => {
+  const cast = useCallback(async (kind: Kind, options: CastOptions) => {
     setBusy(kind)
     setError(null)
     try {
-      let casting = await api.cast(kind, memory)
+      let casting = await api.cast(kind, options)
       if (casting.readingState === 'none') casting = await api.startReading(casting.id)
       show(casting)
       refreshRecent()
@@ -149,7 +161,7 @@ export default function App() {
     refreshRecent()
   }
 
-  const updateCasting = async (patch: { memory?: boolean | null; memoryExcluded?: string[] }): Promise<void> => {
+  const updateCasting = async (patch: CastOptions): Promise<void> => {
     if (!current) return
     try { setCurrent(await api.updateCasting(current.id, patch)) } catch (e) { setError((e as Error).message) }
   }
@@ -219,10 +231,11 @@ export default function App() {
             memoryDefault={config?.memoryDefault === 'on'}
             onMemory={(m) => void updateCasting({ memory: m })}
             onExclude={(ids) => void updateCasting({ memoryExcluded: ids })}
+            onFrame={(frame) => void updateCasting(frame)}
             onMemories={() => setMemoriesOpen(true)}
             onWrite={(again) => void write(again)}
             onStop={() => void stop()}
-            onRecast={() => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded })}
+            onRecast={() => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: current.style, note: current.note })}
             onDelete={() => void remove()}
             onSettled={settled}
           />

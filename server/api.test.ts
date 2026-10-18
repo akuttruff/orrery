@@ -138,6 +138,25 @@ describe('castings', () => {
     expect(await (await fetch(`${ctx.base}/api/busy`)).json()).toMatchObject({ transits: 0 })
   })
 
+  it('casts with the kind of reading and the note, keeps the brief once the reading starts, and refuses a style it does not know', async () => {
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'today', style: 'coach', note: ' anxious today ' })).json() as Casting
+    expect(c).toMatchObject({ style: 'coach', note: 'anxious today', brief: null })
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'today', style: 'wizard' })).status).toBe(400)
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'today', note: 'x'.repeat(601) })).status).toBe(400)
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await (await fetch(`${ctx.base}/api/castings/${c.id}/events`)).text()
+    const kept = await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json() as Casting
+    expect(kept.brief!.system).toContain('Be their coach.')
+    expect(kept.brief!.system).toContain('WHAT SAM ASKED FOR, in their words: "anxious today"')
+    expect(kept.brief!.task).toMatch(/^Write today's reading/)
+    expect(kept.brief!.task).not.toContain('"chart_type"')
+    // Changed before a Write again.
+    const changed = await (await fetch(`${ctx.base}/api/castings/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: 'plain', note: '' }) })).json() as Casting
+    expect(changed).toMatchObject({ style: 'plain', note: '' })
+    const list = await (await fetch(`${ctx.base}/api/castings`)).json() as CastingSummary[]
+    expect(list.find((x) => x.id === c.id)).toMatchObject({ style: 'plain' })
+  })
+
   it('rejects a kind it does not know', async () => {
     expect((await post(`${ctx.base}/api/castings`, { kind: 'tarot' })).status).toBe(400)
   })

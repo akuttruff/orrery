@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from 'react'
-import { Brain, ListChecks, RotateCw, Trash2 } from 'lucide-react'
+import { Brain, ListChecks, RotateCw, SlidersHorizontal, Trash2 } from 'lucide-react'
 import MemoryPicker from './MemoryPicker'
 import ChartWheel from './ChartWheel'
 import { ActiveTransits, ForecastTransits } from './TransitTable'
@@ -10,6 +10,7 @@ import { useReading } from '../hooks/useReading.ts'
 import { parseWheel } from '../lib/chartWheel.ts'
 import { parseForecast } from '../lib/forecastTable.ts'
 import { formatWhen } from '../lib/when.ts'
+import { READING_STYLES, styleOf, NOTE_MAX, type StyleId } from '../lib/styles.ts'
 import type { Casting } from '../types.ts'
 
 interface CastingViewProps {
@@ -20,6 +21,8 @@ interface CastingViewProps {
   onMemory: (memory: boolean | null) => void
   /** Which memories this casting leaves out, by id. */
   onExclude: (ids: string[]) => void
+  /** The kind of reading and what it is for, changed before a Write again. */
+  onFrame: (frame: { style?: StyleId; note?: string }) => void
   onMemories: () => void
   onWrite: (again: boolean) => void
   onStop: () => void
@@ -35,9 +38,12 @@ const Forecast = memo(ForecastTransits)
 const Moon = memo(MoonView)
 
 /** One casting: its chart or tables, the reading, then the questions asked about it. */
-export default function CastingView({ casting, memoryDefault, onMemory, onExclude, onMemories, onWrite, onStop, onRecast, onDelete, onSettled }: CastingViewProps) {
+export default function CastingView({ casting, memoryDefault, onMemory, onExclude, onFrame, onMemories, onWrite, onStop, onRecast, onDelete, onSettled }: CastingViewProps) {
   const memoryOn = casting.memory ?? memoryDefault
   const [picking, setPicking] = useState(false)
+  const [framing, setFraming] = useState(false)
+  const [noteDraft, setNoteDraft] = useState(casting.note)
+  const style = styleOf(casting.style)
   const reading = useReading(casting, onSettled)
   const wheel = useMemo(() => (casting.kind === 'today' || casting.kind === 'natal' ? parseWheel(casting.result) : null), [casting])
   const forecast = useMemo(() => (casting.kind === 'week' || casting.kind === 'month' || casting.kind === 'year' ? parseForecast(casting.result) : null), [casting])
@@ -46,13 +52,32 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
     <article className="casting">
       <header className="casting-head">
         <h2>{casting.title}</h2>
-        <p className="casting-sub">Cast {formatWhen(casting.createdAt)}</p>
+        <p className="casting-sub">Cast {formatWhen(casting.createdAt)} · {style.label}{casting.note ? <> · <q className="casting-note">{casting.note}</q></> : ''}</p>
       </header>
       {wheel && <ChartWheel wheel={wheel} castingId={casting.id} readings={casting.transitReadings ?? undefined} />}
       {wheel?.kind === 'transit' && <Transits wheel={wheel} />}
       {forecast && <Forecast table={forecast} />}
       {casting.kind === 'moon' && <Moon result={casting.result} />}
       {!wheel && !forecast && casting.kind !== 'moon' && <p className="reading-status error">The tool's result could not be drawn.</p>}
+      <div className="memory-switch">
+        <button type="button" className={`chip${framing ? ' on' : ''}`} aria-expanded={framing} onClick={() => setFraming((f) => !f)}>
+          <SlidersHorizontal size={13} aria-hidden="true" /> {style.label}{casting.note ? ' · framed' : ''}
+        </button>
+        <span className="memory-note">{reading.state === 'none' ? 'The kind of reading, what it is for, and memory; set them before it is written.' : 'The kind of reading, what it is for, and memory. Change them, then Write again.'}</span>
+      </div>
+      {framing && (
+        <div className="frame" role="group" aria-label="Frame of the reading">
+          <label className="ask-label" htmlFor={`note-${casting.id}`}>What you want from it, in your words</label>
+          <textarea id={`note-${casting.id}`} className="ask-box frame-box" rows={2} maxLength={NOTE_MAX} value={noteDraft} placeholder="Optional. Context helps: “I'm going through some anxiety today”" onChange={(e) => setNoteDraft(e.target.value)} onBlur={() => { if (noteDraft.trim() !== casting.note) onFrame({ note: noteDraft.trim() }) }} />
+          <div className="frame-styles" role="radiogroup" aria-label="Kind of reading">
+            {READING_STYLES.map((s) => (
+              <button key={s.id} type="button" role="radio" aria-checked={style.id === s.id} className={`chip${style.id === s.id ? ' on' : ''}`} title={s.hint} onClick={() => onFrame({ style: s.id })}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="memory-switch">
         <button
           type="button"
@@ -78,7 +103,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
         </span>
       </div>
       {memoryOn && picking && <MemoryPicker excluded={casting.memoryExcluded} used={casting.memoriesUsed} onChange={onExclude} onManage={onMemories} />}
-      <Reading reading={reading} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
+      <Reading reading={reading} brief={casting.brief} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
       <FollowUps key={casting.id} castingId={casting.id} readingState={reading.state} readingText={reading.text} />
       <div className="casting-actions">
         <button type="button" className="chip" onClick={onRecast}><RotateCw size={13} aria-hidden="true" /> Recast</button>

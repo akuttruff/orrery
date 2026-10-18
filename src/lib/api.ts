@@ -1,7 +1,7 @@
 import type { Casting, CastingSummary, Config, FollowUp, Kind, Memory, Profile } from '../types.ts'
 
-/** Whether a casting is read with memories (null follows Settings) and which it leaves out. */
-export type MemoryChoice = Partial<Pick<Casting, 'memory' | 'memoryExcluded'>>
+/** The choices a casting is made with: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
+export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note'>>
 
 /** The server, from the page. Every call throws with the server's message on failure. */
 
@@ -24,10 +24,10 @@ export const api = {
   models: () => request<{ models: string[]; loaded: string[]; error: string | null }>('/api/models'),
   castings: () => request<CastingSummary[]>('/api/castings'),
   /** A new casting of the kind, cast now with the memory choice made beforehand; the earlier ones stay in the list. */
-  cast: (kind: Kind, memory: MemoryChoice = {}) => request<Casting>('/api/castings', jsonInit('POST', { kind, ...memory })),
+  cast: (kind: Kind, options: CastOptions = {}) => request<Casting>('/api/castings', jsonInit('POST', { kind, ...options })),
   casting: (id: string) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`),
   /** The casting's memory switch (true, false, or null to follow Settings) and the memories it leaves out. */
-  updateCasting: (id: string, patch: MemoryChoice) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`, jsonInit('PATCH', patch)),
+  updateCasting: (id: string, patch: CastOptions) => request<Casting>(`/api/castings/${encodeURIComponent(id)}`, jsonInit('PATCH', patch)),
   startReading: (id: string, again = false) => request<Casting>(`/api/castings/${encodeURIComponent(id)}/reading${again ? '?again=1' : ''}`, { method: 'POST' }),
   stopReading: (id: string) => request<{ stopped: boolean }>(`/api/castings/${encodeURIComponent(id)}/reading`, { method: 'DELETE' }),
   remove: (id: string) => request<{ ok: boolean }>(`/api/castings/${encodeURIComponent(id)}`, { method: 'DELETE' }),

@@ -7,9 +7,9 @@ import type { Casting, CastingSummary } from './types.ts'
 
 const casting = (id: string, over: Partial<Casting> = {}): Casting => ({
   id, kind: 'today', period: '2026-10-16', title: `Casting ${id}`, result: '{}', reading: '', readingState: 'writing', readingError: null,
-  createdAt: 1, updatedAt: 1, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: {}, ...over,
+  createdAt: 1, updatedAt: 1, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: {}, style: null, note: '', brief: null, ...over,
 })
-const summary = ({ result: _r, reading: _g, transitReadings: _t, ...rest }: Casting): CastingSummary => ({ ...rest, questions: 0 })
+const summary = ({ result: _r, reading: _g, transitReadings: _t, brief: _b, ...rest }: Casting): CastingSummary => ({ ...rest, questions: 0 })
 
 /** A fetch that serves the app's routes from a list of castings the test can change. */
 function serve(castings: Casting[]) {
@@ -18,8 +18,8 @@ function serve(castings: Casting[]) {
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     // A tap casts anew: the new casting joins the list, and its reading is started.
     if (url === '/api/castings' && init?.method === 'POST') {
-      const { kind, memory = null, memoryExcluded = [] } = JSON.parse(String(init.body)) as Pick<Casting, 'kind'> & Partial<Casting>
-      const c = casting(`new${castings.length + 1}`, { kind, memory, memoryExcluded, readingState: 'none', createdAt: 100, updatedAt: 100 })
+      const { kind, memory = null, memoryExcluded = [], style = null, note = '' } = JSON.parse(String(init.body)) as Pick<Casting, 'kind'> & Partial<Casting>
+      const c = casting(`new${castings.length + 1}`, { kind, memory, memoryExcluded, style, note, readingState: 'none', createdAt: 100, updatedAt: 100 })
       castings.push(c)
       return reply(201, c)
     }
@@ -168,6 +168,23 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Casting new1' })).toBeInTheDocument()
     expect(castings[0]).toMatchObject({ kind: 'moon', memory: true, memoryExcluded: ['m2'] })
     expect(JSON.parse(localStorage.getItem('orrery.memoryExcluded')!)).toEqual(['m2'])
+  })
+
+  it('carries what the person wants from the reading, and the kind, on the tap that casts', async () => {
+    const castings: Casting[] = []
+    serve(castings)
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(await screen.findByLabelText('What do you want from the next reading?'), "I'm going through some anxiety today")
+    await user.click(screen.getByRole('radio', { name: 'Gentle' }))
+    expect(screen.getByRole('radio', { name: 'Gentle' })).toHaveAttribute('aria-checked', 'true')
+    expect(localStorage.getItem('orrery.style')).toBe('gentle')
+    // The memory switch sits in the same panel.
+    expect(within(screen.getByLabelText('What do you want from the next reading?').closest('.frame') as HTMLElement).getByRole('switch', { name: 'Memory off' })).toBeInTheDocument()
+    await user.click(screen.getByText('Transits now, over the birth chart').closest('button')!)
+    expect(await screen.findByRole('heading', { name: 'Casting new1' })).toBeInTheDocument()
+    expect(castings[0]).toMatchObject({ kind: 'today', style: 'gentle', note: "I'm going through some anxiety today" })
+    expect(screen.getByText(/^Cast /)).toHaveTextContent("· Gentle · I'm going through some anxiety today")
   })
 
   it('shows a long group in part, and the rest on request', async () => {

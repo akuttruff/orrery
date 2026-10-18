@@ -265,6 +265,21 @@ input, select { font: inherit; }
 
 /* ====== Memory ====== */
 .memory-switch { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 14px 0 0; }
+/* Before the tap: what the next reading is for, what kind, and with what memory, in one panel above the tiles or at the sidebar's head. */
+.frame { margin: 0 0 12px; }
+.frame-box { display: block; width: 100%; font-size: 15px; }
+.frame.compact .frame-box { font-size: 13px; padding: 8px 10px; border-radius: 10px; }
+.frame.compact .ask-label { font-size: 12px; }
+.frame-styles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.frame.compact .frame-styles .chip, .casting .frame-styles .chip { padding: 5px 10px; font-size: 13px; }
+.frame .memory-choice { margin: 10px 0 0; }
+.frame.compact .memory-choice { margin: 8px 0 0; padding-bottom: 10px; }
+.casting .frame { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-raised); }
+.casting-note { font-style: italic; color: var(--paper); }
+/* The brief a reading was written with, folded under it. */
+.brief { margin: 10px 0 0; font-size: 13px; color: var(--paper-dim); }
+.brief summary { cursor: pointer; }
+.brief-text { margin: 8px 0 4px; padding: 10px 12px; max-width: 100%; overflow-x: auto; white-space: pre-wrap; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-raised); color: var(--paper); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; line-height: 1.45; }
 /* Before the tap: the choice the next casting is read with, above the tiles or at the sidebar's head. */
 .memory-choice { margin: 0 0 14px; }
 .memory-choice .memory-switch { margin-top: 0; }

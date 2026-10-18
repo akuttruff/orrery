@@ -119,10 +119,22 @@ export interface Casting {
    * for the popup over it; null until the model has written them.
    */
   transitReadings: Record<string, string> | null
+  /** The kind of reading asked for (see lib/styles.ts); null is the balanced one. */
+  style: string | null
+  /** What the person wanted from the reading, in their words; '' when they said nothing. */
+  note: string
+  /** The brief the reading was last written with, kept for anyone who wants to see it; null until a reading starts. */
+  brief: Brief | null
+}
+
+/** The prompt a reading was written with: the system part, and the task without the data under it. */
+export interface Brief {
+  system: string
+  task: string
 }
 
 /** A casting in the recent list: everything but the bodies, and how many questions were asked under it. */
-export type CastingSummary = Omit<Casting, 'result' | 'reading' | 'transitReadings'> & { questions: number }
+export type CastingSummary = Omit<Casting, 'result' | 'reading' | 'transitReadings' | 'brief'> & { questions: number }
 
 /**
  * A question asked under a reading and the model's answer, written on the

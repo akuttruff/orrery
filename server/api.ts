@@ -11,6 +11,7 @@ import { Memories, MemoryInputError, memoryPath } from './memory.ts'
 import { parseFacts, rememberRequest } from './remember.ts'
 import { followUpRequest, readingRequest } from './prompt.ts'
 import { Readings, answerOf } from './readings.ts'
+import { NOTE_MAX, isStyleId } from '../src/lib/styles.ts'
 import { Store } from './store.ts'
 import type { ServerConfig } from './store.ts'
 import { TransitReadings } from './transits.ts'
@@ -129,7 +130,7 @@ export function createMiddleware(state: ApiState): Handler {
    * A new casting of a kind, cast now with the memory choice made before the
    * tap; the earlier ones stay. Two taps while the tools run share the one cast.
    */
-  const cast = async (kind: Kind, memory: Pick<Casting, 'memory' | 'memoryExcluded'>): Promise<unknown> => {
+  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note'>): Promise<unknown> => {
     const profile = store.getProfile()
     const period = periodFor(kind, new Date())
     const key = `${kind}:${period}`
@@ -137,7 +138,7 @@ export function createMiddleware(state: ApiState): Handler {
     if (!pending) {
       pending = (async () => {
         const result = await castResult(kind, period, profile, call)
-        const casting = store.addCasting({ kind, period, title: titleFor(kind, period, profile), result, ...memory })
+        const casting = store.addCasting({ kind, period, title: titleFor(kind, period, profile), result, ...frame })
         state.transits.ensure(casting.id)
         return casting
       })().finally(() => state.casting.delete(key))
@@ -146,9 +147,18 @@ export function createMiddleware(state: ApiState): Handler {
     return pending
   }
 
-  /** The memory switch and exclusions in a request body, checked; what is not given is left as it was. */
-  const memoryPatch = (body: Record<string, unknown>): Partial<Pick<Casting, 'memory' | 'memoryExcluded'>> => {
-    const out: Partial<Pick<Casting, 'memory' | 'memoryExcluded'>> = {}
+  /** The choices in a request body, checked: memory and the memories left out, the kind of reading, and what it is for. What is not given is left as it was. */
+  const framePatch = (body: Record<string, unknown>): Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note'>> => {
+    const out: Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note'>> = {}
+    if ('style' in body) {
+      if (body.style !== null && !isStyleId(body.style)) throw new Error('style must be one of the reading styles, or null')
+      out.style = body.style as string | null
+    }
+    if ('note' in body) {
+      if (typeof body.note !== 'string') throw new Error('note must be text')
+      if (body.note.length > NOTE_MAX) throw new Error(`Keep the note under ${NOTE_MAX} characters`)
+      out.note = body.note.trim()
+    }
     if ('memory' in body) {
       if (body.memory !== null && typeof body.memory !== 'boolean') throw new Error('memory must be true, false or null')
       out.memory = body.memory as boolean | null
@@ -169,7 +179,7 @@ export function createMiddleware(state: ApiState): Handler {
 
     const fail = (err: unknown): void => {
       const status = err instanceof AstroToolError ? 422 : 400
-      if (!(err instanceof AstroToolError) && !(err instanceof MemoryInputError) && !(err instanceof SyntaxError) && !/^(Unknown kind|Ask something|Keep the question|Wait for the reading|One answer|Birth date|A birth city|Expected a JSON|Nothing to change|memory)/.test((err as Error).message)) console.log(`[orrery] ${(err as Error).message}`)
+      if (!(err instanceof AstroToolError) && !(err instanceof MemoryInputError) && !(err instanceof SyntaxError) && !/^(Unknown kind|Ask something|Keep the question|Keep the note|Wait for the reading|One answer|Birth date|A birth city|Expected a JSON|Nothing to change|memory|style|note)/.test((err as Error).message)) console.log(`[orrery] ${(err as Error).message}`)
       json(res, status, { error: (err as Error).message || String(err) })
     }
 
@@ -232,8 +242,8 @@ export function createMiddleware(state: ApiState): Handler {
     if (url === '/api/castings' && method === 'POST') {
       void readBody(req).then(async (body) => {
         if (!isKind(body.kind)) throw new Error(`Unknown kind: ${String(body.kind)}`)
-        const { memory = null, memoryExcluded = [] } = memoryPatch(body)
-        json(res, 201, await cast(body.kind, { memory, memoryExcluded }))
+        const { memory = null, memoryExcluded = [], style = null, note = '' } = framePatch(body)
+        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note }))
       }).catch(fail)
       return undefined
     }
@@ -247,10 +257,11 @@ export function createMiddleware(state: ApiState): Handler {
       if (!sub && method === 'GET') { state.transits.ensure(id); return json(res, 200, casting) }
       if (!sub && method === 'PATCH') {
         void readBody(req).then((body) => {
-          const patch = memoryPatch(body)
-          if (patch.memory === undefined && patch.memoryExcluded === undefined) throw new Error('Nothing to change')
+          const patch = framePatch(body)
+          if (Object.keys(patch).length === 0) throw new Error('Nothing to change')
           if (patch.memory !== undefined) store.setCastingMemory(id, patch.memory)
           if (patch.memoryExcluded !== undefined) store.setMemoryExcluded(id, patch.memoryExcluded)
+          if (patch.style !== undefined || patch.note !== undefined) store.setFrame(id, patch)
           json(res, 200, store.getCasting(id))
         }).catch(fail)
         return undefined

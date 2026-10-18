@@ -1,5 +1,5 @@
 import type { ServerResponse } from 'node:http'
-import type { ReadingEvent, ReadingState, Step, Written } from '../src/types.ts'
+import type { Brief, ReadingEvent, ReadingState, Step, Written } from '../src/types.ts'
 import { appendThinking } from '../src/lib/trail.ts'
 import type { WriteRequest } from './model.ts'
 import { ModelError, stripLeakedThinking, writeWithModel } from './model.ts'
@@ -25,8 +25,8 @@ export interface Kept {
 
 export interface Target {
   get(): Kept | undefined
-  /** The writing starts now: nothing written, nothing on the trail. */
-  begin(): void
+  /** The writing starts now, from this request: nothing written, nothing on the trail. */
+  begin(req: WriteRequest): void
   /** The trail so far, each time its shape changes. */
   trail(steps: Step[]): void
   /** The writing is over, well or badly: the text, the whole trail, and the turn's numbers. */
@@ -39,10 +39,13 @@ export const readingOf = (store: Store, id: string): Target => ({
     const c = store.getCasting(id)
     return c ? { text: c.reading, state: c.readingState, error: c.readingError, written: c.written } : undefined
   },
-  begin: () => store.beginReading(id),
+  begin: (req) => store.beginReading(id, briefOf(req)),
   trail: (steps) => store.setReadingTrail(id, steps),
   finish: (text, state, error, written) => store.finishReading(id, text, state, error, written),
 })
+
+/** The prompt as the person may read it: the system part and the task, without the data under it. */
+export const briefOf = (req: WriteRequest): Brief => ({ system: req.system, task: req.input.split('\n\nDATA:\n')[0]! })
 
 /** A follow-up's answer as a target. */
 export const answerOf = (store: Store, id: string): Target => ({
@@ -83,7 +86,7 @@ export class Readings {
     if (this.runs.has(id)) return
     const run: Run = { text: '', trail: [], startedAt: Date.now(), listeners: new Set(), controller: new AbortController(), thought: '', thoughtTimer: null }
     this.runs.set(id, run)
-    target.begin()
+    target.begin(req)
     void (async () => {
       try {
         const reply = await this.write(this.store.getConfig(), req, (piece) => {
