@@ -96,11 +96,12 @@ input, select { font: inherit; }
 /* "+" on a section's head: another casting of that kind. Small, but a full tap target. */
 .side-add {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; margin: -6px -4px -6px 0;
+  width: 28px; height: 28px; margin: -6px 8px -6px 0;
   border: none; border-radius: 8px; background: none; color: var(--paper-dim);
 }
 .side-add:hover, .side-add:focus-visible { color: var(--moss); background: var(--bg); }
-/* A row and, at its edge, its star and bin: shown on a hover or a focus, and the star whenever it is on. */
+/* A row and, at its edge, its star and bin: shown on a hover or a focus, and the star whenever it is on.
+   The actions sit in from the edge, clear of the list's scrollbar. */
 .side-row-wrap { position: relative; display: flex; align-items: center; border-bottom: 1px solid var(--line); }
 .side-row-wrap:hover, .side-row-wrap:focus-within, .side-row-wrap.active { background: var(--bg); }
 .side-row {
@@ -108,13 +109,13 @@ input, select { font: inherit; }
   padding: 9px 6px; border: none; border-radius: 0;
   background: none; color: var(--paper); font-size: 15px; text-align: left;
 }
-.side-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; padding-right: 2px; opacity: 0; transition: opacity 0.12s ease; }
+.side-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; padding-right: 14px; opacity: 0; transition: opacity 0.12s ease; }
 .side-row-wrap:hover .side-actions, .side-row-wrap:focus-within .side-actions, .side-row-wrap.starred .side-actions { opacity: 1; }
 .side-row-wrap.starred:not(:hover):not(:focus-within) .side-actions .danger { opacity: 0; }
 .side-actions .icon-btn[aria-pressed="true"] { color: var(--gold); }
 .side-actions .icon-btn:hover, .side-actions .icon-btn:focus-visible { color: var(--paper); background: var(--bg-raised); }
 .side-actions .icon-btn.danger:hover, .side-actions .icon-btn.danger:focus-visible { color: var(--rust); }
-.side-confirm { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 0 6px 0 2px; font-size: 12px; color: var(--paper-dim); white-space: nowrap; }
+.side-confirm { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 0 16px 0 2px; font-size: 12px; color: var(--paper-dim); white-space: nowrap; }
 .side-confirm .chip { padding: 4px 9px; font-size: 12px; }
 .recent-title .starred { color: var(--gold); vertical-align: -1px; margin-right: 5px; }
 .side-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: transparent; }
