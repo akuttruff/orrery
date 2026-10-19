@@ -50,50 +50,78 @@ npm run screenshots                # another; needs Google Chrome
 
 ## Before you start
 
-Orrery is a Node server that you run on the computer with the model and
-open from a browser. It needs three things on that computer: Node, the
-ephemeris, and a model served by LM Studio. Nothing leaves your network.
+### How it fits together
 
-| You want to | You need |
+```
+your phone or desktop browser
+        │  http, over your own network
+        ▼
+Orrery ── one Node process on one computer ── .data/orrery.sqlite, memory.sqlite
+        │
+        ├──▶ astro-mcp, started by Orrery          (the charts, in under a second)
+        └──▶ a model server on the same computer   (the readings and the answers)
+```
+
+Orrery is one Node process that serves the app to any browser on your
+network and keeps the castings and memories in SQLite on that computer. For
+a cast, Orrery runs the ephemeris itself and draws the chart at once. For
+the reading, it sends the chart to a model server beside it and streams
+the text back, so a phone that locks mid-reading loses nothing. Your phone
+talks only to Orrery.
+
+### What you need
+
+| For | You need |
 |---|---|
-| Cast a chart and see the wheel and tables | Node 24 or newer, and [astro-mcp](https://github.com/akuttruff/astro-mcp) installed (below) |
-| A reading written over it | LM Studio 0.4 or newer serving a chat model (below) |
-| Follow-up questions that look things up | LM Studio allowed to call astro-mcp as an MCP server, with authentication on |
-| Open it on your phone | The phone on the same Wi-Fi, or [Tailscale](https://tailscale.com) on both devices (see *Run*) |
+| Casting a chart and seeing the wheel and tables | Node 24 or newer, and [astro-mcp](https://github.com/akuttruff/astro-mcp) installed on the same computer (below) |
+| A reading written over it | A model server with a chat model (below) |
+| Follow-up questions that look things up | The model server able to call astro-mcp as an MCP server, with its authentication on |
+| Opening it on your phone | The phone on the same Wi-Fi, or [Tailscale](https://tailscale.com) on both devices (see *Run*) |
 
-**Node.** Castings and memories are stored with `node:sqlite`, which
-arrived in Node 24. Check with `node --version`.
+Node 24 is the floor because castings are stored with `node:sqlite`, which
+arrived in that version. Check with `node --version`.
 
-**The ephemeris.** Orrery starts astro-mcp itself for every cast and talks
-to it directly, so the wheel is on screen in under a second. Install it
-following its README (Python 3.10+ and `uv`), then either:
+### The ephemeris
 
-- add it to `~/.lmstudio/mcp.json` under the name `astrology-v2`, which
-  Orrery reads for the command to run, and which also lets LM Studio call
-  it for follow-up questions; or
-- check it out at `~/Code/astro-mcp` with its `.venv` created, which
-  Orrery falls back to.
+Orrery starts astro-mcp for every cast and talks to it directly, so the
+wheel is on screen in under a second. Install it following its README
+(Python 3.10 or newer and `uv`), then either:
 
-**Serving a model.** Orrery talks to LM Studio's `/api/v1/chat` endpoint,
-so it needs [LM Studio](https://lmstudio.ai) 0.4 or newer.
+- register it with your model server under the name `astrology-v2`. Orrery
+  reads the command from LM Studio's `~/.lmstudio/mcp.json`, and the same
+  entry lets the model call it for follow-up questions; or
+- check it out at `~/Code/astro-mcp` with its `.venv` created, which Orrery
+  falls back to.
 
-1. Install LM Studio and download a chat model in its Discover tab. Orrery
-   is written and tested against `qwen/qwen3.8-27b`. Any chat model works;
-   a smaller one writes faster and shallower. Give it a context length of
-   at least 16K.
-2. In the **Developer** tab, start the server. It listens on
-   `http://127.0.0.1:1234`, Orrery's default.
-3. If **Require Authentication** is on, create a token under **Manage
-   Tokens** and paste it into Orrery's Settings. It is kept on the server
-   and never sent to the browser. Authentication is required for the
-   follow-up questions' tool calls.
-4. For follow-up questions to call the ephemeris, enable **Allow calling
-   servers from mcp.json** in the Developer settings.
-5. Settings offers LM Studio's reasoning levels. `low` is the default and
+### A model server
+
+Orrery sends the chart and its brief to a model server's `/api/v1/chat`
+endpoint, the API that [LM Studio](https://lmstudio.ai) 0.4 introduced,
+because it carries MCP tool calls, reasoning levels and streamed replies in
+one request. LM Studio is the server these steps use. Any other server that
+implements that same API works the same way; one that offers only the
+OpenAI chat API does not, yet. Nothing leaves your network.
+
+1. Install the server and download a chat model. In LM Studio that is the
+   Discover tab. Orrery is written and tested against `qwen/qwen3.8-27b`.
+   Any chat model works; a smaller one writes faster and shallower. Give
+   it a context length of at least 16K.
+2. Start the server. In LM Studio that is the **Developer** tab. It listens
+   on `http://127.0.0.1:1234`, Orrery's default; Settings takes another
+   address.
+3. If the server asks for a token (in LM Studio, **Require Authentication**
+   under **Manage Tokens**), paste it into Orrery's Settings. It is kept on
+   the server and never sent to the browser. LM Studio requires
+   authentication for the follow-up questions' tool calls.
+4. For follow-up questions to call the ephemeris, let the model server call
+   it: in LM Studio, **Allow calling servers from mcp.json** in the
+   Developer settings.
+5. Settings offers the server's reasoning levels. `low` is the default and
    the sweet spot; `off` is faster and flatter.
 
-The first run copies the LM Studio address, token and model from LM Chat's
-database when it is on this machine, so there is nothing to type twice.
+The first run copies the model server address, token and model from LM
+Chat's database when it is on this machine, so there is nothing to type
+twice.
 
 ## Casting
 
