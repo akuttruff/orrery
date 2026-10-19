@@ -1,6 +1,14 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
+import { REACH } from '../lib/reach.ts'
+
+// The waits around a server that gives no reply, cut to a few ticks: a test
+// that sits through eight seconds of silence learns nothing from the wait.
+REACH.readTimeoutMs = 200
+REACH.retryWaitsMs = [10, 20, 30]
+REACH.unreachableAfterMs = 40
+REACH.probeMs = 40
 
 // Server tests run in node (`@vitest-environment node`), where there is no
 // window to patch and fetch must reach the test's own socket.

@@ -1,12 +1,19 @@
+import { noReply, reachFetch } from './reach.ts'
 import type { Casting, CastingSummary, Config, FollowUp, Kind, Memory, Profile } from '../types.ts'
 
 /** The choices a casting is made with: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
 export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>>
 
-/** The server, from the page. Every call throws with the server's message on failure. */
+/** The server, from the page. Every call throws with the server's message on failure, or a plain one when it gave no reply (see lib/reach.ts). */
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(url, init)
+  let r: Response
+  try {
+    r = await reachFetch(url, init)
+  } catch (err) {
+    if (!noReply(err)) throw err
+    throw new Error("Can't reach Orrery. Check that Tailscale is connected, then try again.")
+  }
   const body = await r.json().catch(() => ({})) as T & { error?: string }
   if (!r.ok) throw new Error(body.error || `${r.status} from ${url}`)
   return body

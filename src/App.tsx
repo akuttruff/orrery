@@ -6,9 +6,11 @@ import Settings from './components/Settings'
 import Sidebar from './components/Sidebar'
 import MemoriesSheet from './components/MemoriesSheet'
 import CastSheet from './components/CastSheet'
+import Unreachable from './components/Unreachable.tsx'
 import useMediaQuery, { WIDE } from './hooks/useMediaQuery.ts'
 import { api } from './lib/api.ts'
 import type { CastOptions } from './lib/api.ts'
+import { noReply } from './lib/reach.ts'
 import { DEFAULT_STYLE, isStyleId, type StyleId } from './lib/styles.ts'
 import { KIND_LABEL } from './lib/kinds.ts'
 import { formatWhen } from './lib/when.ts'
@@ -104,10 +106,16 @@ export default function App() {
     })
   }, [])
 
-  useEffect(() => {
-    api.profile().then(setProfile).catch((e: Error) => setError(e.message))
-    api.config().then(setConfig).catch((e: Error) => setError(e.message))
+  /** What the home screen needs; fetched again when the server comes back into reach after a launch it missed. A server out of reach is said once, by the strip, not here. */
+  const load = useCallback(() => {
+    const quiet = (e: Error) => { if (!noReply(e)) setError(e.message) }
+    api.profile().then(setProfile).catch(quiet)
+    api.config().then(setConfig).catch(quiet)
     refreshRecent()
+  }, [refreshRecent])
+
+  useEffect(() => {
+    load()
     openAddressed()
     // A shortcut straight to casting: the popup opens, and the address is cleared so a reload does not reopen it.
     const kind = castKindIn(window.location.hash)
@@ -122,7 +130,7 @@ export default function App() {
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
-  }, [openAddressed, refreshRecent])
+  }, [load, openAddressed, refreshRecent])
 
   // Readings go on being written on the server after a Back; the home screen keeps their state fresh while any are.
   const writing = recent.filter((c) => c.readingState === 'writing')
@@ -224,6 +232,7 @@ export default function App() {
         />
       )}
       <div className="main">
+      <Unreachable app="Orrery" onBack={load} />
       <header className="app-header">
         <span className="app-header-side">
           {wide && !sidebarOpen && (
