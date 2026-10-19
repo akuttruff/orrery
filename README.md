@@ -12,28 +12,34 @@ same chart-drawing code, copied rather than shared.
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/screenshots/home-phone.png" alt="The home screen" /></td>
-    <td width="33%"><img src="docs/screenshots/today-phone.png" alt="Today's transits as a wheel and a table" /></td>
-    <td width="33%"><img src="docs/screenshots/reading-phone.png" alt="A reading with a question under it" /></td>
+    <td width="50%"><img src="docs/screenshots/home-phone.png" alt="The home screen" /></td>
+    <td width="50%"><img src="docs/screenshots/today-phone.png" alt="Today's transits as a wheel and a table" /></td>
   </tr>
   <tr>
     <td><b>Home.</b> Six shortcuts, each a cast, and the recent castings by kind.</td>
     <td><b>Today.</b> The transits over the birth chart as a wheel, then every contact in a table with its weight.</td>
-    <td><b>The reading.</b> Written by the model, with what it cost, then your questions and its answers underneath.</td>
   </tr>
   <tr>
+    <td><img src="docs/screenshots/reading-phone.png" alt="A reading with a question under it" /></td>
     <td><img src="docs/screenshots/week-phone.png" alt="A week's transits in two groups" /></td>
+  </tr>
+  <tr>
+    <td><b>The reading.</b> Written by the model, with what it cost, then your questions and its answers underneath.</td>
+    <td><b>A week.</b> The contacts exact this week, then the slow planets in orb all week, with the frame the reading was written in.</td>
+  </tr>
+  <tr>
     <td><img src="docs/screenshots/natal-phone.png" alt="The birth chart" /></td>
     <td></td>
   </tr>
   <tr>
-    <td><b>A week.</b> The contacts exact this week, then the slow planets in orb all week, with the frame the reading was written in.</td>
     <td><b>The birth chart.</b> The chart itself, and a reading of it.</td>
     <td></td>
   </tr>
 </table>
 
-<p><img src="docs/screenshots/desktop.png" alt="Desktop: the castings in a sidebar beside the one open" /></p>
+<img src="docs/screenshots/desktop.png" alt="Desktop: the castings in a sidebar beside the one open" />
+
+**On a desktop.** The castings in a sidebar beside the one open.
 
 The screenshots use a fictional person and demo readings. To regenerate them:
 
@@ -41,6 +47,53 @@ The screenshots use a fictional person and demo readings. To regenerate them:
 npm run seed:demo && npm run dev   # one terminal
 npm run screenshots                # another; needs Google Chrome
 ```
+
+## Before you start
+
+Orrery is a Node server that you run on the computer with the model and
+open from a browser. It needs three things on that computer: Node, the
+ephemeris, and a model served by LM Studio. Nothing leaves your network.
+
+| You want to | You need |
+|---|---|
+| Cast a chart and see the wheel and tables | Node 24 or newer, and [astro-mcp](https://github.com/akuttruff/astro-mcp) installed (below) |
+| A reading written over it | LM Studio 0.4 or newer serving a chat model (below) |
+| Follow-up questions that look things up | LM Studio allowed to call astro-mcp as an MCP server, with authentication on |
+| Open it on your phone | The phone on the same Wi-Fi, or [Tailscale](https://tailscale.com) on both devices (see *Run*) |
+
+**Node.** Castings and memories are stored with `node:sqlite`, which
+arrived in Node 24. Check with `node --version`.
+
+**The ephemeris.** Orrery starts astro-mcp itself for every cast and talks
+to it directly, so the wheel is on screen in under a second. Install it
+following its README (Python 3.10+ and `uv`), then either:
+
+- add it to `~/.lmstudio/mcp.json` under the name `astrology-v2`, which
+  Orrery reads for the command to run, and which also lets LM Studio call
+  it for follow-up questions; or
+- check it out at `~/Code/astro-mcp` with its `.venv` created, which
+  Orrery falls back to.
+
+**Serving a model.** Orrery talks to LM Studio's `/api/v1/chat` endpoint,
+so it needs [LM Studio](https://lmstudio.ai) 0.4 or newer.
+
+1. Install LM Studio and download a chat model in its Discover tab. Orrery
+   is written and tested against `qwen/qwen3.8-27b`. Any chat model works;
+   a smaller one writes faster and shallower. Give it a context length of
+   at least 16K.
+2. In the **Developer** tab, start the server. It listens on
+   `http://127.0.0.1:1234`, Orrery's default.
+3. If **Require Authentication** is on, create a token under **Manage
+   Tokens** and paste it into Orrery's Settings. It is kept on the server
+   and never sent to the browser. Authentication is required for the
+   follow-up questions' tool calls.
+4. For follow-up questions to call the ephemeris, enable **Allow calling
+   servers from mcp.json** in the Developer settings.
+5. Settings offers LM Studio's reasoning levels. `low` is the default and
+   the sweet spot; `off` is faster and flatter.
+
+The first run copies the LM Studio address, token and model from LM Chat's
+database when it is on this machine, so there is nothing to type twice.
 
 ## Casting
 
@@ -133,34 +186,19 @@ npm run seed:demo    # fill the dev database with demo castings
 npm run screenshots  # regenerate docs/screenshots/ from the dev server
 ```
 
+Then open Settings and enter whose chart it is: name, birth date and time,
+and birthplace.
+
 The persistent instance is `com.amie.orrery` (launchd), served by Tailscale
-at `https://<your-machine>.<your-tailnet>.ts.net:8445`. Its data lives in
-`.data/orrery.sqlite`.
+at `https://<your-machine>.<your-tailnet>.ts.net:8445`:
 
-## Local models
+```bash
+/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg --https=8445 http://127.0.0.1:8410
+```
 
-Everything the model does happens on this machine, through
-[LM Studio](https://lmstudio.ai). No cloud service, no account.
-
-1. **LM Studio 0.4 or newer**, since Orrery talks to its `/api/v1/chat`
-   endpoint. Start the server in the Developer tab. It listens on
-   `http://127.0.0.1:1234`, Orrery's default.
-2. **A model.** Orrery is written and tested against `qwen/qwen3.8-27b`.
-   Any chat model LM Studio can load works; a smaller one writes faster and
-   shallower. Give it a context length of at least 16K.
-3. **Reasoning.** Settings offers LM Studio's reasoning levels. `low` is the
-   default and the sweet spot. `off` is faster and flatter.
-4. **A token**, only if LM Studio's Require Authentication is on. It is kept
-   on the server and never sent to the browser. Authentication is required
-   for the follow-up questions' tool calls.
-5. **astro-mcp**, the ephemeris. Orrery starts it itself for every cast,
-   using the command written for it in `~/.lmstudio/mcp.json` under the
-   name `astrology-v2`, falling back to `~/Code/astro-mcp/start-server.sh`.
-   For follow-up questions to call it too, enable *Allow calling servers
-   from mcp.json* in LM Studio's Developer settings.
-
-The first run copies the LM Studio address, token and model from LM Chat's
-database when it is on this machine, so there is nothing to type twice.
+Its data lives in `.data/orrery.sqlite`. The page is served from the
+browser's cache on every launch, so it opens at once on the phone and says
+so if the server cannot be reached.
 
 ## Settings
 
@@ -175,6 +213,7 @@ server/   api.ts (routes), store.ts (SQLite), astro.ts (astro-mcp over stdio),
           cast.ts (which tools a shortcut runs), prompt.ts (the briefs),
           readings.ts (writing on the server), memory.ts, remember.ts
 src/      App.tsx, components/, lib/ (chartWheel, forecastTable, weight, route)
+public/   sw.js, the app shell cache
 scripts/  deploy.sh, fixtures.ts, seed-demo.ts, screenshots.mjs
 docs/     screenshots/ for this README
 ```
