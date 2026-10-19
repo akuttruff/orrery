@@ -1,12 +1,9 @@
 # Orrery
 
 Your transits, forecasts and birth chart, one tap each. The charts are
-computed on the Mac by [astro-mcp](https://github.com/akuttruff/astro-mcp) and drawn at once. A local
-model in LM Studio then writes the reading over them, streamed in and kept.
-
-Standalone from LM Chat: nothing here touches the chat app or its data,
-though it borrows the chat app's LM Studio settings on first run and the
-same chart-drawing code, copied rather than shared.
+computed on your own computer by [astro-mcp](https://github.com/akuttruff/astro-mcp)
+and drawn at once. A local model then writes the reading over them,
+streamed in and kept. No accounts, no cloud.
 
 ## What it looks like
 
@@ -119,9 +116,9 @@ OpenAI chat API does not, yet. Nothing leaves your network.
 5. Settings offers the server's reasoning levels. `low` is the default and
    the sweet spot; `off` is faster and flatter.
 
-The first run copies the model server address, token and model from LM
-Chat's database when it is on this machine, so there is nothing to type
-twice.
+If [LM Chat](https://github.com/akuttruff/lm-chat) is set up on the same
+computer, the first run copies its model server address, token and model,
+so there is nothing to type twice.
 
 ## Casting
 
@@ -191,7 +188,7 @@ long it took, the model, and LM Studio's token counts.
 ## Memory
 
 Orrery keeps its own memories, in `memory.sqlite` beside the castings
-database, separate from lm-chat's. A casting read with memory on gets what
+database. A casting read with memory on gets what
 is known about the person in its prompt, framed as information to use only
 where the chart touches it, and the page says how many memories the reading
 drew on.
