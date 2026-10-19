@@ -214,17 +214,39 @@ describe('castings', () => {
     expect(kept.reading).toBe('Half')
   })
 
-  it('gives up on a model that never finishes', async () => {
+  it('gives up on a model that goes quiet, keeping what it wrote', async () => {
     ctx.close()
     ctx = await serve((req, onDelta, opts) => hanging(req, onDelta, opts), 120)
     const c = await (await post(`${ctx.base}/api/castings`, { kind: 'moon' })).json() as Casting
     await post(`${ctx.base}/api/castings/${c.id}/reading`)
-    // The stream ends when the run does, given up on at the timeout.
+    // The stream ends when the run does, given up on once the model has said nothing for the stall time.
     await (await fetch(`${ctx.base}/api/castings/${c.id}/events`)).text()
     const kept = await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json() as Casting
     expect(kept.readingState).toBe('failed')
-    expect(kept.readingError).toMatch(/^Given up after 0 minutes/)
+    expect(kept.readingError).toMatch(/^Given up after 0 minutes without a word from the model/)
+    expect(kept.reading).toBe('Half')
     expect(await (await fetch(`${ctx.base}/api/busy`)).json()).toMatchObject({ readings: 0 })
+  })
+
+  it('waits on a slow model as long as it keeps writing or thinking', async () => {
+    ctx.close()
+    // Each gap is under the stall time; the whole run is many times over it.
+    ctx = await serve(async (_r, onDelta, opts) => {
+      const pause = () => new Promise<void>((resolve, reject) => {
+        const t = setTimeout(resolve, 70)
+        opts?.signal?.addEventListener('abort', () => { clearTimeout(t); reject(new Error('aborted')) })
+      })
+      for (const word of ['One', ' two', ' three', ' four']) { await pause(); onDelta(word) }
+      await pause(); opts?.onThinking?.('still here')
+      await pause(); onDelta(' five')
+      return plain('One two three four five')
+    }, 120)
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'moon' })).json() as Casting
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await (await fetch(`${ctx.base}/api/castings/${c.id}/events`)).text()
+    const kept = await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json() as Casting
+    expect(kept.readingState).toBe('done')
+    expect(kept.reading).toBe('One two three four five')
   })
 })
 

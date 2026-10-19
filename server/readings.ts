@@ -62,12 +62,17 @@ export const answerOf = (store: Store, id: string): Target => ({
 const THINKING_FLUSH_MS = 150
 
 /**
- * How long a reading or answer may take before it is given up on: a year's
- * reading with high reasoning runs a few minutes, so this is far above
- * that. Without it a model that hangs leaves the casting writing forever,
- * refusing questions and holding up a deploy, until someone presses Stop.
+ * How long the model may go quiet before a reading or answer is given up
+ * on. Quiet means nothing at all: no text, no thinking, no tool event. A
+ * reading itself may take as long as it needs; on this machine a day's
+ * reading thinks for ten to fifteen minutes before it is done, and a cap on
+ * the whole run cut those off mid-sentence. The longest normal silence is
+ * the wait for the first token while a long prompt is read in (under a
+ * minute, a few with a cold model), so this is well above that. Without it
+ * a model that hangs leaves the casting writing forever, refusing questions
+ * and holding up a deploy, until someone presses Stop.
  */
-export const WRITE_TIMEOUT_MS = 10 * 60_000
+export const STALL_TIMEOUT_MS = 5 * 60_000
 
 interface Run {
   text: string
@@ -83,7 +88,7 @@ interface Run {
 export class Readings {
   private runs = new Map<string, Run>()
 
-  constructor(private readonly store: Store, private readonly write = writeWithModel, private readonly timeoutMs = WRITE_TIMEOUT_MS) {}
+  constructor(private readonly store: Store, private readonly write = writeWithModel, private readonly stallMs = STALL_TIMEOUT_MS) {}
 
   get busy(): number { return this.runs.size }
 
@@ -95,20 +100,30 @@ export class Readings {
     const run: Run = { text: '', trail: [], startedAt: Date.now(), listeners: new Set(), controller: new AbortController(), thought: '', thoughtTimer: null }
     this.runs.set(id, run)
     target.begin(req)
-    const timeout = AbortSignal.timeout(this.timeoutMs)
+    // The stall clock: wound back by every piece the model sends, it fires only when the model has gone quiet for too long.
+    const stall = new AbortController()
+    let stallTimer: NodeJS.Timeout | null = null
+    const heard = () => {
+      if (stallTimer) clearTimeout(stallTimer)
+      stallTimer = setTimeout(() => stall.abort(), this.stallMs)
+    }
+    heard()
     void (async () => {
       try {
         const reply = await this.write(this.store.getConfig(), req, (piece) => {
+          heard()
           run.text += piece
           this.broadcast(run, { type: 'delta', text: piece })
         }, {
-          signal: AbortSignal.any([run.controller.signal, timeout]),
+          signal: AbortSignal.any([run.controller.signal, stall.signal]),
           onTrail: (trail) => {
+            heard()
             run.trail = trail
             target.trail(trail)
             this.broadcast(run, { type: 'trail', trail })
           },
           onThinking: (piece) => {
+            heard()
             run.trail = appendThinking(run.trail, piece)
             run.thought += piece
             if (!run.thoughtTimer) run.thoughtTimer = setTimeout(() => this.flushThinking(run), THINKING_FLUSH_MS)
@@ -122,7 +137,7 @@ export class Readings {
       } catch (err) {
         // Stopped by the person, or given up on, before any other reading of the error: the model client wraps an abort as its own failure.
         const message = run.controller.signal.aborted ? 'Stopped before it was finished.'
-          : timeout.aborted ? `Given up after ${Math.round(this.timeoutMs / 60_000)} minutes without the model finishing.`
+          : stall.signal.aborted ? `Given up after ${Math.round(this.stallMs / 60_000)} minutes without a word from the model.`
           : err instanceof ModelError ? err.message : `Could not write the reading. (${(err as Error).message})`
         // Thinking cut short (stopped, or the model gave out) is over all the same: the page must not show it as still going.
         const trail = run.trail.map((s) => (s.kind === 'reasoning' && !s.done ? { ...s, done: true } : s))
@@ -131,6 +146,7 @@ export class Readings {
         try { target.finish(run.text.trim(), 'failed', message, written) } catch (e) { console.error(`[orrery] could not keep the failed run ${id}: ${(e as Error).message}`) }
         this.broadcast(run, { type: 'error', message, written })
       } finally {
+        if (stallTimer) clearTimeout(stallTimer)
         this.flushThinking(run)
         this.runs.delete(id)
         for (const res of run.listeners) res.end()

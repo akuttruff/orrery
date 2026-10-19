@@ -75,8 +75,9 @@ several hundred words for a day, over a thousand for a year.
 
 The model writes on the server, so a phone that locks mid-reading loses
 nothing. Back during a reading leaves it writing, and the home screen lists
-what is in progress. Stop keeps what was written. A model that never
-finishes is given up on after ten minutes.
+what is in progress. Stop keeps what was written. A reading takes as long
+as it takes (ten to fifteen minutes is normal for a 27B model thinking
+first); only a model that goes quiet for five minutes is given up on.
 
 Before casting, a popup takes the choices a reading is made with:
 
