@@ -26,6 +26,7 @@ const DESKTOP = { width: 1280, height: 840, scale: 2, mobile: false }
  *  aria <label>          click the element with that aria-label
  *  wait <ms>             pause (animations, lazy chunks)
  *  scroll <css> <px>     scroll an element, or the window when the selector matches nothing
+ *  hover <css> <text>    move the mouse over each matching element in turn until the popup says <text>
  */
 const scenarios = [
   { name: 'home-phone', view: PHONE, steps: [] },
@@ -34,6 +35,7 @@ const scenarios = [
   { name: 'week-phone', view: PHONE, steps: [['click', 'Week of Oct 18'], ['wait', 1500]] },
   { name: 'natal-phone', view: PHONE, steps: [['click', "Sam's birth chart"], ['wait', 1500]] },
   { name: 'desktop', view: DESKTOP, steps: [['click', 'Today · Oct 13'], ['wait', 1500]] },
+  { name: 'hover-desktop', view: DESKTOP, steps: [['click', 'Today · Oct 13'], ['wait', 1500], ['hover', '.wheel-aspect', 'deeper than planned']] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -72,6 +74,30 @@ async function withChrome(view, fn) {
 const clickText = (text, sel = 'button, div, span, h2, h3, h4, b, strong, em, p, li, a, summary') =>
   `(() => { const t = ${JSON.stringify(text)}; const all = [...document.querySelectorAll(${JSON.stringify(sel)})].filter((e) => e.textContent.includes(t)); const el = all.find((e) => !all.some((o) => o !== e && e.contains(o))); if (!el) return 'missing ' + t; (el.closest('button, a, summary, li') ?? el).click(); return 'clicked' })()`
 
+/**
+ * A mouse hover, as the pointer events the popup opens on, sent to each
+ * matching element in turn. Sent rather than hit-tested, since a short line
+ * can sit wholly under the planets at its ends.
+ */
+async function hover(evaluate, selector, text) {
+  const n = await evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`)
+  if (!n) return `missing ${selector}`
+  const seen = []
+  for (let i = 0; i < n; i++) {
+    const tip = await evaluate(`(async () => {
+      const el = document.querySelectorAll(${JSON.stringify(selector)})[${i}]
+      el.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))
+      await new Promise((r) => setTimeout(r, 200))
+      const tip = document.querySelector('.wheel-tip')?.textContent ?? ''
+      if (!tip.includes(${JSON.stringify(text)})) el.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' }))
+      return tip
+    })()`)
+    if (tip.includes(text)) return 'hovered'
+    seen.push(tip.slice(0, 60) || '(no popup)')
+  }
+  return `missing popup saying ${text}; saw: ${seen.join(' | ')}`
+}
+
 async function run(scenario) {
   await withChrome(scenario.view, async ({ send, evaluate }) => {
     await send('Page.navigate', { url: URL + (scenario.path ?? '') })
@@ -83,6 +109,7 @@ async function run(scenario) {
       else if (op === 'aria') result = await evaluate(`(() => { const el = document.querySelector('[aria-label=' + ${JSON.stringify(JSON.stringify(a))} + ']'); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
       else if (op === 'wait') { await sleep(a); continue }
       else if (op === 'scroll') result = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(a)}); if (el && el.scrollHeight > el.clientHeight) { el.scrollTop = ${b}; return 'scrolled' } window.scrollTo(0, ${b}); return 'scrolled window' })()`)
+      else if (op === 'hover') result = await hover(evaluate, a, b)
       if (String(result).startsWith('missing')) throw new Error(`${scenario.name}: ${result}`)
       await sleep(700)
     }
