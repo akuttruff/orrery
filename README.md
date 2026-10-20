@@ -1,4 +1,4 @@
-# Orrery
+# <img src="public/icon-180.png" width="40" alt=""> Orrery
 
 Your transits, forecasts and birth chart, one tap each. The charts are
 computed on your own computer by [astro-mcp](https://github.com/akuttruff/astro-mcp)
