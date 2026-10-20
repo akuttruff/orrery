@@ -84,6 +84,42 @@ The **Sun trine your Sun** is still warm on Monday: send the application you hav
 **Saturn on your Mars** separates slowly all week, and **Uranus on your Mercury** keeps the plans fluid. Mercury stations retrograde on Saturday: anything signed after Friday will be revisited.`, 5.4, 1090)
 store.addFollowUp(week.id, 'Which day is best to follow up with the recruiter?')
 
+// A busier day, fourteen contacts on the wheel, listed under the Oct 13 one.
+const busy = store.addCasting({ kind: 'today', period: '2026-11-07', title: 'Today · Nov 7', result: fixture('transit-chart-nov7') })
+write(busy.id, "Write today's reading (2026-11-07).", `### Today
+
+Once a year the **Sun reaches your Pluto**, and today is the day, exact at 14:20 in your second house. What you have been understating about money or your own worth gets said plainly, by you or to you. It is not a crisis; it is the annual audit. By tomorrow before dawn the Sun trines your **Midheaven**, **Jupiter** and **Chiron** in turn, so whatever is faced today turns into standing at work.
+
+**Venus, retrograde, squares your Saturn** for the second of three passes and still trines your Sun: a friendship or a price is being renegotiated slowly, and someone from early September comes back around warmer than before. **Mercury, also retrograde**, doubles back on a clever idea from early October and has second thoughts about the direction; write them down rather than act on them.
+
+### The Moon
+
+A heavy first hour, the Moon in Libra square your Saturn at 06:21, then trine your Sun by 07:03 and the mood lifts. The morning is easy company.
+
+### The backdrop
+
+**Jupiter sextile your Sun**, the first of three passes into next summer: doors open with little push. **Saturn square your Uranus** and sextile your North Node are the season's long argument between the old structure and the new method, and patience is winning it.
+
+### In one line
+
+Say the number out loud.`, 4.6, 840)
+store.setTransitReadings(busy.id, {
+  'Sun|Conjunction|Pluto': 'Once a year the Sun reaches your Pluto. What you have been understating about money or worth gets said plainly today.',
+  'Moon|Square|Saturn': 'A heavy first hour: the to-do list looks longer than it is.',
+  'Venus|Square|Saturn': 'Second pass of three: a friendship or a price being renegotiated, slowly.',
+  'Mercury|Sextile|Uranus': 'Retrograde Mercury doubles back on a clever idea from early October; this time it works.',
+  'Mercury|Square|True North Node': 'Second thoughts about the direction. Write them down rather than acting on them.',
+  'Moon|Trine|Sun': 'By breakfast the mood lifts; the morning is easy company.',
+  'Venus|Trine|Sun': 'Someone from early September comes back around, warmer than before.',
+  'Jupiter|Sextile|Sun': 'The first of three passes into next summer: doors open with little push.',
+  'Saturn|Square|Uranus': 'The long backdrop: the old structure and the new method, still arguing.',
+  'Saturn|Sextile|True North Node': 'Patience is the way forward this season, and it is working.',
+  'Sun|Trine|MC': 'Tomorrow before dawn: a quiet lift in how your work is seen.',
+  'Sun|Trine|Jupiter': 'Generosity at work, yours and theirs.',
+  'Sun|Trine|Chiron': 'What once hurt is now what you are consulted on.',
+  'Sun|Sextile|Neptune': 'A dreamier edge to the week, fading.',
+})
+
 const today = store.addCasting({ kind: 'today', period: '2026-10-13', title: 'Today · Oct 13', result: fixture('transit-chart'), starred: true })
 write(today.id, "Write today's reading (2026-10-13).", `### Today
 

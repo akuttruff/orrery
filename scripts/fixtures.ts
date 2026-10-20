@@ -16,6 +16,8 @@ const OUT = path.resolve('src/test/fixtures')
 const jobs: [file: string, tool: string, args: Record<string, unknown>][] = [
   ['natal-chart.json', 'create_natal_chart', DEMO_BIRTH],
   ['transit-chart.json', 'create_transit_chart', { ...DEMO_BIRTH, transit_date_time: '2026-10-13 05:58' }],
+  // A busy day, for the demo's second Today casting: fourteen contacts on the wheel.
+  ['transit-chart-nov7.json', 'create_transit_chart', { ...DEMO_BIRTH, transit_date_time: '2026-11-07 05:58' }],
   ['forecast-week.json', 'forecast_week', { ...DEMO_BIRTH, start_date: '2026-10-12' }],
   ['forecast-week-oct18.json', 'forecast_week', { ...DEMO_BIRTH, start_date: '2026-10-18' }],
   ['forecast-month.json', 'forecast_month', { ...DEMO_BIRTH, month: '2026-10' }],

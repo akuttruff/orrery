@@ -27,6 +27,7 @@ const DESKTOP = { width: 1280, height: 840, scale: 2, mobile: false }
  *  wait <ms>             pause (animations, lazy chunks)
  *  scroll <css> <px>     scroll an element, or the window when the selector matches nothing
  *  hover <css> <text>    move the mouse over each matching element in turn until the popup says <text>
+ *  press <css> <text>    the same with a finger, so the popup stays up
  */
 const scenarios = [
   { name: 'home-phone', view: PHONE, steps: [] },
@@ -36,6 +37,7 @@ const scenarios = [
   { name: 'natal-phone', view: PHONE, steps: [['click', "Sam's birth chart"], ['wait', 1500]] },
   { name: 'desktop', view: DESKTOP, steps: [['click', 'Today · Oct 13'], ['wait', 1500]] },
   { name: 'hover-desktop', view: DESKTOP, steps: [['click', 'Today · Oct 13'], ['wait', 1500], ['hover', '.wheel-aspect', 'deeper than planned']] },
+  { name: 'hover-phone', view: PHONE, steps: [['click', 'Today · Nov 7'], ['wait', 1500], ['press', '.wheel-aspect', 'gets said plainly']] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -75,24 +77,26 @@ const clickText = (text, sel = 'button, div, span, h2, h3, h4, b, strong, em, p,
   `(() => { const t = ${JSON.stringify(text)}; const all = [...document.querySelectorAll(${JSON.stringify(sel)})].filter((e) => e.textContent.includes(t)); const el = all.find((e) => !all.some((o) => o !== e && e.contains(o))); if (!el) return 'missing ' + t; (el.closest('button, a, summary, li') ?? el).click(); return 'clicked' })()`
 
 /**
- * A mouse hover, as the pointer events the popup opens on, sent to each
- * matching element in turn. Sent rather than hit-tested, since a short line
- * can sit wholly under the planets at its ends.
+ * A mouse hover, or a finger's press, as the pointer events the popup opens
+ * on, sent to each matching element in turn. Sent rather than hit-tested,
+ * since a short line can sit wholly under the planets at its ends.
  */
-async function hover(evaluate, selector, text) {
+async function hover(evaluate, selector, text, finger = false) {
   const n = await evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`)
   if (!n) return `missing ${selector}`
+  const open = finger ? ['pointerdown', 'touch'] : ['pointerover', 'mouse']
+  const close = finger ? ['pointerdown', 'touch'] : ['pointerout', 'mouse']
   const seen = []
   for (let i = 0; i < n; i++) {
     const tip = await evaluate(`(async () => {
       const el = document.querySelectorAll(${JSON.stringify(selector)})[${i}]
-      el.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))
+      el.dispatchEvent(new PointerEvent(${JSON.stringify(open[0])}, { bubbles: true, pointerType: ${JSON.stringify(open[1])} }))
       await new Promise((r) => setTimeout(r, 200))
       const tip = document.querySelector('.wheel-tip')?.textContent ?? ''
-      if (!tip.includes(${JSON.stringify(text)})) el.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' }))
+      if (!tip.includes(${JSON.stringify(text)})) el.dispatchEvent(new PointerEvent(${JSON.stringify(close[0])}, { bubbles: true, pointerType: ${JSON.stringify(close[1])} }))
       return tip
     })()`)
-    if (tip.includes(text)) return 'hovered'
+    if (tip.includes(text)) return finger ? 'pressed' : 'hovered'
     seen.push(tip.slice(0, 60) || '(no popup)')
   }
   return `missing popup saying ${text}; saw: ${seen.join(' | ')}`
@@ -110,6 +114,7 @@ async function run(scenario) {
       else if (op === 'wait') { await sleep(a); continue }
       else if (op === 'scroll') result = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(a)}); if (el && el.scrollHeight > el.clientHeight) { el.scrollTop = ${b}; return 'scrolled' } window.scrollTo(0, ${b}); return 'scrolled window' })()`)
       else if (op === 'hover') result = await hover(evaluate, a, b)
+      else if (op === 'press') result = await hover(evaluate, a, b, true)
       if (String(result).startsWith('missing')) throw new Error(`${scenario.name}: ${result}`)
       await sleep(700)
     }
