@@ -38,6 +38,7 @@ const scenarios = [
   { name: 'desktop', view: DESKTOP, steps: [['click', 'Today · Oct 13'], ['wait', 1500]] },
   { name: 'hover-desktop', view: DESKTOP, steps: [['click', 'Today · Oct 13'], ['wait', 1500], ['hover', '.wheel-aspect', 'deeper than planned']] },
   { name: 'busy-phone', view: PHONE, steps: [['click', 'Today · Nov 7'], ['wait', 1500]] },
+  { name: 'busy-desktop', view: DESKTOP, steps: [['click', 'Today · Nov 7'], ['wait', 1500]] },
   { name: 'hover-phone', view: PHONE, steps: [['click', 'Today · Nov 7'], ['wait', 1500], ['press', '.wheel-aspect', 'gets said plainly']] },
 ]
 
