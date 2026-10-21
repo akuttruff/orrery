@@ -26,11 +26,11 @@ streamed in and kept. No accounts, no cloud.
   </tr>
   <tr>
     <td><img src="docs/screenshots/natal-phone.png" alt="The birth chart" /></td>
-    <td></td>
+    <td><img src="docs/screenshots/wheel-phone.png" alt="A wheel full size, with a close button" /></td>
   </tr>
   <tr>
     <td><b>The birth chart.</b> The chart itself, and a reading of it.</td>
-    <td></td>
+    <td><b>The wheel full size.</b> A tap on any wheel opens it over the reading to pinch and zoom; Done or Back returns.</td>
   </tr>
 </table>
 

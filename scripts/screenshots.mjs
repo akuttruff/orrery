@@ -40,6 +40,7 @@ const scenarios = [
   { name: 'busy-phone', view: PHONE, steps: [['click', 'Today · Nov 7'], ['wait', 1500]] },
   { name: 'busy-desktop', view: DESKTOP, steps: [['click', 'Today · Nov 7'], ['wait', 1500]] },
   { name: 'hover-phone', view: PHONE, steps: [['click', 'Today · Nov 7'], ['wait', 1500], ['press', '.wheel-aspect', 'gets said plainly']] },
+  { name: 'wheel-phone', view: PHONE, steps: [['click', 'Today · Nov 7'], ['wait', 1500], ['sel', '.wheel-open'], ['wait', 800]] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

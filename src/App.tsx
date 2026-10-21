@@ -14,7 +14,7 @@ import { noReply } from './lib/reach.ts'
 import { DEFAULT_STYLE, isStyleId, type StyleId } from './lib/styles.ts'
 import { KIND_LABEL } from './lib/kinds.ts'
 import { formatWhen } from './lib/when.ts'
-import { castKindIn, castingIdIn, hashFor } from './lib/route.ts'
+import { castKindIn, castingIdIn, hashFor, wheelIdIn } from './lib/route.ts'
 import { KINDS } from './types.ts'
 import type { Casting, CastingSummary, Config, Kind, Profile } from './types.ts'
 
@@ -123,8 +123,9 @@ export default function App() {
       setPending(kind as Kind)
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
     }
-    // The browser's Back or Forward: go where the address now says.
+    // The browser's Back or Forward: go where the address now says. A wheel over the open casting is Root's, not a move.
     const onPop = () => {
+      if (wheelIdIn(window.location.hash)) return
       if (castingIdIn(window.location.hash)) openAddressed()
       else { setCurrent(null); refreshRecent() }
     }

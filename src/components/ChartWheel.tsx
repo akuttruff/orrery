@@ -4,7 +4,7 @@ import {
   aspectDetail, aspectFamily, aspectSentence, aspectsOfPoint, describePoint, elementOf, fromLongitude, natalLongitude,
   polar, screenAngle, spread, SIGN_GLYPHS, SIGN_NAMES,
   type AspectFamily, type Element as ZodiacElement, type Ring as RingName, type Wheel, type WheelPoint, aspectGlyph, hasRetrograde, wheelTitle } from '../lib/chartWheel.ts'
-import { wheelHashFor } from '../lib/route.ts'
+import { openWheel, wheelHashFor } from '../lib/route.ts'
 import { readingFor } from '../lib/readings.ts'
 import { placeTip, type Placement, type Point, type Subject } from '../lib/tipPlacement.ts'
 
@@ -411,8 +411,8 @@ export function WheelSvg({ wheel, title, readings }: { wheel: Wheel; title: stri
 }
 
 /**
- * A casting's wheel on its card. A tap opens it on a page of its own in a
- * new tab (WheelPage), where the browser's own pinch and zoom apply.
+ * A casting's wheel on its card. A tap opens it full size over the app
+ * (WheelPage), where the browser's own pinch and zoom apply.
  */
 function ChartWheel({ wheel, castingId, readings }: { wheel: Wheel; castingId?: string; readings?: Record<string, string> }) {
   const title = wheelTitle(wheel)
@@ -420,7 +420,7 @@ function ChartWheel({ wheel, castingId, readings }: { wheel: Wheel; castingId?: 
   return (
     <figure className="wheel">
       {castingId ? (
-        <a className="wheel-open" href={wheelHashFor(castingId)} target="_blank" rel="noopener" aria-label="Open the wheel in a new tab" title="Open in a new tab">
+        <a className="wheel-open" href={wheelHashFor(castingId)} onClick={(e) => { e.preventDefault(); openWheel(castingId) }} aria-label="Open the wheel full size" title="Open full size">
           <WheelSvg wheel={wheel} title={title} readings={readings} />
         </a>
       ) : <WheelSvg wheel={wheel} title={title} readings={readings} />}

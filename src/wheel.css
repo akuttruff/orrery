@@ -88,6 +88,12 @@
 .wheel-tip-reading.pending { color: var(--paper-dim); font-style: italic; }
 
 /* ====== The wheel on a page of its own, in a new tab ====== */
-.wheel-page { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px; }
+/* The wheel full size over the app: its own layer, above the sidebar and sheets, the page's own background. */
+.wheel-page {
+  position: fixed; inset: 0; z-index: 80; overscroll-behavior: contain;
+  background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px;
+}
+.wheel-page-close { position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); }
 .wheel-page .wheel-svg { width: min(100vw - 16px, 100dvh - 56px); max-width: none; height: auto; }
 .wheel-page-title { margin: 0; font-size: 13px; color: var(--paper-dim); text-align: center; }
