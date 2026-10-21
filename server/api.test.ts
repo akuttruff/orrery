@@ -25,7 +25,7 @@ function serve(write: (req: WriteRequest, onDelta: (t: string) => void, opts?: W
   const model: typeof writeWithModel = async (_config, req, onDelta, opts) => { const r = await write(req, onDelta, opts); return typeof r === 'string' ? plain(r) : r }
   const readings = new Readings(store, model, timeoutMs)
   // The memory pool lives in the scratch dir too, never in ~/.lm-memory.
-  const state: ApiState = createApiState({ store, call, readings, memoryDb: path.join(dir, 'memory.sqlite'), write: model })
+  const state: ApiState = createApiState({ store, call, readings, dir, memoryDb: path.join(dir, 'memory.sqlite'), write: model })
   const server = http.createServer((req, res) => createMiddleware(state)(req, res, () => { res.writeHead(404); res.end() }))
   return new Promise<{ base: string; call: typeof call; close: () => void }>((resolve) => {
     server.listen(0, '127.0.0.1', () => {
@@ -469,5 +469,15 @@ describe('memories', () => {
     expect(seen.at(-1)!.system).toContain('- The user has a cat.')
     expect(((await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json()) as FollowUp).memoriesUsed.sort()).toEqual([cat.id, nights.id].sort())
     writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return plain('ok') }
+  })
+})
+
+describe('health', () => {
+  it('reports the process, its data file, what is busy, and whether astro-mcp and the model answer', async () => {
+    const h = await (await fetch(`${ctx.base}/api/health`)).json() as Record<string, unknown>
+    expect(h).toMatchObject({ ok: true, app: 'orrery', busy: { readings: 0, casts: 0, transits: 0 }, deps: { astro: 'ok' } })
+    expect(['ok', 'down']).toContain((h.deps as Record<string, string>).model)
+    expect(h.data).toMatchObject({ file: 'orrery.sqlite' })
+    expect(typeof h.version).toBe('string')
   })
 })

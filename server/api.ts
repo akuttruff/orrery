@@ -13,6 +13,7 @@ import { followUpRequest, readingRequest } from './prompt.ts'
 import { Readings, answerOf } from './readings.ts'
 import { NOTE_MAX, isStyleId } from '../src/lib/styles.ts'
 import { Store } from './store.ts'
+import { HealthCheck } from './health.ts'
 import type { ServerConfig } from './store.ts'
 import { TransitReadings } from './transits.ts'
 
@@ -39,6 +40,8 @@ export interface ApiState {
   transits: TransitReadings
   /** Casts in flight by kind+period, so two taps run the tools once. */
   casting: Map<string, Promise<unknown>>
+  /** What `GET /api/health` reports: the process, its data file, the model server and astro-mcp. */
+  health: HealthCheck
 }
 
 type Handler = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
@@ -86,7 +89,18 @@ export function createApiState(options: ApiOptions = {}): ApiState {
   const readings = options.readings ?? new Readings(store)
   const memories = new Memories(options.memoryDb ?? memoryPath(path.resolve(options.dir ?? '.data')))
   const write = options.write ?? writeWithModel
-  return { store, call, readings, memories, write, transits: options.transits ?? new TransitReadings(store, write), casting: new Map() }
+  const transits = options.transits ?? new TransitReadings(store, write)
+  const casting = new Map<string, Promise<unknown>>()
+  const health = new HealthCheck({
+    app: 'orrery',
+    dataFile: path.resolve(options.dir ?? '.data', 'orrery.sqlite'),
+    busy: () => ({ readings: readings.busy, casts: casting.size, transits: transits.busy }),
+    deps: {
+      model: async () => { const r = await listModels(store.getConfig()); if (r.error) throw new Error(r.error) },
+      astro: () => { const p = store.getProfile(); return call('planetary_hours', { city: p.city, state: p.state || undefined, country: p.country || undefined }) },
+    },
+  })
+  return { store, call, readings, memories, write, transits, casting, health }
 }
 
 export function createMiddleware(state: ApiState): Handler {
@@ -187,12 +201,7 @@ export function createMiddleware(state: ApiState): Handler {
       json(res, status, { error: (err as Error).message || String(err) })
     }
 
-    if (url === '/api/health' && method === 'GET') {
-      void call('planetary_hours', { city: store.getProfile().city, state: store.getProfile().state || undefined, country: store.getProfile().country || undefined })
-        .then(() => json(res, 200, { ok: true, astro: true }))
-        .catch((err: Error) => json(res, 200, { ok: false, astro: false, error: err.message }))
-      return undefined
-    }
+    if (url === '/api/health' && method === 'GET') { void state.health.report().then((h) => json(res, 200, h)); return undefined }
     if (url === '/api/busy' && method === 'GET') return json(res, 200, { readings: readings.busy, casts: state.casting.size, transits: state.transits.busy })
 
     // --- settings -------------------------------------------------------
