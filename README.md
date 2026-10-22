@@ -7,6 +7,10 @@ streamed in and kept. No accounts, no cloud.
 
 ## What it looks like
 
+<p align="center"><img src="docs/screenshots/demo-phone.gif" width="300" alt="Orrery in use" /></p>
+
+<p align="center"><b>In use.</b> A transit wheel with a popup, its reading, then a tarot spread.</p>
+
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/home-phone.png" alt="The home screen" /></td>

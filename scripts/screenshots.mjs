@@ -10,6 +10,7 @@ import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { encodeRecording, glide, startRecording } from './recording.mjs'
 
 const URL = process.env.ORRERY_URL ?? 'http://127.0.0.1:8400'
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -43,6 +44,8 @@ const scenarios = [
   { name: 'wheel-phone', view: PHONE, steps: [['click', 'Today · Nov 7'], ['wait', 1500], ['sel', '.wheel-open'], ['wait', 800]] },
   { name: 'spread-phone', view: PHONE, steps: [['click', 'Past, present, future · Oct 14'], ['wait', 1500]] },
   { name: 'card-phone', view: PHONE, steps: [['click', 'Card · Oct 14'], ['wait', 1500]] },
+  // A walkthrough, recorded: a transit wheel with a popup, its reading, then a tarot spread.
+  { name: 'demo-phone', view: PHONE, record: true, steps: [['wait', 900], ['click', 'Today · Nov 7'], ['wait', 1800], ['press', '.wheel-aspect', 'gets said plainly'], ['wait', 1700], ['glide', '.scroll', 1500, 1700], ['wait', 900], ['aria', 'Back'], ['wait', 1100], ['click', 'Past, present, future · Oct 14'], ['wait', 1800], ['glide', '.scroll', 900, 1300], ['wait', 1400]] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -64,12 +67,14 @@ async function withChrome(view, fn) {
     await new Promise((r) => (ws.onopen = r))
     let id = 0
     const pending = new Map()
-    ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id) } }
+    const listeners = new Map()
+    const on = (method, fn) => listeners.set(method, fn)
+    ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id) } else if (m.method && listeners.has(m.method)) listeners.get(m.method)(m.params) }
     const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })) })
     const evaluate = async (expression) => (await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result?.result?.value
     await send('Page.enable')
     await send('Emulation.setDeviceMetricsOverride', { width: view.width, height: view.height, deviceScaleFactor: view.scale, mobile: view.mobile })
-    await fn({ send, evaluate })
+    await fn({ send, evaluate, on })
     ws.close()
   } finally {
     chrome.kill()
@@ -108,12 +113,14 @@ async function hover(evaluate, selector, text, finger = false) {
 }
 
 async function run(scenario) {
-  await withChrome(scenario.view, async ({ send, evaluate }) => {
+  await withChrome(scenario.view, async ({ send, evaluate, on }) => {
     await send('Page.navigate', { url: URL + (scenario.path ?? '') })
     await sleep(2500)
-    for (const [op, a, b] of scenario.steps) {
+    const recording = scenario.record ? startRecording({ send, on }) : null
+    for (const [op, a, b, c] of scenario.steps) {
       let result = ''
       if (op === 'click') result = await evaluate(clickText(a))
+      else if (op === 'glide') result = await glide(evaluate, a, b, c)
       else if (op === 'sel') result = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(a)}); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
       else if (op === 'aria') result = await evaluate(`(() => { const el = document.querySelector('[aria-label=' + ${JSON.stringify(JSON.stringify(a))} + ']'); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
       else if (op === 'wait') { await sleep(a); continue }
@@ -122,6 +129,12 @@ async function run(scenario) {
       else if (op === 'press') result = await hover(evaluate, a, b, true)
       if (String(result).startsWith('missing')) throw new Error(`${scenario.name}: ${result}`)
       await sleep(700)
+    }
+    if (recording) {
+      const frames = await recording.stop()
+      const made = encodeRecording(frames, { out: OUT, name: scenario.name })
+      console.log(`wrote ${made.gif} and ${made.mp4} (${made.seconds} s, ${made.frames} frames)`)
+      return
     }
     const shot = await send('Page.captureScreenshot', { format: 'png' })
     writeFileSync(`${OUT}/${scenario.name}.png`, Buffer.from(shot.result.data, 'base64'))
