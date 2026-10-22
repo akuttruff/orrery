@@ -9,50 +9,20 @@ streamed in and kept. No accounts, no cloud.
 
 <img src="docs/screenshots/demo-desktop.gif" alt="Orrery in use on a desktop" />
 
-<p>On a desktop, a transit wheel opens with a popup over it, then its reading, then a tarot spread.</p>
-
-<p align="center"><img src="docs/screenshots/demo-phone.gif" width="300" alt="Orrery in use on a phone" /></p>
-
-<p align="center">The same flow on a phone.</p>
+<sub>On a desktop: a transit wheel and its popup, the reading, then a tarot spread.</sub>
 
 <table>
   <tr>
-    <td width="260"><img width="260" src="docs/screenshots/home-phone.png" alt="The home screen" /></td>
-    <td>The home screen offers six shortcuts, each a cast, with the recent castings grouped by kind below them.</td>
+    <td align="center" width="33%"><img src="docs/screenshots/home-phone.png" width="200" alt="The home screen" /><br /><b>Home</b><br /><sub>Six casts, one tap each</sub></td>
+    <td align="center" width="33%"><img src="docs/screenshots/today-phone.png" width="200" alt="Today's transits as a wheel and a table" /><br /><b>Today</b><br /><sub>Transits over your chart, each weighted</sub></td>
+    <td align="center" width="33%"><img src="docs/screenshots/reading-phone.png" width="200" alt="A reading with a question under it" /><br /><b>Reading</b><br /><sub>Written by a local model; ask it questions</sub></td>
   </tr>
   <tr>
-    <td width="260"><img width="260" src="docs/screenshots/today-phone.png" alt="Today's transits as a wheel and a table" /></td>
-    <td>Today's transits sit over the birth chart as a wheel, and every contact follows in a table with its weight.</td>
-  </tr>
-  <tr>
-    <td width="260"><img width="260" src="docs/screenshots/reading-phone.png" alt="A reading with a question under it" /></td>
-    <td>The model writes the reading and shows what it cost, with your questions and its answers underneath.</td>
-  </tr>
-  <tr>
-    <td width="260"><img width="260" src="docs/screenshots/week-phone.png" alt="A week's transits in two groups" /></td>
-    <td>A week lists the contacts exact this week, then the slow planets in orb all week, under the frame the reading was written in.</td>
-  </tr>
-  <tr>
-    <td width="260"><img width="260" src="docs/screenshots/natal-phone.png" alt="The birth chart" /></td>
-    <td>The birth chart is drawn and read the same way.</td>
-  </tr>
-  <tr>
-    <td width="260"><img width="260" src="docs/screenshots/wheel-phone.png" alt="A wheel full size, with a close button" /></td>
-    <td>Tapping any wheel opens it full size over the reading to pinch and zoom; Done or Back returns.</td>
-  </tr>
-  <tr>
-    <td width="260"><img width="260" src="docs/screenshots/spread-phone.png" alt="A three-card tarot spread with its reading" /></td>
-    <td>A spread deals three cards, or the Celtic Cross, for a question in your words and reads them position by position.</td>
-  </tr>
-  <tr>
-    <td width="260"><img width="260" src="docs/screenshots/card-phone.png" alt="The card for the day" /></td>
-    <td>One card is drawn for the day, and its tile opens it again rather than dealing twice. Under any chart reading, <i>Pull a card</i> deals one and reads it against the reading.</td>
+    <td align="center" width="33%"><img src="docs/screenshots/week-phone.png" width="200" alt="A week's transits in two groups" /><br /><b>Week</b><br /><sub>What goes exact, and what hangs over it</sub></td>
+    <td align="center" width="33%"><img src="docs/screenshots/natal-phone.png" width="200" alt="The birth chart" /><br /><b>Birth chart</b><br /><sub>The chart itself, and a reading of it</sub></td>
+    <td align="center" width="33%"><img src="docs/screenshots/spread-phone.png" width="200" alt="A three-card tarot spread with its reading" /><br /><b>Tarot</b><br /><sub>A spread for a question in your words</sub></td>
   </tr>
 </table>
-
-<img src="docs/screenshots/desktop.png" alt="Desktop: the castings in a sidebar beside the one open" />
-
-On a desktop the castings sit in a sidebar beside the one that is open.
 
 The screenshots use a fictional person and demo readings. To regenerate them:
 
