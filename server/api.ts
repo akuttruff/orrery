@@ -2,10 +2,12 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import type { Plugin } from 'vite'
 import { KINDS } from '../src/types.ts'
-import type { Casting, FollowUp, Kind, Profile, Remembered } from '../src/types.ts'
-import { Astro, AstroToolError } from './astro.ts'
+import type { Casting, FollowUp, Kind, Profile, Remembered, TarotCard } from '../src/types.ts'
+import fs from 'node:fs'
+import { Astro, AstroToolError, readTarotSpec, tarotDeckDir } from './astro.ts'
 import type { ToolCaller } from './astro.ts'
-import { castResult, periodFor, titleFor } from './cast.ts'
+import { castResult, isSpreadId, periodFor, titleFor } from './cast.ts'
+import type { SpreadId } from './cast.ts'
 import { listModels, writeWithModel } from './model.ts'
 import { Memories, MemoryInputError, memoryPath } from './memory.ts'
 import { parseFacts, rememberRequest } from './remember.ts'
@@ -21,6 +23,10 @@ export interface ApiOptions {
   dir?: string
   /** The tools, for tests; the real server starts astro-mcp. */
   call?: ToolCaller
+  /** The tarot tools, for tests; the real server starts tarot-mcp. */
+  tarot?: ToolCaller
+  /** Where the card pictures are; the real server finds tarot-mcp's deck/. */
+  deckDir?: string
   readings?: Readings
   store?: Store
   /** Orrery's memory file; defaults to memory.sqlite in the data dir. */
@@ -33,6 +39,9 @@ export interface ApiOptions {
 export interface ApiState {
   store: Store
   call: ToolCaller
+  /** The tarot server's tools: draw_cards, card_meaning, list_spreads. */
+  tarot: ToolCaller
+  deckDir: string
   readings: Readings
   memories: Memories
   write: typeof writeWithModel
@@ -86,6 +95,9 @@ export function createApiState(options: ApiOptions = {}): ApiState {
   if (interrupted) console.log(`[orrery] ${interrupted} reading(s) were cut off by the last restart`)
   const astro = options.call ? null : new Astro()
   const call: ToolCaller = options.call ?? ((name, args) => astro!.call(name, args))
+  const tarotServer = options.tarot ? null : new Astro(readTarotSpec())
+  const tarot: ToolCaller = options.tarot ?? ((name, args) => tarotServer!.call(name, args))
+  const deckDir = options.deckDir ?? tarotDeckDir()
   const readings = options.readings ?? new Readings(store)
   const memories = new Memories(options.memoryDb ?? memoryPath(path.resolve(options.dir ?? '.data')))
   const write = options.write ?? writeWithModel
@@ -98,9 +110,10 @@ export function createApiState(options: ApiOptions = {}): ApiState {
     deps: {
       model: async () => { const r = await listModels(store.getConfig()); if (r.error) throw new Error(r.error) },
       astro: () => { const p = store.getProfile(); return call('planetary_hours', { city: p.city, state: p.state || undefined, country: p.country || undefined }) },
+      tarot: () => tarot('list_spreads', {}),
     },
   })
-  return { store, call, readings, memories, write, transits, casting, health }
+  return { store, call, tarot, deckDir, readings, memories, write, transits, casting, health }
 }
 
 export function createMiddleware(state: ApiState): Handler {
@@ -144,15 +157,15 @@ export function createMiddleware(state: ApiState): Handler {
    * A new casting of a kind, cast now with the memory choice made before the
    * tap; the earlier ones stay. Two taps while the tools run share the one cast.
    */
-  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>): Promise<unknown> => {
+  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>, spread: SpreadId = 'three'): Promise<unknown> => {
     const profile = store.getProfile()
     const period = periodFor(kind, new Date())
-    const key = `${kind}:${period}`
+    const key = `${kind}:${period}:${spread}`
     let pending = state.casting.get(key)
     if (!pending) {
       pending = (async () => {
-        const result = await castResult(kind, period, profile, call)
-        const casting = store.addCasting({ kind, period, title: titleFor(kind, period, profile), result, ...frame })
+        const result = await castResult(kind, period, profile, call, new Date(), { call: state.tarot, spread, question: frame.note })
+        const casting = store.addCasting({ kind, period, title: titleFor(kind, period, profile, spread), result, ...frame })
         state.transits.ensure(casting.id)
         return casting
       })().finally(() => state.casting.delete(key))
@@ -250,17 +263,28 @@ export function createMiddleware(state: ApiState): Handler {
       }
     }
 
+    // --- the card pictures, from tarot-mcp's deck -------------------------
+    const pic = /^\/api\/tarot\/([a-z]+-\d{2})\.jpg$/.exec(url)
+    if (pic && method === 'GET') {
+      const file = path.join(state.deckDir, `${pic[1]}.jpg`)
+      if (!fs.existsSync(file)) return json(res, 404, { error: 'No such card' })
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=604800' })
+      fs.createReadStream(file).pipe(res)
+      return undefined
+    }
+
     // --- castings -------------------------------------------------------
     if (url === '/api/castings' && method === 'GET') return json(res, 200, store.listCastings())
     if (url === '/api/castings' && method === 'POST') {
       void readBody(req).then(async (body) => {
         if (!isKind(body.kind)) throw new Error(`Unknown kind: ${String(body.kind)}`)
         const { memory = null, memoryExcluded = [], style = null, note = '', starred = false } = framePatch(body)
-        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }))
+        if (body.spread !== undefined && !isSpreadId(body.spread)) throw new Error('spread must be single, three, situation or celtic-cross')
+        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }, isSpreadId(body.spread) ? body.spread : undefined))
       }).catch(fail)
       return undefined
     }
-    const m = /^\/api\/castings\/([^/]+)(?:\/(reading|events|followups))?$/.exec(url)
+    const m = /^\/api\/castings\/([^/]+)(?:\/(reading|events|followups|card))?$/.exec(url)
     if (m) {
       const id = decodeURIComponent(m[1]!)
       const sub = m[2]
@@ -299,6 +323,24 @@ export function createMiddleware(state: ApiState): Handler {
       if (sub === 'reading' && method === 'DELETE') return json(res, 200, { stopped: readings.stop(id) })
       if (sub === 'events' && method === 'GET') { readings.subscribe(id, res); return undefined }
       if (sub === 'followups' && method === 'GET') return json(res, 200, store.listFollowUps(id))
+      // A card pulled beside the reading: dealt now, kept on a follow-up, and read against the reading by the model.
+      if (sub === 'card' && method === 'POST') {
+        void (async () => {
+          const current = store.getCasting(id)!
+          if (current.readingState === 'writing' || !current.reading) throw new Error('Wait for the reading to be written, then pull a card')
+          const earlier = store.listFollowUps(id)
+          if (earlier.some((x) => x.state === 'writing')) throw new Error('One answer at a time')
+          const dealt = await state.tarot('draw_cards', { spread: 'single', reversals: true, question: `A card beside this reading: ${current.title}${current.note ? ` (${current.note})` : ''}` })
+          const card = (JSON.parse(dealt) as { cards?: TarotCard[] }).cards?.[0]
+          if (!card?.card?.id) throw new Error('The tarot server dealt nothing')
+          const memory = memoryFor(current)
+          const followUp = store.addFollowUp(id, `Pulled a card: ${card.card.name}${card.reversed ? ', reversed' : ''}`, memory.ids, card)
+          readings.start(followUp.id, followUpRequest(current, earlier, followUp.question, store.getProfile(), new Date(), memory.lines, card), answerOf(store, followUp.id))
+          store.setRemembered(followUp.id, [])
+          json(res, 202, store.getFollowUp(followUp.id))
+        })().catch(fail)
+        return undefined
+      }
       if (sub === 'followups' && method === 'POST') {
         void readBody(req).then((body) => {
           const question = (str(body.question) ?? '').trim()
@@ -336,7 +378,7 @@ export function createMiddleware(state: ApiState): Handler {
         const earlier = store.listFollowUps(casting.id).filter((x) => x.createdAt < followUp.createdAt || (x.createdAt === followUp.createdAt && x.id !== followUp.id && x.id < followUp.id))
         const memory = memoryFor(casting)
         store.setAnswerMemoriesUsed(id, memory.ids)
-        readings.start(id, followUpRequest(casting, earlier, followUp.question, store.getProfile(), new Date(), memory.lines), answerOf(store, id))
+        readings.start(id, followUpRequest(casting, earlier, followUp.question, store.getProfile(), new Date(), memory.lines, followUp.card), answerOf(store, id))
         return json(res, 202, store.getFollowUp(id))
       }
       if (sub === 'answer' && method === 'DELETE') return json(res, 200, { stopped: readings.stop(id) })

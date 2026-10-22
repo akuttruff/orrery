@@ -1,5 +1,10 @@
 import type { Kind, Profile } from '../src/types.ts'
 import type { ToolCaller } from './astro.ts'
+import { SPREAD_LABEL } from '../src/lib/spreads.ts'
+import type { SpreadId } from '../src/lib/spreads.ts'
+
+export { SPREADS, SPREAD_LABEL, isSpreadId } from '../src/lib/spreads.ts'
+export type { SpreadId } from '../src/lib/spreads.ts'
 
 /**
  * What each shortcut button does: which tools to run, for which period,
@@ -47,10 +52,13 @@ export function periodFor(kind: Kind, now: Date): string {
     case 'year': return localDate(now)
     case 'moon': return localDate(now)
     case 'natal': return 'natal'
+    case 'card': return localDate(now)
+    case 'spread': return localDate(now)
   }
 }
 
-export function titleFor(kind: Kind, period: string, profile: Profile): string {
+
+export function titleFor(kind: Kind, period: string, profile: Profile, spread: SpreadId = 'three'): string {
   switch (kind) {
     case 'today': return `Today · ${shortDate(period)}`
     case 'week': return `Week of ${shortDate(period)}`
@@ -61,7 +69,16 @@ export function titleFor(kind: Kind, period: string, profile: Profile): string {
     case 'year': return `Year from ${shortDate(period)}`
     case 'moon': return `Moon · ${shortDate(period)} – ${shortDate(addDays(period, 14))}`
     case 'natal': return `${profile.name}'s birth chart`
+    case 'card': return `Card · ${shortDate(period)}`
+    case 'spread': return `${SPREAD_LABEL[spread]} · ${shortDate(period)}`
   }
+}
+
+/** What a tarot casting is dealt with: the spread, and the question in the person's words. */
+export interface TarotAsk {
+  call: ToolCaller
+  spread?: SpreadId
+  question?: string
 }
 
 const birth = (p: Profile): Record<string, unknown> => ({
@@ -92,9 +109,15 @@ const scanOf = (horizon: Scanned, profile: Profile, call: ToolCaller, start: str
   call('list_upcoming_transits', { ...birth(profile), start_date: start, end_date: end, object_filter: SCAN_OBJECTS[horizon] })
     .catch((e: Error) => { console.warn(`orrery: the ${horizon}'s transit scan failed: ${e.message}`); return null })
 
-/** Run the tools behind a kind and return the result text to keep. */
-export async function castResult(kind: Kind, period: string, profile: Profile, call: ToolCaller, now = new Date()): Promise<string> {
+/** Run the tools behind a kind and return the result text to keep. A tarot kind needs the tarot server beside the astrology one. */
+export async function castResult(kind: Kind, period: string, profile: Profile, call: ToolCaller, now = new Date(), tarot: TarotAsk | null = null): Promise<string> {
   switch (kind) {
+    case 'card':
+    case 'spread': {
+      if (!tarot) throw new Error('The tarot server is not set up')
+      const spread = kind === 'card' ? 'single' : tarot.spread ?? 'three'
+      return tarot.call('draw_cards', { spread, reversals: true, ...(tarot.question ? { question: tarot.question } : {}) })
+    }
     case 'today':
       // No transit_date_time: 'now', so the Moon and the fast planets are where they are this minute.
       return call('create_transit_chart', birth(profile))

@@ -1,0 +1,89 @@
+{
+  "spread": {
+    "id": "three",
+    "name": "Past, present, future",
+    "description": "Three cards in a row: where this came from, where it stands, where it is heading."
+  },
+  "question": "What do I need to see about the job search this week?",
+  "drawnAt": "2026-10-22T05:59:23.818Z",
+  "seed": 4242,
+  "cards": [
+    {
+      "position": {
+        "index": 1,
+        "name": "Past",
+        "meaning": "What led here."
+      },
+      "card": {
+        "id": "wands-06",
+        "name": "Six of Wands",
+        "arcana": "minor",
+        "suit": "wands",
+        "number": 6
+      },
+      "reversed": false,
+      "keywords": [
+        "victory",
+        "recognition",
+        "confidence",
+        "good news"
+      ],
+      "meaning": "A win, and others see it. Accept the recognition; it was earned.",
+      "image": "tarot://card/wands-06"
+    },
+    {
+      "position": {
+        "index": 2,
+        "name": "Present",
+        "meaning": "Where things stand now."
+      },
+      "card": {
+        "id": "swords-13",
+        "name": "Queen of Swords",
+        "arcana": "minor",
+        "suit": "swords",
+        "number": 13
+      },
+      "reversed": true,
+      "keywords": [
+        "coldness",
+        "bitterness",
+        "cruelty",
+        "isolation"
+      ],
+      "meaning": "Clarity gone cold, or a hurt turned into armour. Let something in.",
+      "image": "tarot://card/swords-13"
+    },
+    {
+      "position": {
+        "index": 3,
+        "name": "Future",
+        "meaning": "Where this is heading if nothing changes."
+      },
+      "card": {
+        "id": "major-07",
+        "name": "The Chariot",
+        "arcana": "major",
+        "suit": null,
+        "number": 7
+      },
+      "reversed": true,
+      "keywords": [
+        "lack of direction",
+        "aggression",
+        "being pulled apart",
+        "a stalled effort"
+      ],
+      "meaning": "Drive without steering, or the two horses going their own ways. Decide where you are actually going before pressing harder.",
+      "image": "tarot://card/major-07"
+    }
+  ],
+  "summary": {
+    "majors": 1,
+    "reversed": 2,
+    "suits": {
+      "wands": 1,
+      "swords": 1
+    }
+  }
+}

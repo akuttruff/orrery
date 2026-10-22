@@ -139,7 +139,7 @@ describe('App', () => {
     const side = await screen.findByRole('navigation', { name: 'Castings' })
     expect(await within(side).findByRole('button', { name: /^Thu 16 Oct/ })).toHaveTextContent('read')
     // Every kind has a section, with or without castings; the home screen's own list stays out of the way.
-    expect(within(side).getAllByRole('region')).toHaveLength(6)
+    expect(within(side).getAllByRole('region')).toHaveLength(8)
     expect(screen.queryByRole('region', { name: 'Recent castings' })).not.toBeInTheDocument()
     expect(screen.getByText('Transits now, over the birth chart')).toBeInTheDocument()
 

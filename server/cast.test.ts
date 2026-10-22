@@ -20,6 +20,8 @@ describe('periods', () => {
     expect(periodFor('year', oct15)).toBe('2026-10-15')
     expect(periodFor('moon', oct15)).toBe('2026-10-15')
     expect(periodFor('natal', oct15)).toBe('natal')
+    expect(periodFor('card', oct15)).toBe('2026-10-15')
+    expect(periodFor('spread', oct15)).toBe('2026-10-15')
   })
 
   it('counts days without drifting across DST', () => {
@@ -33,6 +35,9 @@ describe('periods', () => {
     expect(titleFor('today', '2026-10-15', sam)).toBe('Today · Oct 15')
     expect(titleFor('month', '2026-10', sam)).toBe('October 2026')
     expect(titleFor('natal', 'natal', sam)).toBe("Sam's birth chart")
+    expect(titleFor('card', '2026-10-15', sam)).toBe('Card · Oct 15')
+    expect(titleFor('spread', '2026-10-15', sam, 'celtic-cross')).toBe('Celtic Cross · Oct 15')
+    expect(titleFor('spread', '2026-10-15', sam)).toBe('Past, present, future · Oct 15')
     expect(titleFor('moon', '2026-10-15', sam)).toBe('Moon · Oct 15 – Oct 29')
   })
 })
@@ -134,5 +139,17 @@ describe('castResult', () => {
     expect(result).toEqual({ void: { periods: [] }, lunations: { events: [] } })
     expect(call).toHaveBeenCalledWith('moon_void_periods', expect.objectContaining({ start_date: '2026-10-15', end_date: '2026-10-29' }))
     expect(call).toHaveBeenCalledWith('lunations_and_eclipses', expect.objectContaining({ date_time: '1990-06-15 14:30', end_date: '2026-11-29' }))
+  })
+})
+
+describe('a tarot cast', () => {
+  it('deals through the tarot server, one card for the day and the chosen spread otherwise', async () => {
+    const tarot = vi.fn(async (name: string, args: Record<string, unknown>) => JSON.stringify({ tool: name, args }))
+    const call = vi.fn(async () => '{}')
+    const sam = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
+    expect(JSON.parse(await castResult('card', '2026-10-15', sam, call, new Date(), { call: tarot, question: 'hm' }))).toEqual({ tool: 'draw_cards', args: { spread: 'single', reversals: true, question: 'hm' } })
+    expect(JSON.parse(await castResult('spread', '2026-10-15', sam, call, new Date(), { call: tarot, spread: 'situation' }))).toEqual({ tool: 'draw_cards', args: { spread: 'situation', reversals: true } })
+    await expect(castResult('card', '2026-10-15', sam, call)).rejects.toThrow(/tarot server/)
+    expect(call).not.toHaveBeenCalled()
   })
 })

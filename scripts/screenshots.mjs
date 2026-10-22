@@ -41,6 +41,8 @@ const scenarios = [
   { name: 'busy-desktop', view: DESKTOP, steps: [['click', 'Today · Nov 7'], ['wait', 1500]] },
   { name: 'hover-phone', view: PHONE, steps: [['click', 'Today · Nov 7'], ['wait', 1500], ['press', '.wheel-aspect', 'gets said plainly']] },
   { name: 'wheel-phone', view: PHONE, steps: [['click', 'Today · Nov 7'], ['wait', 1500], ['sel', '.wheel-open'], ['wait', 800]] },
+  { name: 'spread-phone', view: PHONE, steps: [['click', 'Past, present, future · Oct 14'], ['wait', 1500]] },
+  { name: 'card-phone', view: PHONE, steps: [['click', 'Card · Oct 14'], ['wait', 1500]] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

@@ -1,0 +1,42 @@
+{
+  "spread": {
+    "id": "single",
+    "name": "One card",
+    "description": "One card for one question, or for the day."
+  },
+  "question": null,
+  "drawnAt": "2026-10-22T05:59:23.818Z",
+  "seed": 77,
+  "cards": [
+    {
+      "position": {
+        "index": 1,
+        "name": "The card",
+        "meaning": "The heart of the matter, or the day's theme."
+      },
+      "card": {
+        "id": "pentacles-05",
+        "name": "Five of Pentacles",
+        "arcana": "minor",
+        "suit": "pentacles",
+        "number": 5
+      },
+      "reversed": true,
+      "keywords": [
+        "recovery",
+        "help found",
+        "the worst over",
+        "spiritual poverty"
+      ],
+      "meaning": "Coming in from the cold. The hard stretch is ending; ask for what is needed.",
+      "image": "tarot://card/pentacles-05"
+    }
+  ],
+  "summary": {
+    "majors": 0,
+    "reversed": 1,
+    "suits": {
+      "pentacles": 1
+    }
+  }
+}

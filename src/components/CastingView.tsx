@@ -6,12 +6,15 @@ import { ActiveTransits, ForecastTransits } from './TransitTable'
 import MoonView from './MoonView'
 import Reading from './Reading'
 import FollowUps from './FollowUps'
+import TarotSpread from './TarotSpread'
 import StyleChips from './StyleChips'
 import { useReading } from '../hooks/useReading.ts'
 import { parseWheel } from '../lib/chartWheel.ts'
 import { parseForecast } from '../lib/forecastTable.ts'
+import { parseReading } from '../lib/tarotSpread.ts'
 import { formatWhen } from '../lib/when.ts'
 import { styleOf, NOTE_MAX, type StyleId } from '../lib/styles.ts'
+import { isTarotKind } from '../types.ts'
 import type { Casting } from '../types.ts'
 
 interface CastingViewProps {
@@ -49,6 +52,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
   const reading = useReading(casting, onSettled)
   const wheel = useMemo(() => (casting.kind === 'today' || casting.kind === 'natal' ? parseWheel(casting.result) : null), [casting])
   const forecast = useMemo(() => (casting.kind === 'week' || casting.kind === 'month' || casting.kind === 'year' ? parseForecast(casting.result) : null), [casting])
+  const cards = useMemo(() => (isTarotKind(casting.kind) ? parseReading(casting.result) : null), [casting])
 
   return (
     <article className="casting">
@@ -60,7 +64,8 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
       {wheel?.kind === 'transit' && <Transits wheel={wheel} />}
       {forecast && <Forecast table={forecast} />}
       {casting.kind === 'moon' && <Moon result={casting.result} />}
-      {!wheel && !forecast && casting.kind !== 'moon' && <p className="reading-status error">The tool's result could not be drawn.</p>}
+      {cards && <TarotSpread reading={cards} />}
+      {!wheel && !forecast && !cards && casting.kind !== 'moon' && <p className="reading-status error">The tool's result could not be drawn.</p>}
       <div className="memory-switch">
         <button type="button" className={`chip${framing ? ' on' : ''}`} aria-expanded={framing} onClick={() => setFraming((f) => !f)}>
           <SlidersHorizontal size={13} aria-hidden="true" /> {style.label}{casting.note ? ' · framed' : ''}
@@ -100,7 +105,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
       </div>
       {memoryOn && picking && <MemoryPicker excluded={casting.memoryExcluded} used={casting.memoriesUsed} onChange={onExclude} onManage={onMemories} />}
       <Reading reading={reading} brief={casting.brief} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
-      <FollowUps key={casting.id} castingId={casting.id} readingState={reading.state} readingText={reading.text} />
+      <FollowUps key={casting.id} castingId={casting.id} kind={casting.kind} readingState={reading.state} readingText={reading.text} />
       {reading.state !== 'none' && (
         <div className="retone" role="group" aria-label="Read it again as">
           <span className="ask-label">Read it again as</span>

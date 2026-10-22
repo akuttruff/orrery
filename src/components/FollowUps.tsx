@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Brain, RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
+import { Brain, RefreshCw, SendHorizontal, Sparkles, Square, X } from 'lucide-react'
 import Body from './Body'
 import Trail from './Trail'
 import WrittenMeta from './WrittenMeta'
@@ -8,7 +8,9 @@ import { api } from '../lib/api.ts'
 import { toolLabel } from '../lib/toolFormat.ts'
 import { pendingTools, thinking } from '../lib/trail.ts'
 import { formatWhen } from '../lib/when.ts'
-import type { FollowUp, ReadingState } from '../types.ts'
+import { imageFor } from '../lib/tarotSpread.ts'
+import { isTarotKind } from '../types.ts'
+import type { FollowUp, Kind, ReadingState } from '../types.ts'
 
 /** The note-taking beside an answer is a model call of its own; look for its result this often, this many times. */
 const REMEMBER_POLL_MS = 5000
@@ -16,6 +18,8 @@ const REMEMBER_POLLS = 24
 
 interface FollowUpsProps {
   castingId: string
+  /** What was cast: a chart can have a card pulled beside it. */
+  kind?: Kind
   /** The reading's state: questions wait until it is written. */
   readingState: ReadingState
   readingText: string
@@ -26,7 +30,7 @@ interface FollowUpsProps {
  * model wrote, then a box to ask the next. The answers are written on the
  * server like the reading, so one streams in and is kept.
  */
-export default function FollowUps({ castingId, readingState, readingText }: FollowUpsProps) {
+export default function FollowUps({ castingId, kind = 'today', readingState, readingText }: FollowUpsProps) {
   const [items, setItems] = useState<FollowUp[]>([])
   const [question, setQuestion] = useState('')
   const [sending, setSending] = useState(false)
@@ -81,6 +85,21 @@ export default function FollowUps({ castingId, readingState, readingText }: Foll
     }
   }
 
+  /** A card dealt beside the reading, read against it by the model. */
+  const pull = async (): Promise<void> => {
+    if (!ready || answering || sending) return
+    setSending(true)
+    setError(null)
+    try {
+      const f = await api.pullCard(castingId)
+      setItems((cur) => [...cur, f])
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSending(false)
+    }
+  }
+
   const again = async (f: FollowUp): Promise<void> => {
     try { replace(await api.askAgain(f.id)) } catch (e) { setError((e as Error).message) }
   }
@@ -123,6 +142,12 @@ export default function FollowUps({ castingId, readingState, readingText }: Foll
             <SendHorizontal size={18} aria-hidden="true" />
           </button>
         </div>
+        {!isTarotKind(kind) && (
+          <div className="pull-row">
+            <button type="button" className="chip" disabled={!ready || answering || sending} onClick={() => void pull()}><Sparkles size={13} aria-hidden="true" /> Pull a card</button>
+            <span className="memory-note">One tarot card, dealt now and read against this reading.</span>
+          </div>
+        )}
         {error && <p className="reading-status error" role="alert">{error}</p>}
       </form>
     </section>
@@ -145,7 +170,15 @@ function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget
   return (
     <li className="followup">
       <div className="followup-q">
-        <p>{followUp.question}</p>
+        {followUp.card ? (
+          <div className="followup-card">
+            <img src={imageFor(followUp.card.card.id)} alt={`${followUp.card.card.name}${followUp.card.reversed ? ', reversed' : ''}`} style={{ transform: followUp.card.reversed ? 'rotate(180deg)' : undefined }} loading="lazy" />
+            <div className="followup-card-text">
+              <p>Pulled a card: <b>{followUp.card.card.name}{followUp.card.reversed ? ', reversed' : ''}</b></p>
+              <span className="followup-card-keys">{followUp.card.keywords.join(' · ')}</span>
+            </div>
+          </div>
+        ) : <p>{followUp.question}</p>}
         <span className="followup-when">{formatWhen(followUp.createdAt)}</span>
         {state !== 'writing' && (
           <button type="button" className="icon-btn small" aria-label="Remove question" onClick={onRemove}><X size={15} aria-hidden="true" /></button>

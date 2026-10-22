@@ -15,7 +15,14 @@ function serve(initial: FollowUp[]) {
     if (url === '/api/castings/c1/followups' && init?.method === 'POST') {
       const { question } = JSON.parse(init.body as string) as { question: string }
       asked.push(question)
-      const f: FollowUp = { id: `f${items.length + 1}`, castingId: 'c1', question, answer: 'The Moon says yes.', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], written: NOT_WRITTEN }
+      const f: FollowUp = { id: `f${items.length + 1}`, castingId: 'c1', question, answer: 'The Moon says yes.', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], written: NOT_WRITTEN, card: null }
+      items.push(f)
+      return reply(202, f)
+    }
+    if (url === '/api/castings/c1/card' && init?.method === 'POST') {
+      asked.push('(card)')
+      const f: FollowUp = { id: `f${items.length + 1}`, castingId: 'c1', question: 'Pulled a card: The Star, reversed', answer: 'The Star, reversed, says the hope is there but not drawn on.', state: 'done', error: null, createdAt: 2, remembered: [], memoriesUsed: [], written: NOT_WRITTEN,
+        card: { position: { index: 1, name: 'The card', meaning: '' }, card: { id: 'major-17', name: 'The Star', arcana: 'major', suit: null, number: 17 }, reversed: true, keywords: ['despair', 'lost faith'], meaning: 'm' } }
       items.push(f)
       return reply(202, f)
     }
@@ -26,7 +33,7 @@ function serve(initial: FollowUp[]) {
 
 describe('FollowUps', () => {
   it('shows the questions asked so far with their answers', async () => {
-    serve([{ id: 'f1', castingId: 'c1', question: 'Which day?', answer: 'Thursday, when the **Moon** is in Leo.', state: 'done', error: null, createdAt: 1, remembered: [], memoriesUsed: ['m1', 'm2'], written: { trail: [{ kind: 'reasoning', text: 'Saturn is the key here.', done: true, seconds: 4.2 }, { kind: 'tool', name: 'verify_claim', ok: true, plugin: 'mcp/astrology-v2', args: { claim: 'Saturn trine Saturn' }, output: 'In effect; exact 2026-10-22.' }, { kind: 'tool', name: 'forecast_week', ok: false, output: 'timed out' }], stats: { model: 'qwen', inputTokens: 3100, outputTokens: 820, reasoningTokens: 210, tokensPerSecond: 21.3, firstTokenSeconds: 2.4 }, startedAt: 1_000, finishedAt: 13_000 } }])
+    serve([{ id: 'f1', castingId: 'c1', question: 'Which day?', answer: 'Thursday, when the **Moon** is in Leo.', state: 'done', error: null, createdAt: 1, remembered: [], memoriesUsed: ['m1', 'm2'], card: null, written: { trail: [{ kind: 'reasoning', text: 'Saturn is the key here.', done: true, seconds: 4.2 }, { kind: 'tool', name: 'verify_claim', ok: true, plugin: 'mcp/astrology-v2', args: { claim: 'Saturn trine Saturn' }, output: 'In effect; exact 2026-10-22.' }, { kind: 'tool', name: 'forecast_week', ok: false, output: 'timed out' }], stats: { model: 'qwen', inputTokens: 3100, outputTokens: 820, reasoningTokens: 210, tokensPerSecond: 21.3, firstTokenSeconds: 2.4 }, startedAt: 1_000, finishedAt: 13_000 } }])
     render(<FollowUps castingId="c1" readingState="done" readingText="A reading." />)
     expect(await screen.findByText('Which day?')).toBeInTheDocument()
     expect(screen.getByText('Moon')).toBeInTheDocument()
@@ -64,5 +71,26 @@ describe('FollowUps', () => {
     expect(await screen.findByText('Is Thursday any good?')).toBeInTheDocument()
     expect(screen.getByText('The Moon says yes.')).toBeInTheDocument()
     expect(box).toHaveValue('')
+  })
+})
+
+describe('a card beside the reading', () => {
+  it('pulls one from the button under a chart reading, and shows it at the head of its answer', async () => {
+    const { asked } = serve([])
+    render(<FollowUps castingId="c1" kind="today" readingState="done" readingText="A reading." />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Pull a card' }))
+    expect(asked).toEqual(['(card)'])
+    const img = await screen.findByRole('img', { name: 'The Star, reversed' })
+    expect(img).toHaveAttribute('src', '/api/tarot/major-17.jpg')
+    expect(img).toHaveStyle({ transform: 'rotate(180deg)' })
+    expect(screen.getByText('despair · lost faith')).toBeInTheDocument()
+    expect(await screen.findByText(/hope is there/)).toBeInTheDocument()
+  })
+
+  it('offers no card under a tarot reading, which is cards already', async () => {
+    serve([])
+    render(<FollowUps castingId="c1" kind="spread" readingState="done" readingText="A reading." />)
+    await screen.findByRole('button', { name: 'Ask' })
+    expect(screen.queryByRole('button', { name: 'Pull a card' })).not.toBeInTheDocument()
   })
 })

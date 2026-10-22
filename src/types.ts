@@ -1,7 +1,20 @@
-/** What a shortcut button casts. */
-export type Kind = 'today' | 'week' | 'month' | 'year' | 'natal' | 'moon'
+/** What a shortcut button casts: a chart or forecast from the ephemeris, or a tarot draw. */
+export type Kind = 'today' | 'week' | 'month' | 'year' | 'natal' | 'moon' | 'card' | 'spread'
 
-export const KINDS: Kind[] = ['today', 'week', 'month', 'year', 'natal', 'moon']
+export const KINDS: Kind[] = ['today', 'week', 'month', 'year', 'natal', 'moon', 'card', 'spread']
+
+/** The kinds that are a tarot draw rather than a chart. */
+export const TAROT_KINDS: Kind[] = ['card', 'spread']
+export const isTarotKind = (kind: Kind): boolean => TAROT_KINDS.includes(kind)
+
+/** One card as the tarot server dealt it: where it fell, which card, which way up, and what it means that way. */
+export interface TarotCard {
+  position: { index: number; name: string; meaning: string }
+  card: { id: string; name: string; arcana: 'major' | 'minor'; suit: string | null; number: number }
+  reversed: boolean
+  keywords: string[]
+  meaning: string
+}
 
 /** Whose chart: one person, kept in Settings. */
 export interface Profile {
@@ -157,6 +170,8 @@ export interface FollowUp {
   memoriesUsed: string[]
   /** How the answer was written: thinking and tool calls in order, cost and timing. */
   written: Written
+  /** A card pulled beside the reading, when this follow-up is one; the answer reads it against the reading. */
+  card: TarotCard | null
 }
 
 /** What the reading stream sends: the text as pieces, the thinking as pieces, the trail whenever its shape changes. */

@@ -22,15 +22,25 @@ function serve(write: (req: WriteRequest, onDelta: (t: string) => void, opts?: W
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orrery-'))
   const store = new Store(dir, '/nonexistent/lm-chat.sqlite')
   const call = vi.fn(async (name: string, args: Record<string, unknown>) => JSON.stringify({ tool: name, args }))
+  // The tarot server: deals the spread asked for, the Fool first and the Tower reversed second.
+  const tarot = vi.fn(async (name: string, args: Record<string, unknown>) => {
+    if (name === 'list_spreads') return '[]'
+    const n = args.spread === 'single' ? 1 : args.spread === 'celtic-cross' ? 10 : 3
+    const names = ['The Fool', 'The Tower', 'The Star', 'Two of Cups', 'Ace of Wands', 'Justice', 'The Moon', 'Six of Swords', 'The Sun', 'The World']
+    const ids = ['major-00', 'major-16', 'major-17', 'cups-02', 'wands-01', 'major-11', 'major-18', 'swords-06', 'major-19', 'major-21']
+    return JSON.stringify({ spread: { id: args.spread, name: args.spread === 'single' ? 'One card' : 'Past, present, future', description: '' }, question: args.question ?? null, drawnAt: 'x', seed: 1, cards: Array.from({ length: n }, (_, i) => ({ position: { index: i + 1, name: `P${i + 1}`, meaning: '' }, card: { id: ids[i], name: names[i], arcana: 'major', suit: null, number: i }, reversed: i === 1, keywords: ['k'], meaning: 'm' })), summary: {} })
+  })
+  fs.mkdirSync(path.join(dir, 'deck'))
+  fs.writeFileSync(path.join(dir, 'deck', 'major-00.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]))
   const model: typeof writeWithModel = async (_config, req, onDelta, opts) => { const r = await write(req, onDelta, opts); return typeof r === 'string' ? plain(r) : r }
   const readings = new Readings(store, model, timeoutMs)
   // The memory pool lives in the scratch dir too, never in ~/.lm-memory.
-  const state: ApiState = createApiState({ store, call, readings, dir, memoryDb: path.join(dir, 'memory.sqlite'), write: model })
+  const state: ApiState = createApiState({ store, call, tarot, readings, dir, memoryDb: path.join(dir, 'memory.sqlite'), write: model, deckDir: path.join(dir, 'deck') })
   const server = http.createServer((req, res) => createMiddleware(state)(req, res, () => { res.writeHead(404); res.end() }))
-  return new Promise<{ base: string; call: typeof call; close: () => void }>((resolve) => {
+  return new Promise<{ base: string; call: typeof call; tarot: typeof tarot; close: () => void }>((resolve) => {
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address() as { port: number }
-      resolve({ base: `http://127.0.0.1:${port}`, call, close: () => { server.close(); store.close(); fs.rmSync(dir, { recursive: true, force: true }) } })
+      resolve({ base: `http://127.0.0.1:${port}`, call, tarot, close: () => { server.close(); store.close(); fs.rmSync(dir, { recursive: true, force: true }) } })
     })
   })
 }
@@ -312,7 +322,7 @@ describe('questions under a reading', () => {
     // The answer may call astro-mcp through LM Studio; the reading itself does not.
     expect(seen[0]!.tools).toBeUndefined()
     const askReq = seen[1]!
-    expect(askReq.tools).toEqual(['mcp/astrology-v2'])
+    expect(askReq.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
     expect(askReq.system).toContain('THE READING YOU WROTE:\nBecause Saturn.')
     expect(askReq.system).toContain('THE CASTING: October 2026.\nDATA:\n{"tool":"forecast_month"')
     expect(askReq.input).toBe('Sam asks: Which day is best for the move?')
@@ -479,5 +489,51 @@ describe('health', () => {
     expect(['ok', 'down']).toContain((h.deps as Record<string, string>).model)
     expect(h.data).toMatchObject({ file: 'orrery.sqlite' })
     expect(typeof h.version).toBe('string')
+  })
+})
+
+describe('tarot', () => {
+  it('deals a daily card and a spread, titles them by the spread, and serves the card pictures', async () => {
+    const card = await (await post(`${ctx.base}/api/castings`, { kind: 'card', note: 'what today asks' })).json() as Casting
+    expect(card).toMatchObject({ kind: 'card', title: expect.stringMatching(/^Card · /) })
+    expect(ctx.tarot).toHaveBeenCalledWith('draw_cards', { spread: 'single', reversals: true, question: 'what today asks' })
+    expect(JSON.parse(card.result).cards).toHaveLength(1)
+    const spread = await (await post(`${ctx.base}/api/castings`, { kind: 'spread', spread: 'celtic-cross' })).json() as Casting
+    expect(spread.title).toMatch(/^Celtic Cross · /)
+    expect(JSON.parse(spread.result).cards).toHaveLength(10)
+    expect(ctx.tarot).toHaveBeenLastCalledWith('draw_cards', { spread: 'celtic-cross', reversals: true })
+    const bad = await post(`${ctx.base}/api/castings`, { kind: 'spread', spread: 'hexagram' })
+    expect(bad.status).toBe(400)
+    const pic = await fetch(`${ctx.base}/api/tarot/major-00.jpg`)
+    expect(pic.status).toBe(200)
+    expect(pic.headers.get('content-type')).toBe('image/jpeg')
+    expect((await fetch(`${ctx.base}/api/tarot/major-99.jpg`)).status).toBe(404)
+    expect((await fetch(`${ctx.base}/api/tarot/..%2F..%2Fetc.jpg`)).status).toBe(404)
+  })
+
+  it('pulls a card beside a chart reading, keeps it on a follow-up, and has the model read it against the reading', async () => {
+    const seen: WriteRequest[] = []
+    writer = async (req, onDelta) => { seen.push(req); onDelta('The Tower, reversed, says the fall is behind you.'); return plain('The Tower, reversed, says the fall is behind you.') }
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'today' })).json() as Casting
+    expect((await post(`${ctx.base}/api/castings/${c.id}/card`)).status).toBe(400)
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await new Promise((r) => setTimeout(r, 120))
+    const r = await post(`${ctx.base}/api/castings/${c.id}/card`)
+    expect(r.status).toBe(202)
+    const f = await r.json() as FollowUp
+    expect(f.question).toBe('Pulled a card: The Fool')
+    expect(f.card).toMatchObject({ card: { id: 'major-00', name: 'The Fool' }, reversed: false })
+    await new Promise((r) => setTimeout(r, 120))
+    const kept = await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json() as FollowUp
+    expect(kept.state).toBe('done')
+    expect(kept.card?.card.id).toBe('major-00')
+    const req = seen.at(-1)!
+    expect(req.input).toMatch(/pulled a tarot card beside this reading: The Fool, upright/)
+    expect(req.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
+    // The thread replays the pull as such.
+    const q = await (await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'and the week?' })).json() as FollowUp
+    await new Promise((r) => setTimeout(r, 120))
+    expect(seen.at(-1)!.input).toMatch(/pulled a card: The Fool, upright/)
+    expect(q.card).toBeNull()
   })
 })

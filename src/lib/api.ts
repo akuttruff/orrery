@@ -1,8 +1,9 @@
 import { noReply, reachFetch } from './reach.ts'
 import type { Casting, CastingSummary, Config, FollowUp, Kind, Memory, Profile } from '../types.ts'
+import type { SpreadId } from './spreads.ts'
 
 /** The choices a casting is made with: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
-export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>>
+export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>> & { spread?: SpreadId }
 
 /** The server, from the page. Every call throws with the server's message on failure, or a plain one when it gave no reply (see lib/reach.ts). */
 
@@ -43,6 +44,8 @@ export const api = {
   // Questions asked under a reading, answered on the server the same way.
   followUps: (castingId: string) => request<FollowUp[]>(`/api/castings/${encodeURIComponent(castingId)}/followups`),
   ask: (castingId: string, question: string) => request<FollowUp>(`/api/castings/${encodeURIComponent(castingId)}/followups`, jsonInit('POST', { question })),
+  /** A card pulled beside the reading, dealt on the server and read against the reading. */
+  pullCard: (castingId: string) => request<FollowUp>(`/api/castings/${encodeURIComponent(castingId)}/card`, { method: 'POST' }),
   followUp: (id: string) => request<FollowUp>(`/api/followups/${encodeURIComponent(id)}`),
   askAgain: (id: string) => request<FollowUp>(`/api/followups/${encodeURIComponent(id)}/answer`, { method: 'POST' }),
   stopAnswer: (id: string) => request<{ stopped: boolean }>(`/api/followups/${encodeURIComponent(id)}/answer`, { method: 'DELETE' }),

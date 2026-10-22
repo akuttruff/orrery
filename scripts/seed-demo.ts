@@ -166,6 +166,31 @@ const moon = store.addCasting({ kind: 'moon', period: '2026-10-15', title: 'Moon
   lunations: { events: [{ event: 'full moon', exact: '2026-10-26 00:12', position: "2°46' Taurus", natal_house: 8, contacts: ['opposition natal Pluto (2.6°)'] }] },
 }) })
 void moon
+// A three-card spread on the job search, and a card for the day, dealt by tarot-mcp (the fixtures are seeded draws).
+const spread = store.addCasting({ kind: 'spread', period: '2026-10-14', title: 'Past, present, future · Oct 14', result: fixture('tarot-three'), note: 'the job search' })
+write(spread.id, 'Write the reading for this spread.', `### Past · Six of Wands
+
+You arrive at this search **having already won something**: the Six of Wands is recognition, the ride through the crowd. The last role ended with your name known for the right reasons, and that is the ground you stand on now, even on the days it feels like starting from nothing.
+
+### Present · Queen of Swords, reversed
+
+The present is the Queen of Swords turned on her head: **clarity gone cold**. Upright she sees through everything and says so; reversed, the sharpness has turned inward, and the honesty that serves you in an interview is being spent on yourself at two in the morning. The card does not say you are wrong about the market. It says the judge has been sitting too long.
+
+### Future · The Chariot, reversed
+
+The Chariot reversed is drive without steering: two horses pulling two ways. Read with the first two cards, it is a warning about the next few weeks, not a verdict: applications sent in every direction will stall. **Pick the direction first, then press.** The momentum is yours once it has somewhere to go.
+
+**One line to carry:** you have already been seen; decide where to point the horses before you push.`, 5.8, 640)
+
+const dayCard = store.addCasting({ kind: 'card', period: '2026-10-14', title: 'Card · Oct 14', result: fixture('tarot-card') })
+write(dayCard.id, 'Write the card for the day.', `### Five of Pentacles, reversed
+
+The day's card is the Five of Pentacles turned upright again: **coming in from the cold**. Upright, two figures pass a lit window in the snow without going in; reversed, the door opens. Whatever has felt short this week, money, company, sleep, the card says the hard stretch is ending and that the help on offer is real.
+
+What it asks of you today is small: say yes to one thing you would normally wave off. The window has been lit the whole time.
+
+**One line to carry:** the help is nearer than the cold makes it look.`, 3.1, 260)
+
 const year = store.addCasting({ kind: 'year', period: '2026-10-14', title: 'Year from Oct 14', result: fixture('forecast-year') })
 void year
 

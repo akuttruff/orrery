@@ -24,13 +24,27 @@ export const ASTRO_SERVER_NAME = 'astrology-v2'
 /** Where the repo lives when the config has no entry for it. */
 const FALLBACK: ServerSpec = { command: path.join(os.homedir(), 'Code', 'astro-mcp', 'start-server.sh') }
 
-export function readAstroSpec(file = MCP_CONFIG_PATH, name = ASTRO_SERVER_NAME): ServerSpec {
+/** The entry that is tarot-mcp, which deals the cards. */
+export const TAROT_SERVER_NAME = 'tarot'
+const TAROT_FALLBACK: ServerSpec = { command: 'node', args: [path.join(os.homedir(), 'Code', 'tarot-mcp', 'dist', 'index.js')] }
+
+/** One server's entry in LM Studio's config, or the fallback when it has none. */
+export function readServerSpec(name: string, fallback: ServerSpec, file = MCP_CONFIG_PATH): ServerSpec {
   try {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as { mcpServers?: Record<string, ServerSpec> }
     const spec = parsed.mcpServers?.[name]
     if (spec?.command) return spec
-  } catch { /* no config, or not ours to parse: the fallback below */ }
-  return FALLBACK
+  } catch { /* no config, or not ours to parse: the fallback */ }
+  return fallback
+}
+
+export const readAstroSpec = (file = MCP_CONFIG_PATH, name = ASTRO_SERVER_NAME): ServerSpec => readServerSpec(name, FALLBACK, file)
+export const readTarotSpec = (file = MCP_CONFIG_PATH): ServerSpec => readServerSpec(TAROT_SERVER_NAME, TAROT_FALLBACK, file)
+
+/** Where tarot-mcp keeps the card pictures: deck/ beside the dist/ its command names. */
+export function tarotDeckDir(spec: ServerSpec = readTarotSpec()): string {
+  const entry = spec.args?.find((a) => a.endsWith('.js'))
+  return entry ? path.resolve(path.dirname(entry), '..', 'deck') : path.resolve(path.dirname(TAROT_FALLBACK.args![0]!), '..', 'deck')
 }
 
 export class AstroToolError extends Error {}

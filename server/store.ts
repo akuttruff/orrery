@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Brief, Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ReplyStats, Step, ToolUse, Written } from '../src/types.ts'
+import type { Brief, Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ReplyStats, Step, TarotCard, ToolUse, Written } from '../src/types.ts'
 import { NOT_WRITTEN } from '../src/types.ts'
 
 export interface ServerConfig extends Omit<Config, 'hasToken'> {
@@ -129,7 +129,16 @@ const fromRow = (r: CastingRow): Casting => ({
 
 interface FollowUpRow extends WrittenRow {
   id: string; casting_id: string; question: string; answer: string; state: string; error: string | null; created_at: number
-  remembered: string | null; memories_used: string | null; tools: string | null
+  remembered: string | null; memories_used: string | null; tools: string | null; card: string | null
+}
+
+/** The card a follow-up was pulled with, or null for a question; a row written by an older build has none. */
+const parseCard = (text: string | null): TarotCard | null => {
+  if (!text) return null
+  try {
+    const v = JSON.parse(text) as TarotCard
+    return v && typeof v === 'object' && v.card && typeof v.card.id === 'string' ? v : null
+  } catch { return null }
 }
 
 const parseTools = (text: string | null): ToolUse[] => {
@@ -151,7 +160,7 @@ const parseRemembered = (text: string | null): Remembered[] | null => {
 const followUpFromRow = (r: FollowUpRow): FollowUp => ({
   id: r.id, castingId: r.casting_id, question: r.question, answer: r.answer,
   state: r.state as ReadingState, error: r.error, createdAt: r.created_at, remembered: parseRemembered(r.remembered),
-  memoriesUsed: parseIds(r.memories_used), written: parseWritten(r),
+  memoriesUsed: parseIds(r.memories_used), written: parseWritten(r), card: parseCard(r.card ?? null),
 })
 
 export const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -178,6 +187,7 @@ export class Store {
     if (!has('castings', 'memories_used')) this.db.exec('ALTER TABLE castings ADD COLUMN memories_used TEXT')
     if (!has('follow_ups', 'remembered')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN remembered TEXT')
     if (!has('castings', 'memory_excluded')) this.db.exec('ALTER TABLE castings ADD COLUMN memory_excluded TEXT')
+    if (!has('follow_ups', 'card')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN card TEXT')
     if (!has('follow_ups', 'memories_used')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN memories_used TEXT')
     if (!has('follow_ups', 'tools')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN tools TEXT')
     for (const table of ['castings', 'follow_ups']) {
@@ -355,10 +365,10 @@ export class Store {
     return r ? followUpFromRow(r) : undefined
   }
 
-  addFollowUp(castingId: string, question: string, memoriesUsed: string[] = []): FollowUp {
-    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now(), remembered: null, memoriesUsed, written: { ...NOT_WRITTEN } }
-    this.db.prepare('INSERT INTO follow_ups (id, casting_id, question, answer, state, error, created_at, memories_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(f.id, f.castingId, f.question, '', 'none', null, f.createdAt, JSON.stringify(memoriesUsed))
+  addFollowUp(castingId: string, question: string, memoriesUsed: string[] = [], card: TarotCard | null = null): FollowUp {
+    const f: FollowUp = { id: newId(), castingId, question, answer: '', state: 'none', error: null, createdAt: Date.now(), remembered: null, memoriesUsed, written: { ...NOT_WRITTEN }, card }
+    this.db.prepare('INSERT INTO follow_ups (id, casting_id, question, answer, state, error, created_at, memories_used, card) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(f.id, f.castingId, f.question, '', 'none', null, f.createdAt, JSON.stringify(memoriesUsed), card ? JSON.stringify(card) : null)
     this.touch(castingId, f.createdAt)
     return f
   }

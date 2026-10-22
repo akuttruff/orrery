@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, CalendarDays, CalendarRange, ChevronRight, Moon, Orbit, PanelLeftOpen, Settings as SettingsIcon, Sun, Sunrise } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CalendarRange, ChevronRight, Layers, Moon, Orbit, PanelLeftOpen, Settings as SettingsIcon, Sparkles, Sun, Sunrise } from 'lucide-react'
 import CastingView from './components/CastingView'
 import Recent from './components/Recent'
 import Settings from './components/Settings'
@@ -12,6 +12,7 @@ import { api } from './lib/api.ts'
 import type { CastOptions } from './lib/api.ts'
 import { noReply } from './lib/reach.ts'
 import { DEFAULT_STYLE, isStyleId, type StyleId } from './lib/styles.ts'
+import { DEFAULT_SPREAD, isSpreadId, type SpreadId } from './lib/spreads.ts'
 import { KIND_LABEL } from './lib/kinds.ts'
 import { formatWhen } from './lib/when.ts'
 import { castKindIn, castingIdIn, hashFor, wheelIdIn } from './lib/route.ts'
@@ -26,7 +27,13 @@ const SHORTCUTS: { kind: Kind; label: string; hint: string; Icon: typeof Sun }[]
   { kind: 'year', label: 'Year ahead', hint: 'The slow planets, with their passes', Icon: Orbit },
   { kind: 'moon', label: 'Moon', hint: 'Void windows and lunations, two weeks', Icon: Moon },
   { kind: 'natal', label: 'Birth chart', hint: 'The chart itself, read', Icon: Sunrise },
+  { kind: 'card', label: 'Daily card', hint: 'One tarot card for the day', Icon: Sparkles },
+  { kind: 'spread', label: 'Card spread', hint: 'Three cards, or the Celtic Cross, for a question', Icon: Layers },
 ]
+
+const pad = (n: number): string => String(n).padStart(2, '0')
+/** Today as a period key, in this device's timezone (the same as the server's). */
+const todayKey = (d = new Date()): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
 /** How often the home screen asks after readings still being written. */
 export const WRITING_POLL_MS = 3000
@@ -72,7 +79,15 @@ export default function App() {
     setStyleState(s)
     try { localStorage.setItem('orrery.style', s) } catch { /* a preference, not a record */ }
   }
-  const choice: CastOptions = { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, note: note.trim() }
+  // Which spread a card spread is dealt (kept on this device).
+  const [spread, setSpreadState] = useState<SpreadId>(() => { try { const v = localStorage.getItem('orrery.spread'); return isSpreadId(v) ? v : DEFAULT_SPREAD } catch { return DEFAULT_SPREAD } })
+  const setSpread = (id: SpreadId): void => {
+    setSpreadState(id)
+    try { localStorage.setItem('orrery.spread', id) } catch { /* a preference, not a record */ }
+  }
+  const choice: CastOptions = { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, note: note.trim(), spread }
+  // The day's card, once drawn, is opened rather than drawn again.
+  const todaysCard = recent.find((c) => c.kind === 'card' && c.period === todayKey())
   // A tile opens the popup for these choices; the cast waits for its button.
   const [pending, setPending] = useState<Kind | null>(null)
   const closeSheet = useCallback(() => setPending(null), [])
@@ -262,7 +277,7 @@ export default function App() {
             onMemories={() => setMemoriesOpen(true)}
             onWrite={(again) => void write(again)}
             onStop={() => void stop()}
-            onRecast={(style) => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: style ?? current.style, note: current.note })}
+            onRecast={(style) => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: style ?? current.style, note: current.note, spread })}
             onDelete={() => void remove()}
             onSettled={settled}
           />
@@ -284,13 +299,16 @@ export default function App() {
               </section>
             )}
             <div className="shortcuts" role="list">
-              {SHORTCUTS.map(({ kind, label, hint, Icon }) => (
-                <button key={kind} type="button" role="listitem" className={`shortcut${busy === kind ? ' busy' : ''}`} disabled={busy !== null} onClick={() => setPending(kind)}>
-                  <Icon size={22} aria-hidden="true" />
-                  <span className="shortcut-label">{busy === kind ? 'Casting…' : label}</span>
-                  <span className="shortcut-hint">{hint}</span>
-                </button>
-              ))}
+              {SHORTCUTS.map(({ kind, label, hint, Icon }) => {
+                const drawn = kind === 'card' ? todaysCard : undefined
+                return (
+                  <button key={kind} type="button" role="listitem" className={`shortcut${busy === kind ? ' busy' : ''}${drawn ? ' drawn' : ''}`} disabled={busy !== null} onClick={() => (drawn ? void open(drawn.id) : setPending(kind))}>
+                    <Icon size={22} aria-hidden="true" />
+                    <span className="shortcut-label">{busy === kind ? 'Casting…' : label}</span>
+                    <span className="shortcut-hint">{drawn ? 'Drawn today · tap to open' : hint}</span>
+                  </button>
+                )
+              })}
             </div>
             {!sidebar && <Recent castings={recent.filter((c) => c.readingState !== 'writing')} onOpen={(id) => void open(id)} />}
           </>
@@ -303,11 +321,13 @@ export default function App() {
           kind={pending}
           note={note}
           style={style}
+          spread={spread}
           memoryOn={memoryOn}
           excluded={excluded}
           busy={busy !== null}
           onNote={setNote}
           onStyle={setStyle}
+          onSpread={setSpread}
           onMemory={(on) => void setMemoryOn(on)}
           onExclude={exclude}
           onManage={() => setMemoriesOpen(true)}

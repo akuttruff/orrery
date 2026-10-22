@@ -4,17 +4,22 @@ import MemoryChoice from './MemoryChoice'
 import StyleChips from './StyleChips'
 import { NOTE_MAX, type StyleId } from '../lib/styles.ts'
 import { KIND_LABEL } from '../lib/kinds.ts'
+import { SPREADS, SPREAD_HINT, SPREAD_LABEL, type SpreadId } from '../lib/spreads.ts'
+import { isTarotKind } from '../types.ts'
 import type { Kind } from '../types.ts'
 
 interface CastSheetProps {
   kind: Kind
   note: string
   style: StyleId
+  /** Which spread a card spread is dealt. */
+  spread: SpreadId
   memoryOn: boolean
   excluded: string[]
   busy: boolean
   onNote: (note: string) => void
   onStyle: (style: StyleId) => void
+  onSpread: (spread: SpreadId) => void
   onMemory: (on: boolean) => void
   onExclude: (ids: string[]) => void
   onManage: () => void
@@ -28,7 +33,8 @@ interface CastSheetProps {
  * casts. Nothing is cast until that button; the X or Escape puts the tile
  * back untouched.
  */
-export default function CastSheet({ kind, note, style, memoryOn, excluded, busy, onNote, onStyle, onMemory, onExclude, onManage, onCast, onClose }: CastSheetProps) {
+export default function CastSheet({ kind, note, style, spread, memoryOn, excluded, busy, onNote, onStyle, onSpread, onMemory, onExclude, onManage, onCast, onClose }: CastSheetProps) {
+  const tarot = isTarotKind(kind)
   const box = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
     box.current?.focus()
@@ -47,21 +53,29 @@ export default function CastSheet({ kind, note, style, memoryOn, excluded, busy,
           <textarea
             id="cast-note"
             ref={box}
-            aria-label="What do you want from this reading?"
+            aria-label={tarot ? 'What is the question?' : 'What do you want from this reading?'}
             className="ask-box frame-box"
             rows={3}
             maxLength={NOTE_MAX}
             value={note}
-            placeholder="Optional. Context helps: “I'm going through some anxiety today”, “deciding about the job this week”"
+            placeholder={tarot ? 'Optional. The question, in your words: “should I take the job?”, “what do I need to see about this week?”' : "Optional. Context helps: “I'm going through some anxiety today”, “deciding about the job this week”"}
             onChange={(e) => onNote(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onCast() } }}
           />
+          {kind === 'spread' && (
+            <div className="spread-choice" role="radiogroup" aria-label="Which spread">
+              {SPREADS.map((id) => (
+                <button key={id} type="button" role="radio" aria-checked={spread === id} className={`chip${spread === id ? ' on' : ''}`} title={SPREAD_HINT[id]} onClick={() => onSpread(id)}>{SPREAD_LABEL[id]}</button>
+              ))}
+              <span className="memory-note">{SPREAD_HINT[spread]}</span>
+            </div>
+          )}
           <StyleChips value={style} as="radio" onPick={onStyle} />
           <MemoryChoice on={memoryOn} excluded={excluded} onToggle={onMemory} onExclude={onExclude} onManage={onManage} quiet />
         </div>
         <footer className="sheet-foot cast-foot">
           <button type="button" className="chip" onClick={onClose}>Cancel</button>
-          <button type="button" className="primary" disabled={busy} onClick={onCast}>{busy ? 'Casting…' : `Cast ${KIND_LABEL[kind].toLowerCase()}`}</button>
+          <button type="button" className="primary" disabled={busy} onClick={onCast}>{busy ? (tarot ? 'Dealing…' : 'Casting…') : tarot ? `Draw ${kind === 'card' ? 'the card' : 'the cards'}` : `Cast ${KIND_LABEL[kind].toLowerCase()}`}</button>
         </footer>
       </div>
     </div>

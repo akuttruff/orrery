@@ -95,11 +95,11 @@ describe('readingRequest', () => {
 
 describe('followUpRequest', () => {
   const read = casting({ kind: 'week', result: week, title: 'Week of Oct 12', period: '2026-10-12', reading: '### Monday\nSaturn leans in.', readingState: 'done' })
-  const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], written: NOT_WRITTEN, ...over })
+  const answered = (over: Partial<FollowUp>): FollowUp => ({ id: 'f', castingId: 'c1', question: 'q', answer: 'a', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], written: NOT_WRITTEN, card: null, ...over })
 
   it('puts the data and the reading behind the question, in the same voice', () => {
     const req = followUpRequest(read, [], 'Is Thursday any good?', sam, new Date(2026, 9, 13))
-    expect(req.tools).toEqual(['mcp/astrology-v2'])
+    expect(req.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
     expect(req.system).toContain('use the astrology tools')
     expect(req.system).toContain('same astrologer')
     expect(req.system).toContain('Sam, born 1990-06-15 14:30')
@@ -140,5 +140,30 @@ describe('memoryBlock', () => {
     expect(readingRequest(casting({}), sam).system).not.toContain('WHAT YOU KNOW')
     const plain = casting({ kind: 'week', result: week, reading: 'r', readingState: 'done' })
     expect(followUpRequest(plain, [], 'q', sam, new Date(), ['- The user works nights.']).system).toContain('- The user works nights.')
+  })
+})
+
+describe('a tarot reading', () => {
+  const dealt = JSON.stringify({ spread: { id: 'three', name: 'Past, present, future', description: '' }, question: 'the move', drawnAt: 'x', seed: 1, cards: [{ position: { index: 1, name: 'Past', meaning: '' }, card: { id: 'major-00', name: 'The Fool', arcana: 'major', suit: null, number: 0 }, reversed: false, keywords: ['beginnings'], meaning: 'A fresh start.' }], summary: {} })
+  const spread = casting({ kind: 'spread', result: dealt, title: 'Past, present, future · Oct 15', period: '2026-10-15', note: 'the move' })
+
+  it('is written in the tarot reader\'s voice, from the cards alone, a section per position', () => {
+    const req = readingRequest(spread, sam)
+    expect(req.system).toMatch(/^You are a tarot reader/)
+    expect(req.system).toMatch(/Never add a card that was not dealt/)
+    expect(req.system).not.toMatch(/astrologer/)
+    expect(req.input).toMatch(/Write the reading for this spread: take each position in order/)
+    expect(req.input).toContain('"The Fool"')
+  })
+
+  it('answers questions as the tarot reader with both tool sets, and reads a pulled card against the reading', () => {
+    const q = followUpRequest({ ...spread, reading: 'A reading.', readingState: 'done' }, [], 'and reversed?', sam)
+    expect(q.system).toMatch(/^You are the same tarot reader/)
+    expect(q.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
+    const card = { position: { index: 1, name: 'The card', meaning: '' }, card: { id: 'major-16', name: 'The Tower', arcana: 'major' as const, suit: null, number: 16 }, reversed: true, keywords: ['averted disaster'], meaning: 'The crisis delayed.' }
+    const pulled = followUpRequest({ ...casting({ kind: 'today', result: '{}', reading: 'Saturn leans in.', readingState: 'done' }) }, [], 'Pulled a card: The Tower, reversed', sam, new Date(), [], card)
+    expect(pulled.system).toMatch(/^You are the same astrologer/)
+    expect(pulled.input).toMatch(/pulled a tarot card beside this reading: The Tower, reversed\. Keywords: averted disaster\. Its meaning that way up: The crisis delayed\./)
+    expect(pulled.input).toMatch(/a reversal is a shading, not an opposite/)
   })
 })
