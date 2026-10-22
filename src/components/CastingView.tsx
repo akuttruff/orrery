@@ -53,6 +53,8 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
   const wheel = useMemo(() => (casting.kind === 'today' || casting.kind === 'natal' ? parseWheel(casting.result) : null), [casting])
   const forecast = useMemo(() => (casting.kind === 'week' || casting.kind === 'month' || casting.kind === 'year' ? parseForecast(casting.result) : null), [casting])
   const cards = useMemo(() => (isTarotKind(casting.kind) ? parseReading(casting.result) : null), [casting])
+  /** What the reading is written from, when memory is off. */
+  const source = isTarotKind(casting.kind) ? 'the cards' : 'the chart'
 
   return (
     <article className="casting">
@@ -97,10 +99,10 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
         )}
         <span className="memory-note">
           {reading.state === 'none'
-            ? memoryOn ? 'The reading will draw on what the model knows about you.' : 'The reading will be written from the chart alone.'
+            ? memoryOn ? 'The reading will draw on what the model knows about you.' : `The reading will be written from ${source} alone.`
             : casting.memoriesUsed.length
               ? <>Written with <button type="button" className="link" onClick={() => setPicking(true)}>{casting.memoriesUsed.length} {casting.memoriesUsed.length === 1 ? 'memory' : 'memories'}</button>{memoryOn ? '' : '. Write again to leave them out.'}</>
-              : <>Written from the chart alone{memoryOn ? '. Write again to bring memories in.' : ''}</>}
+              : <>Written from {source} alone{memoryOn ? '. Write again to bring memories in.' : ''}</>}
         </span>
       </div>
       {memoryOn && picking && <MemoryPicker excluded={casting.memoryExcluded} used={casting.memoriesUsed} onChange={onExclude} onManage={onMemories} />}

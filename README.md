@@ -32,6 +32,14 @@ streamed in and kept. No accounts, no cloud.
     <td><b>The birth chart.</b> The chart itself, and a reading of it.</td>
     <td><b>The wheel full size.</b> A tap on any wheel opens it over the reading to pinch and zoom; Done or Back returns.</td>
   </tr>
+  <tr>
+    <td><img src="docs/screenshots/spread-phone.png" alt="A three-card tarot spread with its reading" /></td>
+    <td><img src="docs/screenshots/card-phone.png" alt="The card for the day" /></td>
+  </tr>
+  <tr>
+    <td><b>A spread.</b> Three cards, or the Celtic Cross, dealt for a question in your words and read position by position.</td>
+    <td><b>The daily card.</b> One card for the day; the tile opens it again rather than dealing twice. Under any chart reading, <i>Pull a card</i> deals one and reads it against the reading.</td>
+  </tr>
 </table>
 
 <img src="docs/screenshots/desktop.png" alt="Desktop: the castings in a sidebar beside the one open" />
@@ -56,6 +64,7 @@ your phone or desktop browser
 Orrery ── one Node process on one computer ── .data/orrery.sqlite, memory.sqlite
         │
         ├──▶ astro-mcp, started by Orrery          (the charts, in under a second)
+        ├──▶ tarot-mcp, started by Orrery          (the cards, and their pictures)
         └──▶ a model server on the same computer   (the readings and the answers)
 ```
 
