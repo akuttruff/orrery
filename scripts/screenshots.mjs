@@ -44,8 +44,9 @@ const scenarios = [
   { name: 'wheel-phone', view: PHONE, steps: [['click', 'Today · Nov 7'], ['wait', 1500], ['sel', '.wheel-open'], ['wait', 800]] },
   { name: 'spread-phone', view: PHONE, steps: [['click', 'Past, present, future · Oct 14'], ['wait', 1500]] },
   { name: 'card-phone', view: PHONE, steps: [['click', 'Card · Oct 14'], ['wait', 1500]] },
-  // A walkthrough, recorded: a transit wheel with a popup, its reading, then a tarot spread.
-  { name: 'demo-phone', view: PHONE, record: true, steps: [['wait', 900], ['click', 'Today · Nov 7'], ['wait', 1800], ['press', '.wheel-aspect', 'gets said plainly'], ['wait', 1700], ['glide', '.scroll', 1500, 1700], ['wait', 900], ['aria', 'Back'], ['wait', 1100], ['click', 'Past, present, future · Oct 14'], ['wait', 1800], ['glide', '.scroll', 900, 1300], ['wait', 1400]] },
+  // Walkthroughs, recorded (see recording.mjs): the phone's and the desktop's.
+  { name: 'demo-phone', view: PHONE, record: true, steps: [['wait', 1000], ['click', 'Today · Nov 7'], ['wait', 1900], ['press', '.wheel-aspect', 'gets said plainly'], ['wait', 1900], ['glide', '.scroll', 1500, 2400], ['wait', 1000], ['aria', 'Back'], ['wait', 1200], ['click', 'Past, present, future · Oct 14'], ['wait', 1900], ['glide', '.scroll', 900, 1800], ['wait', 1600]] },
+  { name: 'demo-desktop', view: DESKTOP, record: true, steps: [['wait', 1000], ['click', 'Today · Nov 7'], ['wait', 1900], ['hover', '.wheel-aspect', 'gets said plainly'], ['wait', 2000], ['glide', '.scroll', 1400, 2400], ['wait', 1000], ['click', 'Past, present, future · Oct 14'], ['wait', 1900], ['glide', '.scroll', 800, 1800], ['wait', 1600]] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -132,7 +133,7 @@ async function run(scenario) {
     }
     if (recording) {
       const frames = await recording.stop()
-      const made = encodeRecording(frames, { out: OUT, name: scenario.name })
+      const made = encodeRecording(frames, { out: OUT, name: scenario.name, wide: !scenario.view.mobile })
       console.log(`wrote ${made.gif} and ${made.mp4} (${made.seconds} s, ${made.frames} frames)`)
       return
     }

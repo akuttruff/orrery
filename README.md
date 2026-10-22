@@ -7,9 +7,13 @@ streamed in and kept. No accounts, no cloud.
 
 ## What it looks like
 
-<p align="center"><img src="docs/screenshots/demo-phone.gif" width="300" alt="Orrery in use" /></p>
+<img src="docs/screenshots/demo-desktop.gif" alt="Orrery in use on a desktop" />
 
-<p align="center"><b>In use.</b> A transit wheel with a popup, its reading, then a tarot spread.</p>
+<p><b>In use.</b> On a desktop: a transit wheel with a popup, its reading, then a tarot spread.</p>
+
+<p align="center"><img src="docs/screenshots/demo-phone.gif" width="300" alt="Orrery in use on a phone" /></p>
+
+<p align="center">The same, on a phone.</p>
 
 <table>
   <tr>
