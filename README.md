@@ -9,11 +9,11 @@ streamed in and kept. No accounts, no cloud.
 
 <img src="docs/screenshots/demo-desktop.gif" alt="Orrery in use on a desktop" />
 
-<p><b>In use.</b> On a desktop: a transit wheel with a popup, its reading, then a tarot spread.</p>
+<p>On a desktop, a transit wheel opens with a popup over it, then its reading, then a tarot spread.</p>
 
 <p align="center"><img src="docs/screenshots/demo-phone.gif" width="300" alt="Orrery in use on a phone" /></p>
 
-<p align="center">The same, on a phone.</p>
+<p align="center">The same flow on a phone.</p>
 
 <table>
   <tr>
@@ -21,38 +21,38 @@ streamed in and kept. No accounts, no cloud.
     <td width="50%"><img src="docs/screenshots/today-phone.png" alt="Today's transits as a wheel and a table" /></td>
   </tr>
   <tr>
-    <td><b>Home.</b> Six shortcuts, each a cast, and the recent castings by kind.</td>
-    <td><b>Today.</b> The transits over the birth chart as a wheel, then every contact in a table with its weight.</td>
+    <td>The home screen offers six shortcuts, each a cast, with the recent castings grouped by kind below them.</td>
+    <td>Today's transits sit over the birth chart as a wheel, and every contact follows in a table with its weight.</td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/reading-phone.png" alt="A reading with a question under it" /></td>
     <td><img src="docs/screenshots/week-phone.png" alt="A week's transits in two groups" /></td>
   </tr>
   <tr>
-    <td><b>The reading.</b> Written by the model, with what it cost, then your questions and its answers underneath.</td>
-    <td><b>A week.</b> The contacts exact this week, then the slow planets in orb all week, with the frame the reading was written in.</td>
+    <td>The model writes the reading and shows what it cost, with your questions and its answers underneath.</td>
+    <td>A week lists the contacts exact this week, then the slow planets in orb all week, under the frame the reading was written in.</td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/natal-phone.png" alt="The birth chart" /></td>
     <td><img src="docs/screenshots/wheel-phone.png" alt="A wheel full size, with a close button" /></td>
   </tr>
   <tr>
-    <td><b>The birth chart.</b> The chart itself, and a reading of it.</td>
-    <td><b>The wheel full size.</b> A tap on any wheel opens it over the reading to pinch and zoom; Done or Back returns.</td>
+    <td>The birth chart is drawn and read the same way.</td>
+    <td>Tapping any wheel opens it full size over the reading to pinch and zoom; Done or Back returns.</td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/spread-phone.png" alt="A three-card tarot spread with its reading" /></td>
     <td><img src="docs/screenshots/card-phone.png" alt="The card for the day" /></td>
   </tr>
   <tr>
-    <td><b>A spread.</b> Three cards, or the Celtic Cross, dealt for a question in your words and read position by position.</td>
-    <td><b>The daily card.</b> One card for the day; the tile opens it again rather than dealing twice. Under any chart reading, <i>Pull a card</i> deals one and reads it against the reading.</td>
+    <td>A spread deals three cards, or the Celtic Cross, for a question in your words and reads them position by position.</td>
+    <td>One card is drawn for the day, and its tile opens it again rather than dealing twice. Under any chart reading, <i>Pull a card</i> deals one and reads it against the reading.</td>
   </tr>
 </table>
 
 <img src="docs/screenshots/desktop.png" alt="Desktop: the castings in a sidebar beside the one open" />
 
-**On a desktop.** The castings in a sidebar beside the one open.
+On a desktop the castings sit in a sidebar beside the one that is open.
 
 The screenshots use a fictional person and demo readings. To regenerate them:
 
@@ -149,17 +149,17 @@ Every tap casts anew. The earlier castings of that kind stay, so a day can
 hold several readings of the same kind, and Recast adds one more. A casting
 is `#/c/<id>` in the address, so Back and a reload both land where expected.
 
-**A week is Sunday to Saturday.** Cast on a Thursday, it covers Thursday to
-Saturday.
+A week runs Sunday to Saturday, so a cast made on a Thursday covers
+Thursday to Saturday.
 
-**A week and a month list every transit.** The forecast tool picks a few
-headlines. Both castings also run the ephemeris scan over the same days and
-keep every contact in orb, in two groups: the period's events, exact inside
+A week and a month list every transit. The forecast tool picks a few
+headlines, and both castings also run the ephemeris scan over the same days
+to keep every contact in orb, in two groups: the period's events, exact inside
 it, and its backdrop, in orb without perfecting. The forecast still casts if
 the scan fails.
 
-**Every transit has a weight.** The table's last column is the forecasts'
-own ranking: the transiting planet's slowness (Mercury 0.5 up to Pluto 5),
+Every transit carries a weight, shown in the table's last column. It is
+the forecasts' own ranking: the transiting planet's slowness (Mercury 0.5 up to Pluto 5),
 doubled on the Sun, Moon, Ascendant, MC or chart ruler, times the aspect.
 Pluto on the Sun is 10 and fills the bar.
 
@@ -188,18 +188,17 @@ again as" casts the same kind anew in another tone, beside the first.
 
 ## Under the reading
 
-**The wheel's popups read too.** Hovering a planet or an aspect line, or a
-press and hold on a phone, shows its position and aspects. On a Today wheel
+Hovering a planet or an aspect line, or pressing and holding it on a
+phone, shows its position and aspects. On a Today wheel
 each aspect also carries a sentence on what that transit tends to bring up,
 written by the model in one short call beside the reading.
 
-**Ask about it.** A box under every reading takes follow-up questions. Each
+A box under every reading takes follow-up questions. Each
 answer is written on the server like the reading and kept with the casting.
 An answer may call the astrology tools through LM Studio for anything the
 casting's data does not cover: another day, a return, a horary question.
 
-**The trail and the cost.** Everything the model did on the way to its text
-is kept with it: each stretch of thinking, as a "Thought for 4.2s" row that
+Everything the model did on the way to its text is kept with it: each stretch of thinking, as a "Thought for 4.2s" row that
 opens, and each tool call, as a card. Under the text: when it finished, how
 long it took, the model, and LM Studio's token counts.
 
@@ -245,9 +244,9 @@ so if the server cannot be reached.
 
 ## Settings
 
-Whose chart (name, birth date and time, birthplace) and who writes (LM
-Studio address, API token, model, reasoning level), plus whether readings
-draw on memory by default.
+Settings holds whose chart it is (name, birth date and time, birthplace),
+who writes it (LM Studio address, API token, model, reasoning level), and
+whether readings draw on memory by default.
 
 ## Layout
 
