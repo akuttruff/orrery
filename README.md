@@ -17,35 +17,35 @@ streamed in and kept. No accounts, no cloud.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/home-phone.png" alt="The home screen" /></td>
-    <td width="50%"><img src="docs/screenshots/today-phone.png" alt="Today's transits as a wheel and a table" /></td>
+    <td width="260"><img width="260" src="docs/screenshots/home-phone.png" alt="The home screen" /></td>
+    <td>The home screen offers six shortcuts, each a cast, with the recent castings grouped by kind below them.</td>
   </tr>
   <tr>
-    <td>The home screen offers six shortcuts, each a cast, with the recent castings grouped by kind below them.</td>
+    <td width="260"><img width="260" src="docs/screenshots/today-phone.png" alt="Today's transits as a wheel and a table" /></td>
     <td>Today's transits sit over the birth chart as a wheel, and every contact follows in a table with its weight.</td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/reading-phone.png" alt="A reading with a question under it" /></td>
-    <td><img src="docs/screenshots/week-phone.png" alt="A week's transits in two groups" /></td>
+    <td width="260"><img width="260" src="docs/screenshots/reading-phone.png" alt="A reading with a question under it" /></td>
+    <td>The model writes the reading and shows what it cost, with your questions and its answers underneath.</td>
   </tr>
   <tr>
-    <td>The model writes the reading and shows what it cost, with your questions and its answers underneath.</td>
+    <td width="260"><img width="260" src="docs/screenshots/week-phone.png" alt="A week's transits in two groups" /></td>
     <td>A week lists the contacts exact this week, then the slow planets in orb all week, under the frame the reading was written in.</td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/natal-phone.png" alt="The birth chart" /></td>
-    <td><img src="docs/screenshots/wheel-phone.png" alt="A wheel full size, with a close button" /></td>
+    <td width="260"><img width="260" src="docs/screenshots/natal-phone.png" alt="The birth chart" /></td>
+    <td>The birth chart is drawn and read the same way.</td>
   </tr>
   <tr>
-    <td>The birth chart is drawn and read the same way.</td>
+    <td width="260"><img width="260" src="docs/screenshots/wheel-phone.png" alt="A wheel full size, with a close button" /></td>
     <td>Tapping any wheel opens it full size over the reading to pinch and zoom; Done or Back returns.</td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/spread-phone.png" alt="A three-card tarot spread with its reading" /></td>
-    <td><img src="docs/screenshots/card-phone.png" alt="The card for the day" /></td>
+    <td width="260"><img width="260" src="docs/screenshots/spread-phone.png" alt="A three-card tarot spread with its reading" /></td>
+    <td>A spread deals three cards, or the Celtic Cross, for a question in your words and reads them position by position.</td>
   </tr>
   <tr>
-    <td>A spread deals three cards, or the Celtic Cross, for a question in your words and reads them position by position.</td>
+    <td width="260"><img width="260" src="docs/screenshots/card-phone.png" alt="The card for the day" /></td>
     <td>One card is drawn for the day, and its tile opens it again rather than dealing twice. Under any chart reading, <i>Pull a card</i> deals one and reads it against the reading.</td>
   </tr>
 </table>
