@@ -13,14 +13,14 @@ streamed in and kept. No accounts, no cloud.
 
 <table>
   <tr>
-    <td align="center" width="33%"><img src="docs/screenshots/home-phone.png" width="200" alt="The home screen" /><br /><b>Home</b><br /><sub>Six casts, one tap each</sub></td>
-    <td align="center" width="33%"><img src="docs/screenshots/today-phone.png" width="200" alt="Today's transits as a wheel and a table" /><br /><b>Today</b><br /><sub>Transits over your chart, each weighted</sub></td>
-    <td align="center" width="33%"><img src="docs/screenshots/reading-phone.png" width="200" alt="A reading with a question under it" /><br /><b>Reading</b><br /><sub>Written by a local model; ask it questions</sub></td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/home-phone.png" width="200" alt="The home screen" /><br /><b>Home</b><br /><sub>Six casts, one tap each</sub></td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/today-phone.png" width="200" alt="Today's transits as a wheel and a table" /><br /><b>Today</b><br /><sub>Transits over your chart, each weighted</sub></td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/reading-phone.png" width="200" alt="A reading with a question under it" /><br /><b>Reading</b><br /><sub>Written by a local model; ask it questions</sub></td>
   </tr>
   <tr>
-    <td align="center" width="33%"><img src="docs/screenshots/week-phone.png" width="200" alt="A week's transits in two groups" /><br /><b>Week</b><br /><sub>What goes exact, and what hangs over it</sub></td>
-    <td align="center" width="33%"><img src="docs/screenshots/natal-phone.png" width="200" alt="The birth chart" /><br /><b>Birth chart</b><br /><sub>The chart itself, and a reading of it</sub></td>
-    <td align="center" width="33%"><img src="docs/screenshots/spread-phone.png" width="200" alt="A three-card tarot spread with its reading" /><br /><b>Tarot</b><br /><sub>A spread for a question in your words</sub></td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/week-phone.png" width="200" alt="A week's transits in two groups" /><br /><b>Week</b><br /><sub>What goes exact, and what hangs over it</sub></td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/natal-phone.png" width="200" alt="The birth chart" /><br /><b>Birth chart</b><br /><sub>The chart itself, and a reading of it</sub></td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/spread-phone.png" width="200" alt="A three-card tarot spread with its reading" /><br /><b>Tarot</b><br /><sub>A spread for a question in your words</sub></td>
   </tr>
 </table>
 
