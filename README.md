@@ -80,6 +80,7 @@ talks only to Orrery.
 | For | You need |
 |---|---|
 | Casting a chart and seeing the wheel and tables | Node 24 or newer, and [astro-mcp](https://github.com/akuttruff/astro-mcp) installed on the same computer (below) |
+| Dealing a daily card or a spread | [tarot-mcp](https://github.com/akuttruff/tarot-mcp) built on the same computer; Orrery finds it through LM Studio's `mcp.json` entry `tarot`, or at `~/Code/tarot-mcp` |
 | A reading written over it | A model server with a chat model (below) |
 | Follow-up questions that look things up | The model server able to call astro-mcp as an MCP server, with its authentication on |
 | Opening it on your phone | The phone on the same Wi-Fi, or [Tailscale](https://tailscale.com) on both devices (see *Run*) |
