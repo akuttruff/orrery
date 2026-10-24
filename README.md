@@ -195,7 +195,7 @@ its own switch.
 
 ```bash
 npm install
-npm run dev          # http://localhost:8400, scratch database in .data-dev/
+npm run dev          # http://127.0.0.1:8400, scratch database in .data-dev/
 npm run check        # typecheck, lint, tests
 npm run deploy       # build and restart the launchd instance on :8410
 npm run seed:demo    # fill the dev database with demo castings

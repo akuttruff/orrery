@@ -6,6 +6,9 @@ import api from './server/api.ts'
 // Any name on the tailnet, not one machine's: `tailscale serve` is what
 // actually limits who can reach this, so a rename shouldn't break it.
 const TAILNET = '.ts.net'
+// Loopback only: `tailscale serve` proxies to 127.0.0.1, and the API has no
+// login, so listening on every interface would open it to the whole Wi-Fi.
+const HOST = '127.0.0.1'
 
 export default defineConfig(({ command, isPreview }) => {
   // `vite preview` is the one real instance (local and, via Tailscale,
@@ -17,7 +20,7 @@ export default defineConfig(({ command, isPreview }) => {
   return {
     plugins: [react(), api({ dir })],
     server: {
-      host: true,
+      host: HOST,
       port: 8400,
       strictPort: true,
       allowedHosts: [TAILNET],
@@ -25,6 +28,6 @@ export default defineConfig(({ command, isPreview }) => {
     },
     // A separate port from `server` above: the persistent, built instance
     // Tailscale points at, so it can run alongside `npm run dev`.
-    preview: { host: true, port: 8410, strictPort: true, allowedHosts: [TAILNET] },
+    preview: { host: HOST, port: 8410, strictPort: true, allowedHosts: [TAILNET] },
   }
 })
