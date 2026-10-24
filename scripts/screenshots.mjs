@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeRecording, glide, startRecording } from './recording.mjs'
+import { encodeRecording, glide, startRecording, typeInto, waitUntil } from './recording.mjs'
 
 const URL = process.env.ORRERY_URL ?? 'http://127.0.0.1:8400'
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -27,9 +27,20 @@ const DESKTOP = { width: 1280, height: 840, scale: 2, mobile: false }
  *  aria <label>          click the element with that aria-label
  *  wait <ms>             pause (animations, lazy chunks)
  *  scroll <css> <px>     scroll an element, or the window when the selector matches nothing
+ *  glide <css> <px> <ms> scroll it smoothly, for a recording
+ *  type <css> <text>     type into a field a few characters at a time
+ *  ask <css>             click what sends a question (the recording runs the wait for the answer fast)
+ *  until <js> <ms> <opt> wait until the expression is true in the page ({ follow, faster }: see run)
+ *  letgo                 let go of the wheel's popup
  *  hover <css> <text>    move the mouse over each matching element in turn until the popup says <text>
  *  press <css> <text>    the same with a finger, so the popup stays up
  */
+/** What the phone's recording asks, and how the recordings know the answer has started and finished (the newest answer). */
+const QUESTION = 'What does this mean for a conversation I keep putting off?'
+const LAST = `[...document.querySelectorAll('.followup-a')].pop()`
+const WRITING = `(() => { const a = ${LAST}; return !!a && !a.querySelector('.reading-status') && a.textContent.length > 60 })()`
+const ANSWERED = `(() => { const a = ${LAST}; return !!a && !!a.querySelector('.followup-memory') })()`
+
 const scenarios = [
   { name: 'home-phone', view: PHONE, steps: [] },
   { name: 'today-phone', view: PHONE, steps: [['click', 'Today · Oct 13'], ['wait', 1500]] },
@@ -45,8 +56,9 @@ const scenarios = [
   { name: 'spread-phone', view: PHONE, steps: [['click', 'Past, present, future · Oct 14'], ['wait', 1500]] },
   { name: 'card-phone', view: PHONE, steps: [['click', 'Card · Oct 14'], ['wait', 1500]] },
   // Walkthroughs, recorded (see recording.mjs): the phone's and the desktop's.
-  { name: 'demo-phone', view: PHONE, record: true, steps: [['wait', 1000], ['click', 'Today · Nov 7'], ['wait', 1900], ['press', '.wheel-aspect', 'gets said plainly'], ['wait', 1900], ['glide', '.scroll', 1500, 2400], ['wait', 1000], ['aria', 'Back'], ['wait', 1200], ['click', 'Past, present, future · Oct 14'], ['wait', 1900], ['glide', '.scroll', 900, 1800], ['wait', 1600]] },
-  { name: 'demo-desktop', view: DESKTOP, record: true, steps: [['wait', 1000], ['click', 'Today · Nov 7'], ['wait', 1900], ['hover', '.wheel-aspect', 'gets said plainly'], ['wait', 2000], ['glide', '.scroll', 1400, 2400], ['wait', 1000], ['click', 'Past, present, future · Oct 14'], ['wait', 1900], ['glide', '.scroll', 800, 1800], ['wait', 1600]] },
+  // A question typed under a reading and answered as it streams (the phone), and a card pulled against one (the desktop).
+  { name: 'demo-phone', view: PHONE, record: true, speed: 1.3, steps: [['wait', 900], ['click', 'Today · Nov 7'], ['wait', 1700], ['press', '.wheel-aspect', 'gets said plainly'], ['wait', 1500], ['letgo'], ['wait', 300], ['glide', '.scroll', 99999, 2200], ['wait', 500], ['type', '.ask-box', QUESTION], ['wait', 400], ['ask', '.ask-send'], ['wait', 300], ['glide', '.scroll', 99999, 600], ['until', WRITING, 150000, { faster: 8, follow: true }], ['until', ANSWERED, 200000, { faster: 2.5, follow: true }], ['wait', 600], ['glide', '.scroll', 99999, 1200], ['wait', 1600]] },
+  { name: 'demo-desktop', view: DESKTOP, record: true, speed: 1.3, steps: [['wait', 900], ['click', 'Today · Nov 7'], ['wait', 1700], ['hover', '.wheel-aspect', 'gets said plainly'], ['wait', 1500], ['letgo'], ['wait', 300], ['glide', '.scroll', 99999, 2200], ['wait', 700], ['ask', '.pull-row .chip'], ['wait', 300], ['glide', '.scroll', 99999, 600], ['until', WRITING, 150000, { faster: 8, follow: true }], ['until', ANSWERED, 200000, { faster: 2.5, follow: true }], ['wait', 600], ['glide', '.scroll', 99999, 1200], ['wait', 1600]] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -118,10 +130,24 @@ async function run(scenario) {
     await send('Page.navigate', { url: URL + (scenario.path ?? '') })
     await sleep(2500)
     const recording = scenario.record ? startRecording({ send, on }) : null
+    // Waits marked `faster` (for the model's first word, for a long answer) run that much faster in the recording.
+    const fast = []
+    let asked = null
     for (const [op, a, b, c] of scenario.steps) {
       let result = ''
       if (op === 'click') result = await evaluate(clickText(a))
       else if (op === 'glide') result = await glide(evaluate, a, b, c)
+      else if (op === 'type') result = await typeInto(send, evaluate, a, b, 45)
+      else if (op === 'ask') { result = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(a)}); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`); asked = Date.now() / 1000 }
+      else if (op === 'until') {
+        // `follow` keeps the newest text in view as it streams; `faster` runs this wait (from the question, for the first one) that much faster.
+        const from = asked ?? Date.now() / 1000
+        asked = null
+        result = await waitUntil(evaluate, c?.follow ? `(() => { const el = document.querySelector('.scroll'); if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); return ${a} })()` : a, b, c?.follow ? 400 : 250)
+        if (result === 'timeout') throw new Error(`${scenario.name}: gave up waiting for ${a}`)
+        if (c?.faster) fast.push({ from, to: Date.now() / 1000, factor: c.faster })
+      }
+      else if (op === 'letgo') result = await evaluate(`(async () => { document.querySelectorAll('.wheel-aspect, .wheel-point').forEach((el) => el.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' }))); document.querySelector('.wheel-aspect')?.closest('svg')?.querySelector('rect')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' })); await new Promise((r) => requestAnimationFrame(r)); return document.querySelector('.wheel-tip') ? 'missing: the popup is still up' : 'let go' })()`)
       else if (op === 'sel') result = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(a)}); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
       else if (op === 'aria') result = await evaluate(`(() => { const el = document.querySelector('[aria-label=' + ${JSON.stringify(JSON.stringify(a))} + ']'); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
       else if (op === 'wait') { await sleep(a); continue }
@@ -133,7 +159,7 @@ async function run(scenario) {
     }
     if (recording) {
       const frames = await recording.stop()
-      const made = encodeRecording(frames, { out: OUT, name: scenario.name, wide: !scenario.view.mobile })
+      const made = encodeRecording(frames, { out: OUT, name: scenario.name, wide: !scenario.view.mobile, speed: scenario.speed ?? 1, fast })
       console.log(`wrote ${made.gif} and ${made.mp4} (${made.seconds} s, ${made.frames} frames)`)
       return
     }

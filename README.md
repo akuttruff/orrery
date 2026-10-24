@@ -9,7 +9,11 @@ streamed in and kept. No accounts, no cloud.
 
 <img src="docs/screenshots/demo-desktop.gif" alt="Orrery in use on a desktop" />
 
-<sub>On a desktop: a transit wheel and its popup, the reading, then a tarot spread.</sub>
+<p>On a desktop, a transit wheel and its popup, the reading, then a tarot card pulled and read against it.</p>
+
+<p align="center"><img src="docs/screenshots/demo-phone.gif" width="300" alt="Orrery in use on a phone" /></p>
+
+<p align="center">On a phone, a question is typed under the reading and answered as it streams.</p>
 
 <table>
   <tr>
