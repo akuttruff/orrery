@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { Trail, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
+import { Trail, sseEvents, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
 import type { ServerConfig } from './store.ts'
 import type { Step } from '../src/types.ts'
 
@@ -112,5 +112,25 @@ describe('Trail', () => {
     expect(t.take({ type: 'message.start' }, 4200)).toBe('steps')
     expect(t.steps[2]).toEqual({ kind: 'reasoning', text: 'b', done: true, seconds: 0.2 })
     expect(t.take({ type: 'message.start' })).toBe('none')
+  })
+})
+
+describe('sseEvents', () => {
+  const stream = (chunks: string[], cancel?: () => void) => new ReadableStream<Uint8Array>({
+    start(c) { for (const chunk of chunks) c.enqueue(new TextEncoder().encode(chunk)) },
+    pull(c) { if (!cancel) c.close() },
+    cancel,
+  })
+  const all = async (body: ReadableStream<Uint8Array>) => { const out: unknown[] = []; for await (const e of sseEvents(body)) out.push(e); return out }
+
+  it('reads an event split across chunks, and a last one with no newline after it', async () => {
+    expect(await all(stream(['data: {"type":"a"', '}\n\n', 'data: {"type":"b"}']))).toEqual([{ type: 'a' }, { type: 'b' }])
+  })
+
+  it('lets the reader go when the loop stops early', async () => {
+    let cancelled = false
+    const body = stream(['data: {"type":"error"}\n\n'], () => { cancelled = true })
+    for await (const evt of sseEvents(body)) { expect(evt.type).toBe('error'); break }
+    expect(cancelled).toBe(true)
   })
 })

@@ -274,23 +274,38 @@ async function describeHttpError(res: Response): Promise<string> {
   return `LM Studio answered ${res.status}${detail ? `: ${detail}` : ''}`
 }
 
-async function* sseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<ChatEvent> {
+/** The event on one line of the stream, if it carries one. */
+function eventOf(rawLine: string): ChatEvent | null {
+  const line = rawLine.replace(/\r$/, '')
+  if (!line.startsWith('data:')) return null
+  const payload = line.slice(5).trim()
+  if (!payload) return null
+  try { return JSON.parse(payload) as ChatEvent } catch { return null /* not an event */ }
+}
+
+/**
+ * The stream's events, a line at a time. A last line without its newline
+ * still counts. The reader is let go however the loop ends, so a reply given
+ * up on part-way (an error event, a stop) does not hold the connection open.
+ */
+export async function* sseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<ChatEvent> {
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buf = ''
-  for (;;) {
-    const { value, done } = await reader.read()
-    if (done) return
-    buf += decoder.decode(value, { stream: true })
-    const lines = buf.split('\n')
-    buf = lines.pop() ?? ''
-    for (const rawLine of lines) {
-      const line = rawLine.replace(/\r$/, '')
-      if (!line.startsWith('data:')) continue
-      const payload = line.slice(5).trim()
-      if (!payload) continue
-      try { yield JSON.parse(payload) as ChatEvent } catch { /* not an event */ }
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      buf += done ? decoder.decode() : decoder.decode(value, { stream: true })
+      const lines = buf.split('\n')
+      buf = done ? '' : lines.pop() ?? ''
+      for (const line of lines) {
+        const evt = eventOf(line)
+        if (evt) yield evt
+      }
+      if (done) return
     }
+  } finally {
+    await reader.cancel().catch(() => { /* already closed */ })
   }
 }
 
