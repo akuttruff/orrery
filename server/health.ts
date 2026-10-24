@@ -34,7 +34,7 @@ export interface HealthOptions {
   app: string
   dataFile: string
   busy: () => Record<string, number>
-  /** Each resolves when the dependency answers and throws when it does not. */
+  /** Each resolves when the dependency answers and throws when it does not; resolving to UNKNOWN says it was not asked. */
   deps?: Record<string, () => Promise<unknown>>
   depTtlMs?: number
   depTimeoutMs?: number
@@ -53,6 +53,9 @@ const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => new Promise((r
   const t = setTimeout(() => reject(new Error(`no answer in ${ms}ms`)), ms)
   p.then((v) => { clearTimeout(t); resolve(v) }, (e: unknown) => { clearTimeout(t); reject(e) })
 })
+
+/** What a probe resolves to when it cannot tell without disturbing the dependency (an MCP server not started yet): reported as 'unknown'. */
+export const UNKNOWN = Symbol('unknown')
 
 export class HealthCheck {
   private readonly startedAt = new Date()
@@ -77,7 +80,7 @@ export class HealthCheck {
     if (known?.pending) { await known.pending; return this.cache.get(name)! }
     const entry = { at: now, state: (known?.state ?? 'unknown') as DepState, error: known?.error ?? null, pending: null as Promise<void> | null }
     entry.pending = withTimeout(Promise.resolve().then(probe), this.timeout)
-      .then(() => { entry.state = 'ok'; entry.error = null }, (e: unknown) => { entry.state = 'down'; entry.error = (e as Error).message || String(e) })
+      .then((v) => { entry.state = v === UNKNOWN ? 'unknown' : 'ok'; entry.error = null }, (e: unknown) => { entry.state = 'down'; entry.error = (e as Error).message || String(e) })
       .finally(() => { entry.at = Date.now(); entry.pending = null })
     this.cache.set(name, entry)
     await entry.pending

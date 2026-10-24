@@ -15,7 +15,7 @@ import { followUpRequest, readingRequest } from './prompt.ts'
 import { Readings, answerOf } from './readings.ts'
 import { NOTE_MAX, isStyleId } from '../src/lib/styles.ts'
 import { Store } from './store.ts'
-import { HealthCheck } from './health.ts'
+import { HealthCheck, UNKNOWN } from './health.ts'
 import type { ServerConfig } from './store.ts'
 import { TransitReadings } from './transits.ts'
 
@@ -109,8 +109,13 @@ export function createApiState(options: ApiOptions = {}): ApiState {
     busy: () => ({ readings: readings.busy, casts: casting.size, transits: transits.busy }),
     deps: {
       model: async () => { const r = await listModels(store.getConfig()); if (r.error) throw new Error(r.error) },
-      astro: () => { const p = store.getProfile(); return call('planetary_hours', { city: p.city, state: p.state || undefined, country: p.country || undefined }) },
-      tarot: () => tarot('list_spreads', {}),
+      // A server not started yet is not asked: starting one cold (the ephemeris loading) can take longer than the probe waits.
+      astro: async () => {
+        if (astro && !astro.running) return UNKNOWN
+        const p = store.getProfile()
+        return call('planetary_hours', { city: p.city, state: p.state || undefined, country: p.country || undefined })
+      },
+      tarot: async () => (tarotServer && !tarotServer.running ? UNKNOWN : tarot('list_spreads', {})),
     },
   })
   return { store, call, tarot, deckDir, readings, memories, write, transits, casting, health }

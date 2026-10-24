@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { HealthCheck, versionOf } from './health.ts'
+import { HealthCheck, UNKNOWN, versionOf } from './health.ts'
 
 describe('HealthCheck', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'health-'))
@@ -36,6 +36,13 @@ describe('HealthCheck', () => {
     expect(r.data).toBeNull()
     expect(r.deps.model).toBe('down')
     expect(r.errors[0]).toMatch(/no answer in 20ms/)
+  })
+
+  it('says unknown, not down, for a dependency the probe chose not to wake', async () => {
+    const health = new HealthCheck({ app: 'demo', dataFile: path.join(dir, 'missing.sqlite'), busy: () => ({}), deps: { mcp: async () => UNKNOWN } })
+    const r = await health.report()
+    expect(r.deps.mcp).toBe('unknown')
+    expect(r.errors).toEqual([])
   })
 
   it('reads the checkout\'s commit, or says unknown outside one', () => {
