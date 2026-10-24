@@ -260,7 +260,7 @@ export class Store {
     const rows = this.db.prepare(
       `SELECT id, kind, period, title, reading_state, reading_error, created_at, updated_at, memory, memories_used, memory_excluded, stats, started_at, finished_at, style, note, starred,
         (SELECT COUNT(*) FROM follow_ups f WHERE f.casting_id = castings.id) AS questions
-      FROM castings ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC LIMIT ?`,
+      FROM castings ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC, rowid DESC LIMIT ?`,
     ).all(limit) as unknown as (Omit<CastingRow, 'result' | 'reading' | 'trail' | 'transit_readings' | 'brief'> & { questions: number })[]
     return rows.map((r) => ({
       id: r.id, kind: r.kind as Kind, period: r.period, title: r.title,
