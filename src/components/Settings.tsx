@@ -74,7 +74,7 @@ export default function Settings({ profile, config, onSaved, onClose, onMemories
         <h3 className="section-title">Who writes</h3>
         <label className="field"><span>LM Studio address</span><input value={c.lmStudioUrl} inputMode="url" onChange={(e) => setC({ ...c, lmStudioUrl: e.target.value })} /></label>
         <label className="field">
-          <span>API token {config.hasToken ? '(set; leave blank to keep)' : ''}</span>
+          <span>API token {config.hasToken ? '(set; leave blank to keep, for the same URL)' : ''}</span>
           <input type="password" value={token} autoComplete="off" onChange={(e) => setToken(e.target.value)} />
         </label>
         <label className="field">

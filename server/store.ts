@@ -233,7 +233,11 @@ export class Store {
   }
 
   setConfig(patch: Partial<ServerConfig>): Config {
-    const next = { ...this.getConfig(), ...patch }
+    const cur = this.getConfig()
+    const next = { ...cur, ...patch }
+    // The token is sent as a Bearer to whatever server the URL names; a new URL
+    // without a new token must not carry the old one somewhere else.
+    if (patch.lmStudioUrl !== undefined && patch.lmStudioUrl !== cur.lmStudioUrl && patch.apiToken === undefined) next.apiToken = ''
     this.db.prepare('UPDATE config SET lm_studio_url = ?, api_token = ?, model = ?, reasoning = ?, memory_default = ? WHERE id = 1')
       .run(next.lmStudioUrl, next.apiToken, next.model, next.reasoning, next.memoryDefault)
     return this.getPublicConfig()

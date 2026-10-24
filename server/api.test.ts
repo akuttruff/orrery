@@ -71,6 +71,15 @@ describe('settings', () => {
     expect(JSON.stringify(config)).not.toContain('secret')
   })
 
+  it('forgets the token when the LM Studio URL changes without a new one, so it is never sent to another server', async () => {
+    const put = (body: object) => fetch(`${ctx.base}/api/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<Record<string, unknown>>)
+    await put({ apiToken: 'secret' })
+    const url = (await put({})).lmStudioUrl as string
+    expect(await put({ lmStudioUrl: url, model: 'qwen' })).toMatchObject({ hasToken: true })
+    expect(await put({ lmStudioUrl: 'http://elsewhere:1234' })).toMatchObject({ hasToken: false })
+    expect(await put({ lmStudioUrl: 'http://other:1234', apiToken: 'new' })).toMatchObject({ lmStudioUrl: 'http://other:1234', hasToken: true })
+  })
+
   it('refuses a birth time the tools would reject', async () => {
     const r = await fetch(`${ctx.base}/api/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dateTime: 'June 15 1990' }) })
     expect(r.status).toBe(400)
