@@ -84,6 +84,15 @@ describe('settings', () => {
     expect(await put({ preferredModel: '' })).toMatchObject({ model: 'qwen', preferredModel: '' })
   })
 
+  it('keeps the quick jobs model, empty until one is chosen and clearable again', async () => {
+    const put = (body: object) => fetch(`${ctx.base}/api/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<Record<string, unknown>>)
+    expect(((await (await fetch(`${ctx.base}/api/config`)).json()) as { fastModel: string }).fastModel).toBe('')
+    expect(await put({ model: 'qwen', fastModel: ' qwen-9b ' })).toMatchObject({ model: 'qwen', fastModel: 'qwen-9b' })
+    expect(((await (await fetch(`${ctx.base}/api/config`)).json()) as { fastModel: string }).fastModel).toBe('qwen-9b')
+    expect(await put({ preferredModel: 'qwen-big' })).toMatchObject({ preferredModel: 'qwen-big', fastModel: 'qwen-9b' })
+    expect(await put({ fastModel: '' })).toMatchObject({ model: 'qwen', preferredModel: 'qwen-big', fastModel: '' })
+  })
+
   it('forgets the token when the LM Studio URL changes without a new one, so it is never sent to another server', async () => {
     const put = (body: object) => fetch(`${ctx.base}/api/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<Record<string, unknown>>)
     await put({ apiToken: 'secret' })
@@ -188,7 +197,9 @@ describe('castings', () => {
     expect(kept.transitReadings![aspectKey(wheel.aspects[0]!)]).toMatch(/^About \w+ today\.$/)
     // One short call, without thinking, and only once.
     expect(asked.filter((r) => r.system === READINGS_PROMPT)).toHaveLength(1)
-    expect(asked[0]).toMatchObject({ reasoning: 'off' })
+    expect(asked.find((r) => r.system === READINGS_PROMPT)).toMatchObject({ reasoning: 'off', quick: true })
+    // The reading itself is not a quick job.
+    expect(asked.find((r) => r.system !== READINGS_PROMPT)?.quick).toBeFalsy()
     await fetch(`${ctx.base}/api/castings/${c.id}`)
     expect(asked.filter((r) => r.system === READINGS_PROMPT)).toHaveLength(1)
     expect(await (await fetch(`${ctx.base}/api/busy`)).json()).toMatchObject({ transits: 0 })

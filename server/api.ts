@@ -267,7 +267,7 @@ export function createMiddleware(state: ApiState): Handler {
     if (url === '/api/config' && method === 'PUT') {
       void readBody(req).then((body) => {
         const patch: Partial<ServerConfig> = {}
-        for (const key of ['lmStudioUrl', 'apiToken', 'model', 'preferredModel', 'reasoning'] as const) {
+        for (const key of ['lmStudioUrl', 'apiToken', 'model', 'preferredModel', 'fastModel', 'reasoning'] as const) {
           const v = str(body[key])
           if (v !== undefined) patch[key] = v.trim()
         }

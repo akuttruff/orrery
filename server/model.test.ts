@@ -4,7 +4,7 @@ import { Trail, effectiveModel, fitReasoning, reasoningOptions, sseEvents, strip
 import type { ServerConfig } from './store.ts'
 import type { Step } from '../src/types.ts'
 
-const config: ServerConfig = { lmStudioUrl: 'http://lm', apiToken: 't', model: 'm', preferredModel: '', reasoning: 'low', memoryDefault: 'off' }
+const config: ServerConfig = { lmStudioUrl: 'http://lm', apiToken: 't', model: 'm', preferredModel: '', fastModel: '', reasoning: 'low', memoryDefault: 'off' }
 
 /** A fetch that answers with these events as LM Studio's SSE stream, and keeps the request body. */
 function lmStudio(events: object[]) {
@@ -136,7 +136,7 @@ describe('sseEvents', () => {
 })
 
 describe('reasoning a model takes', () => {
-  const config = (model: string) => ({ lmStudioUrl: 'http://lm.test', apiToken: 't', model, preferredModel: '', reasoning: 'low', memoryDefault: 'off' }) as ServerConfig
+  const config = (model: string) => ({ lmStudioUrl: 'http://lm.test', apiToken: 't', model, preferredModel: '', fastModel: '', reasoning: 'low', memoryDefault: 'off' }) as ServerConfig
   const models = {
     models: [
       { key: 'qwen3.5-122b-a10b', capabilities: { vision: true } },
@@ -161,7 +161,7 @@ describe('reasoning a model takes', () => {
 
 describe('the preferred model', () => {
   // Each test its own LM Studio address, so the resolver's short cache does not carry over.
-  const config = (lmStudioUrl: string, preferredModel = 'big') => ({ lmStudioUrl, apiToken: 't', model: 'small', preferredModel, reasoning: 'low', memoryDefault: 'off' }) as ServerConfig
+  const config = (lmStudioUrl: string, preferredModel = 'big') => ({ lmStudioUrl, apiToken: 't', model: 'small', preferredModel, fastModel: '', reasoning: 'low', memoryDefault: 'off' }) as ServerConfig
   /** A fetch that lists these models and counts how often it was asked. */
   const listing = (models: object[]) => {
     let asked = 0
@@ -208,5 +208,52 @@ describe('the preferred model', () => {
     // The chosen model takes 'low'; the preferred one lists no reasoning, so none is sent.
     expect(sent).not.toHaveProperty('reasoning')
     expect(reply.stats?.model).toBe('big')
+  })
+})
+
+describe('the quick jobs model', () => {
+  // Each test its own LM Studio address, so the caches do not carry over.
+  const config = (lmStudioUrl: string, fastModel: string) => ({ lmStudioUrl, apiToken: 't', model: 'small', preferredModel: 'big', fastModel, reasoning: 'low', memoryDefault: 'off' }) as ServerConfig
+  /** LM Studio with big loaded (no reasoning setting), small (full levels) and the unloaded quick model (on/off); keeps what the chat call sent. */
+  const lm = () => {
+    let sent: Record<string, unknown> = {}
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('/api/v1/models')) {
+        return new Response(JSON.stringify({ models: [
+          { key: 'small', loaded_instances: [{ id: 'small' }], capabilities: { reasoning: { allowed_options: ['off', 'low', 'medium', 'high'] } } },
+          { key: 'big', loaded_instances: [{ id: 'big' }], capabilities: { vision: true } },
+          { key: 'quick', loaded_instances: [], capabilities: { reasoning: { allowed_options: ['off', 'on'] } } },
+        ] }))
+      }
+      sent = JSON.parse(init!.body as string) as Record<string, unknown>
+      const events = [{ type: 'message.delta', content: 'ok' }, { type: 'chat.end', result: { stats: { tokens_per_second: 80 } } }]
+      return new Response(events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(''), { status: 200 })
+    }) as unknown as typeof fetch
+    return { fetchImpl, sent: () => sent }
+  }
+
+  it('takes a quick job, loaded or not, with the reasoning fitted to it, and is recorded in the stats', async () => {
+    const lms = lm()
+    const reply = await writeWithModel(config('http://quick-set', ' quick '), { system: 's', input: 'i', quick: true }, () => {}, { fetchImpl: lms.fetchImpl })
+    expect(lms.sent().model).toBe('quick')
+    // Settings ask for 'low'; the quick model is on/off, so it gets 'on'.
+    expect(lms.sent().reasoning).toBe('on')
+    expect(reply.stats?.model).toBe('quick')
+    await writeWithModel(config('http://quick-off', 'quick'), { system: 's', input: 'i', quick: true, reasoning: 'off' }, () => {}, { fetchImpl: lms.fetchImpl })
+    expect(lms.sent()).toMatchObject({ model: 'quick', reasoning: 'off' })
+  })
+
+  it('leaves a quick job to the usual model when none is set', async () => {
+    const lms = lm()
+    const reply = await writeWithModel(config('http://quick-unset', ''), { system: 's', input: 'i', quick: true }, () => {}, { fetchImpl: lms.fetchImpl })
+    expect(lms.sent().model).toBe('big')
+    expect(lms.sent()).not.toHaveProperty('reasoning')
+    expect(reply.stats?.model).toBe('big')
+  })
+
+  it('is not used for a job that is not quick', async () => {
+    const lms = lm()
+    await writeWithModel(config('http://not-quick', 'quick'), { system: 's', input: 'i' }, () => {}, { fetchImpl: lms.fetchImpl })
+    expect(lms.sent().model).toBe('big')
   })
 })

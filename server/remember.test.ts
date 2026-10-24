@@ -14,6 +14,9 @@ describe('rememberRequest', () => {
     expect(req.system).toContain('Already known (do not repeat):\n- The user works nights.')
     expect(req.input).toBe('The question:\nMy friend visits from Lisbon on the 20th, is that a good week?')
     expect(rememberRequest('q', [], sam).system).toContain('Nothing is known yet.')
+    // A short, tool-free job: it goes to the quick jobs model when one is set.
+    expect(req).toMatchObject({ quick: true })
+    expect(req.tools).toBeUndefined()
   })
 })
 

@@ -37,7 +37,7 @@ export class TransitReadings {
       try {
         const { text } = await this.write(
           this.store.getConfig(),
-          { system: READINGS_PROMPT, input, maxTokens: readingsTokenCap(keys.length), reasoning: 'off' },
+          { system: READINGS_PROMPT, input, maxTokens: readingsTokenCap(keys.length), reasoning: 'off', quick: true },
           () => {},
           { signal: AbortSignal.timeout(TIMEOUT_MS) },
         )

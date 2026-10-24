@@ -90,6 +90,8 @@ export interface WriteRequest {
   reasoning?: string
   /** LM Studio integrations the model may call, by plugin id ('mcp/<server>' from its mcp.json). */
   tools?: string[]
+  /** A short, tool-free job (a table's notes, a list of facts): goes to the quick jobs model when one is set. */
+  quick?: boolean
 }
 
 /** What one reply came to: the text, the trail behind it, and LM Studio's numbers. */
@@ -296,7 +298,8 @@ export async function writeWithModel(
   onDelta: (text: string) => void,
   { signal, fetchImpl = fetch, onTrail, onThinking }: WriteOptions = {},
 ): Promise<Reply> {
-  const model = await effectiveModel(config, fetchImpl)
+  const fast = req.quick ? config.fastModel?.trim() : ''
+  const model = fast || await effectiveModel(config, fetchImpl)
   if (!model) throw new ModelError('No model chosen. Pick one in Settings.')
   const base = config.lmStudioUrl.replace(/\/+$/, '')
   const body: Record<string, unknown> = { model, input: req.input, system_prompt: req.system, stream: true }

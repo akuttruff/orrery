@@ -44,7 +44,7 @@ function ModelPicker({ value, onChange, empty, keepEmpty = false, models }: Mode
 /** Whose chart, and which model writes about it. */
 export default function Settings({ profile, config, onSaved, onClose, onMemories }: SettingsProps) {
   const [p, setP] = useState(profile)
-  const [c, setC] = useState({ lmStudioUrl: config.lmStudioUrl, model: config.model, preferredModel: config.preferredModel, reasoning: config.reasoning, memoryDefault: config.memoryDefault })
+  const [c, setC] = useState({ lmStudioUrl: config.lmStudioUrl, model: config.model, preferredModel: config.preferredModel, fastModel: config.fastModel ?? '', reasoning: config.reasoning, memoryDefault: config.memoryDefault })
   const [token, setToken] = useState('')
   const [models, setModels] = useState<{ models: string[]; loaded: string[]; error: string | null } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -104,6 +104,11 @@ export default function Settings({ profile, config, onSaved, onClose, onMemories
           <span>Use when loaded</span>
           <ModelPicker value={c.preferredModel} onChange={(preferredModel) => setC({ ...c, preferredModel })} empty="None" keepEmpty models={models} />
           <span className="field-hint">When this model is loaded in LM Studio, Orrery uses it instead and leaves the other alone.</span>
+        </label>
+        <label className="field">
+          <span>Quick jobs</span>
+          <ModelPicker value={c.fastModel} onChange={(fastModel) => setC({ ...c, fastModel })} empty="None (use the main model)" keepEmpty models={models} />
+          <span className="field-hint">Short jobs, like the transit table's notes, go to this model so the main one stays free.</span>
         </label>
         <label className="field">
           <span>Reasoning</span>

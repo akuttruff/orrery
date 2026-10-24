@@ -28,6 +28,8 @@ export interface Config {
   model: string
   /** A model to use instead of `model` whenever LM Studio has it loaded; '' for none. Orrery never loads it. */
   preferredModel: string
+  /** A model for short, tool-free jobs (the transit table's notes, what to remember); '' sends them to the main one. LM Studio may load it. */
+  fastModel: string
   /** LM Studio's reasoning level ('low', 'medium', 'off', ...); '' leaves it to the model. */
   reasoning: string
   hasToken: boolean

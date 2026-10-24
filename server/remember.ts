@@ -29,7 +29,7 @@ export function rememberRequest(question: string, known: Memory[], profile: Prof
     `The person: ${profile.name}. Today is ${now.toDateString()}.`,
     known.length ? `Already known (do not repeat):\n${known.map((m) => `- ${m.text}`).join('\n')}` : 'Nothing is known yet.',
   ].join('\n\n')
-  return { system, input: `The question:\n${question}`, maxTokens: MAX_TOKENS }
+  return { system, input: `The question:\n${question}`, maxTokens: MAX_TOKENS, quick: true }
 }
 
 /**
