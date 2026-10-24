@@ -180,6 +180,12 @@ describe('castings', () => {
     expect(list.find((x) => x.id === c.id)).toMatchObject({ style: 'plain', starred: true })
   })
 
+  it('keeps a casting starred from the start', async () => {
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'today', starred: true })).json() as Casting
+    expect(c.starred).toBe(true)
+    expect((await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json() as Casting).starred).toBe(true)
+  })
+
   it('rejects a kind it does not know', async () => {
     expect((await post(`${ctx.base}/api/castings`, { kind: 'tarot' })).status).toBe(400)
   })

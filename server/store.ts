@@ -283,8 +283,8 @@ export class Store {
       id: newId(), reading: '', readingState: 'none', readingError: null, createdAt: now, updatedAt: now, memoriesUsed: [],
       written: { ...NOT_WRITTEN }, transitReadings: null, brief: null,
     }
-    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded, style, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded), casting.style, casting.note)
+    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded, style, note, starred) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded), casting.style, casting.note, casting.starred ? 1 : 0)
     return casting
   }
 
