@@ -49,6 +49,8 @@ describe('FollowUps', () => {
     expect(screen.getByText(/^Answered .*12\.0s · qwen$/)).toBeInTheDocument()
     expect(screen.getByText('· 21.3 tok/s · 3100 in / 820 out (210 thinking) · 2.4s to first token')).toBeInTheDocument()
     expect(screen.getByLabelText('Ask another')).toBeEnabled()
+    // A question's answer is no card: nothing to save as a picture.
+    expect(screen.queryByRole('button', { name: 'Download' })).not.toBeInTheDocument()
   })
 
   it('keeps the box closed until the reading is written', async () => {
@@ -98,6 +100,8 @@ describe('a card beside the reading', () => {
     expect(img).toHaveStyle({ transform: 'rotate(180deg)' })
     expect(screen.getByText('despair · lost faith')).toBeInTheDocument()
     expect(await screen.findByText(/hope is there/)).toBeInTheDocument()
+    // Answered: the card and its reading can be saved as one picture.
+    expect(screen.getByRole('button', { name: 'Download' })).toBeEnabled()
   })
 
   it('offers no card under a tarot reading, which is cards already', async () => {

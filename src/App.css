@@ -296,6 +296,10 @@ input, select { font: inherit; }
 @keyframes blink { to { visibility: hidden; } }
 .reading-status { margin: 6px 0; font-size: 14px; color: var(--paper-dim); }
 .reading-status.error { color: var(--rust); }
+/* Under a finished tarot reading: save it as one picture. */
+.reading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 2px; }
+.download-note { font-size: 13px; color: var(--paper-dim); line-height: 1.4; }
+.download-note.error { color: var(--rust); }
 
 /* ====== Memory ====== */
 .memory-switch { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 14px 0 0; }
@@ -438,7 +442,7 @@ input, select { font: inherit; }
 .followup-a { padding: 0 0 0 2px; }
 .followup-a .reading-body { font-size: 15px; }
 .followup-a .reading-body > :last-child { margin-bottom: 4px; }
-.followup-actions { display: flex; gap: 8px; }
+.followup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .followup-actions:empty { display: none; }
 
 .ask { margin: 8px 0 0; }

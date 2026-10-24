@@ -3,12 +3,14 @@ import { Brain, RefreshCw, SendHorizontal, Sparkles, Square, X } from 'lucide-re
 import Body from './Body'
 import Trail from './Trail'
 import WrittenMeta from './WrittenMeta'
+import DownloadButton from './DownloadButton'
 import { useAnswer } from '../hooks/useReading.ts'
 import { api } from '../lib/api.ts'
 import { toolLabel } from '../lib/toolFormat.ts'
 import { pendingTools, thinking } from '../lib/trail.ts'
 import { formatWhen } from '../lib/when.ts'
 import { tarotImage } from '../lib/tarotImage.ts'
+import { pulledImage } from '../lib/readingImage.ts'
 import { isTarotKind } from '../types.ts'
 import type { FollowUp, Kind, ReadingState } from '../types.ts'
 
@@ -18,6 +20,8 @@ const REMEMBER_POLLS = 24
 
 interface FollowUpsProps {
   castingId: string
+  /** The casting's title, for a pulled card's picture: what it was read against. */
+  castingTitle?: string
   /** What was cast: a chart can have a card pulled beside it. */
   kind?: Kind
   /** The reading's state: questions wait until it is written. */
@@ -30,7 +34,7 @@ interface FollowUpsProps {
  * model wrote, then a box to ask the next. The answers are written on the
  * server like the reading, so one streams in and is kept.
  */
-export default function FollowUps({ castingId, kind = 'today', readingState, readingText }: FollowUpsProps) {
+export default function FollowUps({ castingId, castingTitle, kind = 'today', readingState, readingText }: FollowUpsProps) {
   const [items, setItems] = useState<FollowUp[]>([])
   const [question, setQuestion] = useState('')
   const [sending, setSending] = useState(false)
@@ -117,7 +121,7 @@ export default function FollowUps({ castingId, kind = 'today', readingState, rea
       {items.length > 0 && <h3 className="section-title">Questions</h3>}
       <ol className="followup-list">
         {items.map((f) => (
-          <FollowUpItem key={f.id} followUp={f} onSettled={settled} onAgain={() => void again(f)} onStop={() => void stop(f)} onRemove={() => void remove(f)} onForget={(id) => void forget(f, id)} />
+          <FollowUpItem key={f.id} followUp={f} castingTitle={castingTitle} onSettled={settled} onAgain={() => void again(f)} onStop={() => void stop(f)} onRemove={() => void remove(f)} onForget={(id) => void forget(f, id)} />
         ))}
       </ol>
       <form
@@ -157,6 +161,7 @@ export default function FollowUps({ castingId, kind = 'today', readingState, rea
 
 interface FollowUpItemProps {
   followUp: FollowUp
+  castingTitle?: string
   onSettled: (id: string) => void
   onAgain: () => void
   onStop: () => void
@@ -164,7 +169,7 @@ interface FollowUpItemProps {
   onForget: (memoryId: string) => void
 }
 
-function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget }: FollowUpItemProps) {
+function FollowUpItem({ followUp, castingTitle, onSettled, onAgain, onStop, onRemove, onForget }: FollowUpItemProps) {
   const { text, state, error, written } = useAnswer(followUp, onSettled)
   const pending = pendingTools(written.trail)
   const status = thinking(written.trail) ? 'Thinking…' : pending.length ? `Looking up ${pending.map((t) => toolLabel(t.name)).join(', ')}…` : written.trail.length ? 'Writing…' : 'Starting…'
@@ -193,6 +198,7 @@ function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget
         <div className="followup-actions">
           {state === 'writing' && <button type="button" className="chip" onClick={onStop}><Square size={13} aria-hidden="true" /> Stop</button>}
           {state === 'failed' && <button type="button" className="chip" onClick={onAgain}><RefreshCw size={13} aria-hidden="true" /> Try again</button>}
+          {state === 'done' && followUp.card && text && <DownloadButton image={() => pulledImage(followUp, text, castingTitle)!} />}
         </div>
         <WrittenMeta written={written} state={state} label="Answered" />
         {(state === 'done' || state === 'failed') && (

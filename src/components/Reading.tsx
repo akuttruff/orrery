@@ -2,8 +2,10 @@ import { RefreshCw, Square } from 'lucide-react'
 import Body from './Body'
 import Trail from './Trail'
 import WrittenMeta from './WrittenMeta'
+import DownloadButton from './DownloadButton'
 import type { LiveReading } from '../hooks/useReading.ts'
 import { thinking } from '../lib/trail.ts'
+import type { ReadingImage } from '../lib/readingImage.ts'
 import type { Brief } from '../types.ts'
 
 interface ReadingProps {
@@ -12,10 +14,12 @@ interface ReadingProps {
   brief: Brief | null
   onWrite: () => void
   onStop: () => void
+  /** A tarot reading as a picture to save; offered once the reading is written. */
+  image?: (text: string) => ReadingImage
 }
 
 /** The model's reading under the chart: its thinking first, then the text streamed in and kept, then what it cost. */
-export default function Reading({ reading, brief, onWrite, onStop }: ReadingProps) {
+export default function Reading({ reading, brief, onWrite, onStop, image }: ReadingProps) {
   const { text, state, error, written } = reading
   return (
     <section className="reading" aria-live="polite">
@@ -34,6 +38,11 @@ export default function Reading({ reading, brief, onWrite, onStop }: ReadingProp
       {state === 'writing' && <p className="reading-status">{thinking(written.trail) ? 'Thinking' : text ? 'Writing' : 'Starting'}… This carries on if you go back and cast another.</p>}
       {state === 'failed' && <p className="reading-status error">{error ?? 'The reading failed.'}</p>}
       {state === 'none' && <p className="reading-status">No reading yet.</p>}
+      {image && state === 'done' && text && (
+        <div className="reading-actions">
+          <DownloadButton image={() => image(text)} />
+        </div>
+      )}
       <WrittenMeta written={written} state={state} label="Written" />
       {brief && state !== 'none' && (
         <details className="brief">

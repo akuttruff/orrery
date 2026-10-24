@@ -13,6 +13,7 @@ import { parseWheel } from '../lib/chartWheel.ts'
 import { parseForecast } from '../lib/forecastTable.ts'
 import { parseReading } from '../lib/tarotSpread.ts'
 import { tarotImage } from '../lib/tarotImage.ts'
+import { castingImage } from '../lib/readingImage.ts'
 import { formatWhen } from '../lib/when.ts'
 import { styleOf, NOTE_MAX, type StyleId } from '../lib/styles.ts'
 import { isTarotKind } from '../types.ts'
@@ -107,8 +108,8 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
         </span>
       </div>
       {memoryOn && picking && <MemoryPicker excluded={casting.memoryExcluded} used={casting.memoriesUsed} onChange={onExclude} onManage={onMemories} />}
-      <Reading reading={reading} brief={casting.brief} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
-      <FollowUps key={casting.id} castingId={casting.id} kind={casting.kind} readingState={reading.state} readingText={reading.text} />
+      <Reading reading={reading} brief={casting.brief} image={cards ? (text) => castingImage(casting, cards, text) : undefined} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
+      <FollowUps key={casting.id} castingId={casting.id} castingTitle={casting.title} kind={casting.kind} readingState={reading.state} readingText={reading.text} />
       {reading.state !== 'none' && (
         <div className="retone" role="group" aria-label="Read it again as">
           <span className="ask-label">Read it again as</span>
