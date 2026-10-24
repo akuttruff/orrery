@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 
 /**
  * The astrology tools, called directly. astro-mcp is an MCP server over
@@ -51,25 +52,70 @@ export class AstroToolError extends Error {}
 
 export type ToolCaller = (name: string, args: Record<string, unknown>) => Promise<string>
 
+/** The part of an MCP client a call needs; a test passes its own. */
+export type ToolClient = Pick<Client, 'callTool' | 'close'>
+/** Starts the server and connects to it; `onClose` is called when the connection goes, however it goes. */
+export type ConnectClient = (onClose: () => void) => Promise<ToolClient>
+
+/**
+ * Whether a failed call means the server itself is gone, so starting a fresh
+ * one is worth it. A timeout or a JSON-RPC error is the call's own: other
+ * calls on the same server are fine, and a restart would cut them off.
+ */
+export function connectionLost(err: unknown): boolean {
+  if (err instanceof McpError) return err.code === ErrorCode.ConnectionClosed
+  const code = (err as NodeJS.ErrnoException | null)?.code
+  return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED' || (err instanceof Error && err.message === 'Not connected')
+}
+
+/** A name for the log: the repo the server runs from (astro-mcp, tarot-mcp). */
+export function serverLabel(spec: ServerSpec): string {
+  const entry = spec.args?.find((a) => a.endsWith('.js'))
+  return path.basename(entry ? path.dirname(path.dirname(entry)) : path.dirname(spec.command)) || 'mcp'
+}
+
+/** The real server over stdio. Its stderr goes to the log, a line at a time and labelled, so a crash says why. */
+function stdioClient(spec: ServerSpec, label: string): ConnectClient {
+  return async (onClose) => {
+    const transport = new StdioClientTransport({
+      command: spec.command,
+      args: spec.args ?? [],
+      env: { ...(process.env as Record<string, string>), ...spec.env },
+      stderr: 'pipe',
+    })
+    let rest = ''
+    transport.stderr?.on('data', (chunk: Buffer) => {
+      const lines = (rest + chunk.toString('utf8')).split('\n')
+      rest = lines.pop() ?? ''
+      for (const line of lines) if (line.trim()) console.error(`[${label}] ${line}`)
+    })
+    const client = new Client({ name: 'orrery', version: '1.0.0' })
+    transport.onclose = onClose
+    await client.connect(transport)
+    return client
+  }
+}
+
 export class Astro {
-  private client: Client | null = null
-  private connecting: Promise<Client> | null = null
+  private client: ToolClient | null = null
+  private connecting: Promise<ToolClient> | null = null
+  private readonly open: ConnectClient
 
-  constructor(private readonly spec: ServerSpec = readAstroSpec(), private readonly timeoutMs = 60_000) {}
+  constructor(spec: ServerSpec = readAstroSpec(), private readonly timeoutMs = 60_000, open?: ConnectClient) {
+    this.open = open ?? stdioClient(spec, serverLabel(spec))
+  }
 
-  private connect(): Promise<Client> {
+  /** Whether a server is up now; the health probe does not start one cold. */
+  get running(): boolean {
+    return this.client !== null
+  }
+
+  private connect(): Promise<ToolClient> {
     if (this.client) return Promise.resolve(this.client)
     if (!this.connecting) {
       this.connecting = (async () => {
-        const transport = new StdioClientTransport({
-          command: this.spec.command,
-          args: this.spec.args ?? [],
-          env: { ...(process.env as Record<string, string>), ...this.spec.env },
-          stderr: 'ignore',
-        })
-        const client = new Client({ name: 'orrery', version: '1.0.0' })
-        transport.onclose = () => { if (this.client === client) this.client = null }
-        await client.connect(transport)
+        let client: ToolClient | null = null
+        client = await this.open(() => { if (client && this.client === client) this.client = null })
         this.client = client
         return client
       })().finally(() => { this.connecting = null })
@@ -77,7 +123,7 @@ export class Astro {
     return this.connecting
   }
 
-  /** Call one tool and return its text. A server that died is started again once. */
+  /** Call one tool and return its text. A server that died is started again once; any other failure is the call's. */
   async call(name: string, args: Record<string, unknown>): Promise<string> {
     for (let attempt = 0; ; attempt++) {
       const client = await this.connect()
@@ -88,9 +134,9 @@ export class Astro {
         if (result.isError) throw new AstroToolError(text || `${name} failed`)
         return text
       } catch (err) {
-        if (err instanceof AstroToolError || attempt > 0) throw err
-        // The transport broke: forget it and try once on a fresh one.
-        this.client = null
+        if (attempt > 0 || !connectionLost(err)) throw err
+        // The transport broke: forget it (unless another call already has) and try once on a fresh one.
+        if (this.client === client) this.client = null
         await client.close().catch(() => { /* already gone */ })
       }
     }
