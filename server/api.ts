@@ -47,7 +47,7 @@ export interface ApiState {
   write: typeof writeWithModel
   /** The popup sentence for each transit on a wheel, written beside the reading. */
   transits: TransitReadings
-  /** Casts in flight by kind+period, so two taps run the tools once. */
+  /** Casts in flight by kind, period and the choices made, so two taps run the tools once. */
   casting: Map<string, Promise<unknown>>
   /** Castings a card is being dealt for: the deal is awaited before its follow-up exists, so a second tap must see the first. */
   pulling: Set<string>
@@ -194,7 +194,8 @@ export function createMiddleware(state: ApiState): Handler {
   const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>, spread: SpreadId = 'three'): Promise<unknown> => {
     const profile = store.getProfile()
     const period = periodFor(kind, new Date())
-    const key = `${kind}:${period}:${spread}`
+    // Only the same tap twice is shared: a different question deals different cards, and a different style or memory choice is a different reading.
+    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.memory, frame.memoryExcluded])
     let pending = state.casting.get(key)
     if (!pending) {
       pending = (async () => {

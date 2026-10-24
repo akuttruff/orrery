@@ -114,6 +114,18 @@ describe('castings', () => {
     expect(list[0]!.questions).toBe(0)
   })
 
+  it('shares one cast between two taps alike, but not between two questions asked of the cards at once', async () => {
+    const deal = ctx.tarot.getMockImplementation()!
+    ctx.tarot.mockImplementation(async (name, args) => { await tick(); return deal(name, args) })
+    const [a, b] = await Promise.all([post(`${ctx.base}/api/castings`, { kind: 'spread', note: 'Work?' }), post(`${ctx.base}/api/castings`, { kind: 'spread', note: 'Work?' })])
+    expect(((await a.json()) as Casting).id).toBe(((await b.json()) as Casting).id)
+    const [c, d] = await Promise.all([post(`${ctx.base}/api/castings`, { kind: 'spread', note: 'Work?' }), post(`${ctx.base}/api/castings`, { kind: 'spread', note: 'Love?' })])
+    const [cc, dd] = [(await c.json()) as Casting, (await d.json()) as Casting]
+    expect(cc.id).not.toBe(dd.id)
+    expect([cc.note, dd.note]).toEqual(['Work?', 'Love?'])
+    expect(ctx.tarot.mock.calls.filter(([, args]) => args.question === 'Love?')).toHaveLength(1)
+  })
+
   it('lists the casting that changed last first: a reading or a question moves it up', async () => {
     const a = await (await post(`${ctx.base}/api/castings`, { kind: 'natal' })).json() as Casting
     const b = await (await post(`${ctx.base}/api/castings`, { kind: 'moon' })).json() as Casting
