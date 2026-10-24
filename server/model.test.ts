@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { Trail, fitReasoning, reasoningOptions, sseEvents, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
+import { Trail, effectiveModel, fitReasoning, reasoningOptions, sseEvents, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
 import type { ServerConfig } from './store.ts'
 import type { Step } from '../src/types.ts'
 
-const config: ServerConfig = { lmStudioUrl: 'http://lm', apiToken: 't', model: 'm', reasoning: 'low', memoryDefault: 'off' }
+const config: ServerConfig = { lmStudioUrl: 'http://lm', apiToken: 't', model: 'm', preferredModel: '', reasoning: 'low', memoryDefault: 'off' }
 
 /** A fetch that answers with these events as LM Studio's SSE stream, and keeps the request body. */
 function lmStudio(events: object[]) {
@@ -136,7 +136,7 @@ describe('sseEvents', () => {
 })
 
 describe('reasoning a model takes', () => {
-  const config = (model: string) => ({ lmStudioUrl: 'http://lm.test', apiToken: 't', model, reasoning: 'low', memoryDefault: 'off' }) as ServerConfig
+  const config = (model: string) => ({ lmStudioUrl: 'http://lm.test', apiToken: 't', model, preferredModel: '', reasoning: 'low', memoryDefault: 'off' }) as ServerConfig
   const models = {
     models: [
       { key: 'qwen3.5-122b-a10b', capabilities: { vision: true } },
@@ -156,5 +156,57 @@ describe('reasoning a model takes', () => {
     expect(fitReasoning('low', ['off', 'on'])).toBe('on')
     expect(fitReasoning('off', ['off', 'on'])).toBe('off')
     expect(fitReasoning('low', null)).toBe('low')
+  })
+})
+
+describe('the preferred model', () => {
+  // Each test its own LM Studio address, so the resolver's short cache does not carry over.
+  const config = (lmStudioUrl: string, preferredModel = 'big') => ({ lmStudioUrl, apiToken: 't', model: 'small', preferredModel, reasoning: 'low', memoryDefault: 'off' }) as ServerConfig
+  /** A fetch that lists these models and counts how often it was asked. */
+  const listing = (models: object[]) => {
+    let asked = 0
+    const fetchImpl = (async () => { asked++; return new Response(JSON.stringify({ models })) }) as unknown as typeof fetch
+    return { fetchImpl, asked: () => asked }
+  }
+
+  it('is used while LM Studio has it loaded, by key or instance id, and a burst asks once', async () => {
+    const lm = listing([{ key: 'small', loaded_instances: [{ id: 'small' }] }, { key: 'big', loaded_instances: [{ id: 'big' }] }])
+    const answers = await Promise.all([1, 2, 3].map(() => effectiveModel(config('http://loaded'), lm.fetchImpl)))
+    expect(answers).toEqual(['big', 'big', 'big'])
+    expect(lm.asked()).toBe(1)
+    const byInstance = listing([{ key: 'org/big-gguf', loaded_instances: [{ id: 'big' }] }])
+    expect(await effectiveModel(config('http://instance'), byInstance.fetchImpl)).toBe('big')
+  })
+
+  it('falls back to the chosen model when it is not loaded, LM Studio is down, or none is preferred', async () => {
+    const notLoaded = listing([{ key: 'big', loaded_instances: [] }, { key: 'small' }])
+    expect(await effectiveModel(config('http://not-loaded'), notLoaded.fetchImpl)).toBe('small')
+    const down = (async () => { throw new Error('ECONNREFUSED') }) as unknown as typeof fetch
+    expect(await effectiveModel(config('http://down'), down)).toBe('small')
+    const refused = (async () => new Response('nope', { status: 500 })) as unknown as typeof fetch
+    expect(await effectiveModel(config('http://refused'), refused)).toBe('small')
+    const none = listing([{ key: 'big', loaded_instances: [{ id: 'big' }] }])
+    expect(await effectiveModel(config('http://none', ''), none.fetchImpl)).toBe('small')
+    expect(none.asked()).toBe(0)
+  })
+
+  it('is what writeWithModel sends, fits the reasoning to, and records in the stats', async () => {
+    let sent: Record<string, unknown> = {}
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('/api/v1/models')) {
+        return new Response(JSON.stringify({ models: [
+          { key: 'small', loaded_instances: [{ id: 'small' }], capabilities: { reasoning: { allowed_options: ['off', 'low', 'medium', 'high'] } } },
+          { key: 'big', loaded_instances: [{ id: 'big' }], capabilities: { vision: true } },
+        ] }))
+      }
+      sent = JSON.parse(init!.body as string) as Record<string, unknown>
+      const events = [{ type: 'message.delta', content: 'ok' }, { type: 'chat.end', result: { stats: { tokens_per_second: 30 } } }]
+      return new Response(events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(''), { status: 200 })
+    }) as unknown as typeof fetch
+    const reply = await writeWithModel(config('http://write'), { system: 's', input: 'i' }, () => {}, { fetchImpl })
+    expect(sent.model).toBe('big')
+    // The chosen model takes 'low'; the preferred one lists no reasoning, so none is sent.
+    expect(sent).not.toHaveProperty('reasoning')
+    expect(reply.stats?.model).toBe('big')
   })
 })

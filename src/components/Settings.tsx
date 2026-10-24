@@ -20,10 +20,31 @@ const REASONING = [
   { value: 'xhigh', label: 'Extra high' },
 ]
 
+interface ModelPickerProps {
+  value: string
+  onChange: (model: string) => void
+  /** What the empty choice says: no model yet, or none preferred. */
+  empty: string
+  /** Whether the empty choice stays on offer once a model is picked. */
+  keepEmpty?: boolean
+  models: { models: string[]; loaded: string[] } | null
+}
+
+/** LM Studio's models, loaded ones marked; the one saved is offered even when LM Studio can't be asked. */
+function ModelPicker({ value, onChange, empty, keepEmpty = false, models }: ModelPickerProps) {
+  const options = models?.models.length ? models.models : value ? [value] : []
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}>
+      {(keepEmpty || !value) && <option value="">{empty}</option>}
+      {options.map((m) => <option key={m} value={m}>{m}{models?.loaded.includes(m) ? ' · loaded' : ''}</option>)}
+    </select>
+  )
+}
+
 /** Whose chart, and which model writes about it. */
 export default function Settings({ profile, config, onSaved, onClose, onMemories }: SettingsProps) {
   const [p, setP] = useState(profile)
-  const [c, setC] = useState({ lmStudioUrl: config.lmStudioUrl, model: config.model, reasoning: config.reasoning, memoryDefault: config.memoryDefault })
+  const [c, setC] = useState({ lmStudioUrl: config.lmStudioUrl, model: config.model, preferredModel: config.preferredModel, reasoning: config.reasoning, memoryDefault: config.memoryDefault })
   const [token, setToken] = useState('')
   const [models, setModels] = useState<{ models: string[]; loaded: string[]; error: string | null } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -49,8 +70,6 @@ export default function Settings({ profile, config, onSaved, onClose, onMemories
       setSaving(false)
     }
   }
-
-  const options = models?.models.length ? models.models : c.model ? [c.model] : []
 
   return (
     <div className="sheet" role="dialog" aria-label="Settings">
@@ -79,10 +98,12 @@ export default function Settings({ profile, config, onSaved, onClose, onMemories
         </label>
         <label className="field">
           <span>Model {models?.error ? `· ${models.error}` : ''}</span>
-          <select value={c.model} onChange={(e) => setC({ ...c, model: e.target.value })}>
-            {!c.model && <option value="">Choose a model</option>}
-            {options.map((m) => <option key={m} value={m}>{m}{models?.loaded.includes(m) ? ' · loaded' : ''}</option>)}
-          </select>
+          <ModelPicker value={c.model} onChange={(model) => setC({ ...c, model })} empty="Choose a model" models={models} />
+        </label>
+        <label className="field">
+          <span>Use when loaded</span>
+          <ModelPicker value={c.preferredModel} onChange={(preferredModel) => setC({ ...c, preferredModel })} empty="None" keepEmpty models={models} />
+          <span className="field-hint">When this model is loaded in LM Studio, Orrery uses it instead and leaves the other alone.</span>
         </label>
         <label className="field">
           <span>Reasoning</span>

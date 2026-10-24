@@ -75,6 +75,15 @@ describe('settings', () => {
     expect(JSON.stringify(config)).not.toContain('secret')
   })
 
+  it('keeps the model to use when loaded, empty until one is chosen and clearable again', async () => {
+    const put = (body: object) => fetch(`${ctx.base}/api/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<Record<string, unknown>>)
+    expect(((await (await fetch(`${ctx.base}/api/config`)).json()) as { preferredModel: string }).preferredModel).toBe('')
+    expect(await put({ model: 'qwen', preferredModel: ' qwen-big ' })).toMatchObject({ model: 'qwen', preferredModel: 'qwen-big' })
+    expect(((await (await fetch(`${ctx.base}/api/config`)).json()) as { preferredModel: string }).preferredModel).toBe('qwen-big')
+    expect(await put({ reasoning: 'off' })).toMatchObject({ preferredModel: 'qwen-big' })
+    expect(await put({ preferredModel: '' })).toMatchObject({ model: 'qwen', preferredModel: '' })
+  })
+
   it('forgets the token when the LM Studio URL changes without a new one, so it is never sent to another server', async () => {
     const put = (body: object) => fetch(`${ctx.base}/api/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<Record<string, unknown>>)
     await put({ apiToken: 'secret' })

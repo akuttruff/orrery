@@ -211,34 +211,75 @@ export function stripLeakedThinking(text: string): string {
   return close < 0 ? unwrapped : unwrapped.slice(close + '</think>'.length)
 }
 
-/**
- * The reasoning settings LM Studio says a model takes, from /api/v1/models:
- * a list, [] when it lists the model with none (a build with no manifest,
- * like qwen3.5-122b-a10b, which answers any `reasoning` with a 400), or null
- * when it can't be asked or doesn't know the model. Kept a few minutes.
- */
-const REASONING_TTL_MS = 5 * 60_000
-const reasoningCache = new Map<string, { at: number; allowed: string[] | null }>()
+/** One model as /api/v1/models lists it, with what this file reads of it. */
+interface ListedModel {
+  key?: string
+  loaded_instances?: { id?: string }[]
+  capabilities?: { reasoning?: { allowed_options?: string[] } }
+}
 
-export async function reasoningOptions(config: ServerConfig, fetchImpl: typeof fetch = fetch): Promise<string[] | null> {
+/** LM Studio's model list, or null when it can't be asked. */
+async function listedModels(config: ServerConfig, fetchImpl: typeof fetch): Promise<ListedModel[] | null> {
   const base = config.lmStudioUrl.replace(/\/+$/, '')
-  const key = `${base} ${config.model}`
-  const hit = reasoningCache.get(key)
-  if (hit && Date.now() - hit.at < REASONING_TTL_MS) return hit.allowed
   try {
     const res = await fetchImpl(`${base}/api/v1/models`, {
       headers: config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {},
       signal: AbortSignal.timeout(5000),
     })
     if (!res.ok) return null
-    const data = await res.json() as { models?: { key?: string; loaded_instances?: { id?: string }[]; capabilities?: { reasoning?: { allowed_options?: string[] } } }[] }
-    const entry = (data.models ?? []).find((m) => m.key === config.model || (m.loaded_instances ?? []).some((i) => i.id === config.model))
-    const allowed = entry ? (entry.capabilities?.reasoning?.allowed_options ?? []) : null
-    reasoningCache.set(key, { at: Date.now(), allowed })
-    return allowed
+    return ((await res.json()) as { models?: ListedModel[] }).models ?? []
   } catch {
     return null
   }
+}
+
+/** The listing for a model, by its key or a loaded instance's id. */
+const findModel = (models: ListedModel[], model: string): ListedModel | undefined =>
+  models.find((m) => m.key === model || (m.loaded_instances ?? []).some((i) => i.id === model))
+
+/**
+ * The model a call goes to: the preferred one while LM Studio has it
+ * loaded, the chosen one otherwise (not loaded, not listed, LM Studio not
+ * answering). Only asks; never loads anything. The answer is kept a few
+ * seconds, as a promise, so a burst of calls (a reading and its popups)
+ * asks LM Studio once, and a model loaded or ejected is noticed soon after.
+ */
+const PREFERRED_TTL_MS = 10_000
+const loadedCache = new Map<string, { at: number; loaded: Promise<boolean> }>()
+
+export async function effectiveModel(config: ServerConfig, fetchImpl: typeof fetch = fetch): Promise<string> {
+  const preferred = config.preferredModel?.trim()
+  if (!preferred || preferred === config.model) return config.model
+  const key = `${config.lmStudioUrl.replace(/\/+$/, '')} ${preferred}`
+  let hit = loadedCache.get(key)
+  if (!hit || Date.now() - hit.at >= PREFERRED_TTL_MS) {
+    const loaded = listedModels(config, fetchImpl).then((models) => Boolean(models && findModel(models, preferred)?.loaded_instances?.length))
+    hit = { at: Date.now(), loaded }
+    loadedCache.set(key, hit)
+  }
+  return (await hit.loaded) ? preferred : config.model
+}
+
+/**
+ * The reasoning settings LM Studio says a model takes, from /api/v1/models:
+ * a list, [] when it lists the model with none (a build with no manifest,
+ * like qwen3.5-122b-a10b, which answers any `reasoning` with a 400), or null
+ * when it can't be asked or doesn't know the model. Kept a few minutes.
+ * `model` is the one the call goes to, the chosen one unless said otherwise.
+ */
+const REASONING_TTL_MS = 5 * 60_000
+const reasoningCache = new Map<string, { at: number; allowed: string[] | null }>()
+
+export async function reasoningOptions(config: ServerConfig, fetchImpl: typeof fetch = fetch, model = config.model): Promise<string[] | null> {
+  const key = `${config.lmStudioUrl.replace(/\/+$/, '')} ${model}`
+  const hit = reasoningCache.get(key)
+  if (hit && Date.now() - hit.at < REASONING_TTL_MS) return hit.allowed
+  const models = await listedModels(config, fetchImpl)
+  if (!models) return null
+  const entry = findModel(models, model)
+  const allowed = entry ? (entry.capabilities?.reasoning?.allowed_options ?? []) : null
+  reasoningCache.set(key, { at: Date.now(), allowed })
+  return allowed
 }
 
 /** The level to send: as asked when the model takes it, 'on' for any thinking on an on/off model, nothing when it takes none. */
@@ -255,11 +296,12 @@ export async function writeWithModel(
   onDelta: (text: string) => void,
   { signal, fetchImpl = fetch, onTrail, onThinking }: WriteOptions = {},
 ): Promise<Reply> {
-  if (!config.model) throw new ModelError('No model chosen. Pick one in Settings.')
+  const model = await effectiveModel(config, fetchImpl)
+  if (!model) throw new ModelError('No model chosen. Pick one in Settings.')
   const base = config.lmStudioUrl.replace(/\/+$/, '')
-  const body: Record<string, unknown> = { model: config.model, input: req.input, system_prompt: req.system, stream: true }
+  const body: Record<string, unknown> = { model, input: req.input, system_prompt: req.system, stream: true }
   const asked = req.reasoning ?? config.reasoning
-  const reasoning = asked ? fitReasoning(asked, await reasoningOptions(config, fetchImpl)) : undefined
+  const reasoning = asked ? fitReasoning(asked, await reasoningOptions(config, fetchImpl, model)) : undefined
   if (reasoning) body.reasoning = reasoning
   if (req.maxTokens) body.max_output_tokens = req.maxTokens
   if (req.tools?.length) body.integrations = req.tools.map((id) => ({ type: 'plugin', id }))
@@ -293,7 +335,7 @@ export async function writeWithModel(
     } else if (evt.type === 'error') {
       throw new ModelError(evt.error?.message || 'LM Studio reported an error')
     } else if (evt.type === 'chat.end') {
-      stats = replyStats(evt.result?.stats, config.model)
+      stats = replyStats(evt.result?.stats, model)
       if (trail.take({ type: 'message.start' }) === 'steps') onTrail?.(trail.copy())
     } else {
       const change = trail.take(evt)

@@ -11,8 +11,9 @@ export interface ServerConfig extends Omit<Config, 'hasToken'> {
 
 // Reasoning low: the model thinks a little before a reading, which the token
 // caps in prompt.ts leave room for; 'off' in Settings is faster. Memory off
-// until asked for: a reading then draws on nothing but the chart.
-const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', apiToken: '', model: '', reasoning: 'low', memoryDefault: 'off' }
+// until asked for: a reading then draws on nothing but the chart. No
+// preferred model: every call goes to the chosen one.
+const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', apiToken: '', model: '', preferredModel: '', reasoning: 'low', memoryDefault: 'off' }
 
 /** The first chart the app opens with, until Settings says otherwise. */
 const DEFAULT_PROFILE: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
@@ -183,6 +184,7 @@ export class Store {
     const has = (table: string, column: string): boolean =>
       (this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
     if (!has('config', 'memory_default')) this.db.exec("ALTER TABLE config ADD COLUMN memory_default TEXT NOT NULL DEFAULT 'off'")
+    if (!has('config', 'preferred_model')) this.db.exec("ALTER TABLE config ADD COLUMN preferred_model TEXT NOT NULL DEFAULT ''")
     if (!has('castings', 'memory')) this.db.exec('ALTER TABLE castings ADD COLUMN memory INTEGER')
     if (!has('castings', 'memories_used')) this.db.exec('ALTER TABLE castings ADD COLUMN memories_used TEXT')
     if (!has('follow_ups', 'remembered')) this.db.exec('ALTER TABLE follow_ups ADD COLUMN remembered TEXT')
@@ -218,13 +220,16 @@ export class Store {
     }
     if (this.db.prepare('SELECT 1 FROM config WHERE id = 1').get()) return
     const c = { ...DEFAULT_CONFIG, ...seedConfig(seedFrom) }
-    this.db.prepare('INSERT INTO config (id, lm_studio_url, api_token, model, reasoning, memory_default) VALUES (1, ?, ?, ?, ?, ?)')
-      .run(c.lmStudioUrl, c.apiToken, c.model, c.reasoning, c.memoryDefault)
+    this.db.prepare('INSERT INTO config (id, lm_studio_url, api_token, model, preferred_model, reasoning, memory_default) VALUES (1, ?, ?, ?, ?, ?, ?)')
+      .run(c.lmStudioUrl, c.apiToken, c.model, c.preferredModel, c.reasoning, c.memoryDefault)
   }
 
   getConfig(): ServerConfig {
     const r = this.db.prepare('SELECT * FROM config WHERE id = 1').get() as Record<string, string>
-    return { lmStudioUrl: r.lm_studio_url!, apiToken: r.api_token!, model: r.model!, reasoning: r.reasoning!, memoryDefault: r.memory_default === 'on' ? 'on' : 'off' }
+    return {
+      lmStudioUrl: r.lm_studio_url!, apiToken: r.api_token!, model: r.model!, preferredModel: r.preferred_model ?? '',
+      reasoning: r.reasoning!, memoryDefault: r.memory_default === 'on' ? 'on' : 'off',
+    }
   }
 
   getPublicConfig(): Config {
@@ -238,8 +243,8 @@ export class Store {
     // The token is sent as a Bearer to whatever server the URL names; a new URL
     // without a new token must not carry the old one somewhere else.
     if (patch.lmStudioUrl !== undefined && patch.lmStudioUrl !== cur.lmStudioUrl && patch.apiToken === undefined) next.apiToken = ''
-    this.db.prepare('UPDATE config SET lm_studio_url = ?, api_token = ?, model = ?, reasoning = ?, memory_default = ? WHERE id = 1')
-      .run(next.lmStudioUrl, next.apiToken, next.model, next.reasoning, next.memoryDefault)
+    this.db.prepare('UPDATE config SET lm_studio_url = ?, api_token = ?, model = ?, preferred_model = ?, reasoning = ?, memory_default = ? WHERE id = 1')
+      .run(next.lmStudioUrl, next.apiToken, next.model, next.preferredModel, next.reasoning, next.memoryDefault)
     return this.getPublicConfig()
   }
 

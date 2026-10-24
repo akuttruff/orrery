@@ -13,7 +13,7 @@ const summary = ({ result: _r, reading: _g, transitReadings: _t, brief: _b, ...r
 
 /** A fetch that serves the app's routes from a list of castings the test can change. */
 function serve(castings: Casting[]) {
-  const config = { lmStudioUrl: '', model: 'm', reasoning: 'low', hasToken: false, memoryDefault: 'off' }
+  const config = { lmStudioUrl: '', model: 'm', preferredModel: '', reasoning: 'low', hasToken: false, memoryDefault: 'off' }
   const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     // A tap casts anew: the new casting joins the list, and its reading is started.

@@ -26,6 +26,8 @@ export interface Profile {
 export interface Config {
   lmStudioUrl: string
   model: string
+  /** A model to use instead of `model` whenever LM Studio has it loaded; '' for none. Orrery never loads it. */
+  preferredModel: string
   /** LM Studio's reasoning level ('low', 'medium', 'off', ...); '' leaves it to the model. */
   reasoning: string
   hasToken: boolean
