@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { Trail, sseEvents, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
+import { Trail, fitReasoning, reasoningOptions, sseEvents, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
 import type { ServerConfig } from './store.ts'
 import type { Step } from '../src/types.ts'
 
@@ -132,5 +132,29 @@ describe('sseEvents', () => {
     const body = stream(['data: {"type":"error"}\n\n'], () => { cancelled = true })
     for await (const evt of sseEvents(body)) { expect(evt.type).toBe('error'); break }
     expect(cancelled).toBe(true)
+  })
+})
+
+describe('reasoning a model takes', () => {
+  const config = (model: string) => ({ lmStudioUrl: 'http://lm.test', apiToken: 't', model, reasoning: 'low', memoryDefault: 'off' }) as ServerConfig
+  const models = {
+    models: [
+      { key: 'qwen3.5-122b-a10b', capabilities: { vision: true } },
+      { key: 'qwen/qwen3.5-9b', capabilities: { reasoning: { allowed_options: ['off', 'on'] } } },
+    ],
+  }
+  const fetchModels = (async () => new Response(JSON.stringify(models))) as unknown as typeof fetch
+
+  it('knows a model with no reasoning setting from one LM Studio does not list', async () => {
+    expect(await reasoningOptions(config('qwen3.5-122b-a10b'), fetchModels)).toEqual([])
+    expect(await reasoningOptions(config('qwen/qwen3.5-9b'), fetchModels)).toEqual(['off', 'on'])
+    expect(await reasoningOptions(config('not-downloaded'), fetchModels)).toBeNull()
+  })
+
+  it('sends nothing to a model that takes none, and on for thinking on an on/off model', () => {
+    expect(fitReasoning('low', [])).toBeUndefined()
+    expect(fitReasoning('low', ['off', 'on'])).toBe('on')
+    expect(fitReasoning('off', ['off', 'on'])).toBe('off')
+    expect(fitReasoning('low', null)).toBe('low')
   })
 })

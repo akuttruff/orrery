@@ -211,6 +211,44 @@ export function stripLeakedThinking(text: string): string {
   return close < 0 ? unwrapped : unwrapped.slice(close + '</think>'.length)
 }
 
+/**
+ * The reasoning settings LM Studio says a model takes, from /api/v1/models:
+ * a list, [] when it lists the model with none (a build with no manifest,
+ * like qwen3.5-122b-a10b, which answers any `reasoning` with a 400), or null
+ * when it can't be asked or doesn't know the model. Kept a few minutes.
+ */
+const REASONING_TTL_MS = 5 * 60_000
+const reasoningCache = new Map<string, { at: number; allowed: string[] | null }>()
+
+export async function reasoningOptions(config: ServerConfig, fetchImpl: typeof fetch = fetch): Promise<string[] | null> {
+  const base = config.lmStudioUrl.replace(/\/+$/, '')
+  const key = `${base} ${config.model}`
+  const hit = reasoningCache.get(key)
+  if (hit && Date.now() - hit.at < REASONING_TTL_MS) return hit.allowed
+  try {
+    const res = await fetchImpl(`${base}/api/v1/models`, {
+      headers: config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {},
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return null
+    const data = await res.json() as { models?: { key?: string; loaded_instances?: { id?: string }[]; capabilities?: { reasoning?: { allowed_options?: string[] } } }[] }
+    const entry = (data.models ?? []).find((m) => m.key === config.model || (m.loaded_instances ?? []).some((i) => i.id === config.model))
+    const allowed = entry ? (entry.capabilities?.reasoning?.allowed_options ?? []) : null
+    reasoningCache.set(key, { at: Date.now(), allowed })
+    return allowed
+  } catch {
+    return null
+  }
+}
+
+/** The level to send: as asked when the model takes it, 'on' for any thinking on an on/off model, nothing when it takes none. */
+export function fitReasoning(requested: string | undefined, allowed: string[] | null): string | undefined {
+  if (!requested || !allowed) return requested
+  if (allowed.includes(requested)) return requested
+  if (requested !== 'off' && allowed.includes('on')) return 'on'
+  return undefined
+}
+
 export async function writeWithModel(
   config: ServerConfig,
   req: WriteRequest,
@@ -220,7 +258,8 @@ export async function writeWithModel(
   if (!config.model) throw new ModelError('No model chosen. Pick one in Settings.')
   const base = config.lmStudioUrl.replace(/\/+$/, '')
   const body: Record<string, unknown> = { model: config.model, input: req.input, system_prompt: req.system, stream: true }
-  const reasoning = req.reasoning ?? config.reasoning
+  const asked = req.reasoning ?? config.reasoning
+  const reasoning = asked ? fitReasoning(asked, await reasoningOptions(config, fetchImpl)) : undefined
   if (reasoning) body.reasoning = reasoning
   if (req.maxTokens) body.max_output_tokens = req.maxTokens
   if (req.tools?.length) body.integrations = req.tools.map((id) => ({ type: 'plugin', id }))
