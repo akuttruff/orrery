@@ -49,6 +49,8 @@ export interface ApiState {
   transits: TransitReadings
   /** Casts in flight by kind+period, so two taps run the tools once. */
   casting: Map<string, Promise<unknown>>
+  /** Castings a card is being dealt for: the deal is awaited before its follow-up exists, so a second tap must see the first. */
+  pulling: Set<string>
   /** What `GET /api/health` reports: the process, its data file, the model server and astro-mcp. */
   health: HealthCheck
 }
@@ -145,11 +147,11 @@ export function createApiState(options: ApiOptions = {}): ApiState {
       tarot: async () => (tarotServer && !tarotServer.running ? UNKNOWN : tarot('list_spreads', {})),
     },
   })
-  return { store, call, tarot, deckDir, readings, memories, write, transits, casting, health }
+  return { store, call, tarot, deckDir, readings, memories, write, transits, casting, pulling: new Set(), health }
 }
 
 export function createMiddleware(state: ApiState): Handler {
-  const { store, call, readings, memories } = state
+  const { store, call, readings, memories, pulling } = state
 
   /** Whether a casting is read with memories: its own switch, else Settings'. */
   const memoryOn = (casting: Casting): boolean => casting.memory ?? store.getConfig().memoryDefault === 'on'
@@ -365,15 +367,22 @@ export function createMiddleware(state: ApiState): Handler {
           const current = store.getCasting(id)!
           if (current.readingState === 'writing' || !current.reading) throw new UserError('Wait for the reading to be written, then pull a card')
           const earlier = store.listFollowUps(id)
-          if (earlier.some((x) => x.state === 'writing')) throw new UserError('One answer at a time')
-          const dealt = await state.tarot('draw_cards', { spread: 'single', reversals: true, question: `A card beside this reading: ${current.title}${current.note ? ` (${current.note})` : ''}` })
-          const card = (JSON.parse(dealt) as { cards?: TarotCard[] }).cards?.[0]
-          if (!card?.card?.id) throw new Error('The tarot server dealt nothing')
-          const memory = memoryFor(current)
-          const followUp = store.addFollowUp(id, `Pulled a card: ${card.card.name}${card.reversed ? ', reversed' : ''}`, memory.ids, card)
-          readings.start(followUp.id, followUpRequest(current, earlier, followUp.question, store.getProfile(), new Date(), memory.lines, card), answerOf(store, followUp.id))
-          store.setRemembered(followUp.id, [])
-          json(res, 202, store.getFollowUp(followUp.id))
+          if (pulling.has(id) || earlier.some((x) => x.state === 'writing')) throw new UserError('One answer at a time')
+          pulling.add(id)
+          try {
+            const dealt = await state.tarot('draw_cards', { spread: 'single', reversals: true, question: `A card beside this reading: ${current.title}${current.note ? ` (${current.note})` : ''}` })
+            const card = (JSON.parse(dealt) as { cards?: TarotCard[] }).cards?.[0]
+            if (!card?.card?.id) throw new Error('The tarot server dealt nothing')
+            // Deleted while the card was dealt: nothing to hang it on.
+            if (!store.getCasting(id)) { json(res, 404, { error: 'No such casting' }); return }
+            const memory = memoryFor(current)
+            const followUp = store.addFollowUp(id, `Pulled a card: ${card.card.name}${card.reversed ? ', reversed' : ''}`, memory.ids, card)
+            readings.start(followUp.id, followUpRequest(current, earlier, followUp.question, store.getProfile(), new Date(), memory.lines, card), answerOf(store, followUp.id))
+            store.setRemembered(followUp.id, [])
+            json(res, 202, store.getFollowUp(followUp.id))
+          } finally {
+            pulling.delete(id)
+          }
         })().catch(fail)
         return undefined
       }
@@ -385,7 +394,7 @@ export function createMiddleware(state: ApiState): Handler {
           const current = store.getCasting(id)!
           if (current.readingState === 'writing' || !current.reading) throw new UserError('Wait for the reading to be written, then ask')
           const earlier = store.listFollowUps(id)
-          if (earlier.some((f) => f.state === 'writing')) throw new UserError('One answer at a time')
+          if (pulling.has(id) || earlier.some((f) => f.state === 'writing')) throw new UserError('One answer at a time')
           const memory = memoryFor(current)
           const followUp = store.addFollowUp(id, question, memory.ids)
           readings.start(followUp.id, followUpRequest(current, earlier, question, store.getProfile(), new Date(), memory.lines), answerOf(store, followUp.id))

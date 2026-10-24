@@ -560,4 +560,16 @@ describe('tarot', () => {
     expect(seen.at(-1)!.input).toMatch(/pulled a card: The Fool, upright/)
     expect(q.card).toBeNull()
   })
+
+  it('pulls one card for a double tap, though the deal takes a while', async () => {
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'today' })).json() as Casting
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await new Promise((r) => setTimeout(r, 120))
+    const deal = ctx.tarot.getMockImplementation()!
+    ctx.tarot.mockImplementationOnce(async (name, args) => { await new Promise((r) => setTimeout(r, 60)); return deal(name, args) })
+    const [a, b] = await Promise.all([post(`${ctx.base}/api/castings/${c.id}/card`), post(`${ctx.base}/api/castings/${c.id}/card`)])
+    expect([a.status, b.status].sort()).toEqual([202, 400])
+    expect(await (await fetch(`${ctx.base}/api/castings/${c.id}/followups`)).json()).toHaveLength(1)
+    expect(ctx.tarot.mock.calls.filter(([name]) => name === 'draw_cards')).toHaveLength(1)
+  })
 })
