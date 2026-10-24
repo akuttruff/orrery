@@ -6,12 +6,19 @@ import type { Casting, ReadingEvent } from '../types.ts'
 
 /** jsdom has no EventSource: one the test drives by hand, remembering every one opened. */
 class FakeSource {
+  static readonly CONNECTING = 0
+  static readonly OPEN = 1
+  static readonly CLOSED = 2
   static opened: FakeSource[] = []
   onmessage: ((e: MessageEvent<string>) => void) | null = null
+  onerror: (() => void) | null = null
+  readyState = FakeSource.OPEN
   closed = false
   constructor(public url: string) { FakeSource.opened.push(this) }
-  close(): void { this.closed = true }
+  close(): void { this.closed = true; this.readyState = FakeSource.CLOSED }
   emit(event: ReadingEvent): void { this.onmessage?.({ data: JSON.stringify(event) } as MessageEvent<string>) }
+  /** A dropped connection the browser will retry, or (`final`) one the server refused, which it will not. */
+  fail(final: boolean): void { this.readyState = final ? FakeSource.CLOSED : FakeSource.CONNECTING; this.onerror?.() }
 }
 
 const casting = (over: Partial<Casting>): Casting => ({
@@ -72,6 +79,21 @@ describe('useReading', () => {
     rerender({ c: casting({ readingState: 'done', reading: 'Finished.' }) })
     expect(result.current).toMatchObject({ text: 'Finished.', state: 'done' })
     expect(FakeSource.opened).toHaveLength(1)
+  })
+
+  it('rides out a dropped connection, but stops writing when the server refuses the stream', () => {
+    const settled = vi.fn()
+    const { result } = renderHook(() => useReading(casting({}), settled))
+    act(() => last().emit({ type: 'snapshot', reading: 'So far', state: 'writing', error: null, written: NOT_WRITTEN }))
+    act(() => last().fail(false))
+    expect(result.current.state).toBe('writing')
+    expect(last().closed).toBe(false)
+    expect(settled).not.toHaveBeenCalled()
+    // Deleted mid-stream: the server answers 404, and EventSource gives up.
+    act(() => last().fail(true))
+    expect(result.current).toMatchObject({ text: 'So far', state: 'failed' })
+    expect(result.current.error).toMatch(/Lost the stream/)
+    expect(settled).toHaveBeenCalledWith('c1')
   })
 
   it('reports a failure, and a snapshot of a run already over', () => {

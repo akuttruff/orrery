@@ -95,7 +95,20 @@ export function useLiveText(id: string | null, stored: LiveReading, eventsUrl: (
         flush()
       }
     }
-    // EventSource reconnects by itself; the snapshot on reconnect resets `text`.
+    // EventSource reconnects by itself after a dropped connection; the snapshot on reconnect resets `text`.
+    // It gives up only when the server refuses the stream (the casting or question was deleted, say):
+    // then nothing more will come, so the page stops showing it as being written and the record is fetched.
+    source.onerror = () => {
+      if (over || source.readyState !== EventSource.CLOSED) return
+      flush()
+      if (over) return
+      state = 'failed'
+      error = 'Lost the stream of this text. Reload to see where it got to.'
+      over = true
+      setLive({ id, reading: { text, state, error, written } })
+      source.close()
+      onSettled?.(id)
+    }
     return () => { if (timer !== null) window.clearTimeout(timer); source.close() }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onSettled and eventsUrl are stable
   }, [id, stored.state])
