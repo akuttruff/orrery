@@ -1,0 +1,22 @@
+{
+  "from": "lm-chat",
+  "files": {
+    "src/components/TarotSpread.tsx": "cd75628edbbf7cb1a770e098684c945f28ac1d1d28c77831ed9a8e8d71c5898d",
+    "src/components/TransitTable.tsx": "3d9c8c6a0e08fe65e32a39fd3edb8bf46b243854d47a6192efee45f2e06f6248",
+    "src/components/Unreachable.tsx": "2699559790805b2bcecded1760231645017f2752665e708582ed5c04ba53161b",
+    "src/components/WheelSvg.tsx": "7f8f7104e9d383501899b1c8e35dab9be97b3cf760ee1166b0f700c2755dfc99",
+    "src/hooks/useMediaQuery.ts": "1803104a4ee9817e97916f885fcb30e5bb1f176d6fa912cf5a54ac7320fe30ac",
+    "src/lib/appShell.ts": "597c0d27c21fbe42b6a675dbcf588e0e65d8875029d310af48d137817de70d11",
+    "src/lib/chartWheel.ts": "85802dad1844070db58c706d362f915ad0e72985b3aecb51a4369a946a5c0868",
+    "src/lib/forecastTable.ts": "efb608f09243fd0085948a15a444e3a61bedb86dd6e28d23da3a17afa74755cf",
+    "src/lib/reach.ts": "476b5532a9830bfa9fbfde8eda95f2a80c6b372547afdf948860f9f049bcff11",
+    "src/lib/readings.ts": "3f2fdb9fefc09a7fa32f602469e10b60aee6e5c370b8bbc8d06ae45676999162",
+    "src/lib/sortRows.ts": "74403d9fb5ceb9866fc78245588e8061999929eb8a3484b142116ff8d981a731",
+    "src/lib/tarotSpread.ts": "d699d86b8f2bedc9a760707672534de7406179661be4fe82eb17ad583a502bdd",
+    "src/lib/tipPlacement.ts": "282bf72b07751bfcd7f4274d250b0955d20406e612b5561602be9866f3c51de0",
+    "src/lib/toolFormat.ts": "34f9d68b7c2441c8793d1b36c1f1117572bcccc2df03ff31602af16a75203143",
+    "src/lib/transitTable.ts": "c47e81e9f695dd0114faeb1bbd00906e9bee0a9a829e55fd987710f1abe3f698",
+    "src/lib/weight.ts": "0c9dabe6e3aa997b8d2897b02d88879909caacff0df76e1986a4dc1573761318",
+    "src/wheel.css": "5c49645bed82ef3c31200c44c2f921393dc66c386f901b082f5afb631488471c"
+  }
+}

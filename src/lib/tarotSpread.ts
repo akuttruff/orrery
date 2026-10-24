@@ -1,13 +1,19 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * A tarot reading in a tool result (the tarot-mcp server's draw_cards),
  * laid out the way the spread is read: a row for a line of cards, the
  * cross and staff for a Celtic Cross. The pictures are the public-domain
- * Rider-Waite-Smith scans, served from tarot-mcp's deck by the server.
+ * Rider-Waite-Smith scans, served from /tarot/<id>.jpg unless the app
+ * serves them elsewhere (imageFor's `base`).
  */
 
-import type { TarotCard } from '../types.ts'
-
-export type DrawnCard = TarotCard
+export interface DrawnCard {
+  position: { index: number; name: string; meaning: string }
+  card: { id: string; name: string; arcana: 'major' | 'minor'; suit: string | null; number: number }
+  reversed: boolean
+  keywords: string[]
+  meaning: string
+}
 
 export interface Reading {
   spread: { id: string; name: string; description: string }
@@ -31,7 +37,8 @@ export function parseReading(output: string): Reading | null {
   return { spread: d.spread, question: typeof d.question === 'string' ? d.question : null, seed: typeof d.seed === 'number' ? d.seed : 0, cards }
 }
 
-export const imageFor = (id: string): string => `/api/tarot/${id}.jpg`
+/** A card's picture: /tarot/<id>.jpg, or under another `base`. */
+export const imageFor = (id: string, base = '/tarot/'): string => `${base}${id}.jpg`
 
 /** A card's place in the picture: in card widths and heights from the top left, and how it is turned. */
 export interface Slot { x: number; y: number; turn: number }

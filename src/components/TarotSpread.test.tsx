@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import TarotSpread from './TarotSpread'
+import { tarotImage } from '../lib/tarotImage.ts'
 import type { Reading } from '../lib/tarotSpread.ts'
 
 const card = (i: number, name: string, id: string, reversed = false): Reading['cards'][number] => ({ position: { index: i, name: `Position ${i}`, meaning: 'm' }, card: { id, name, arcana: 'minor', suit: 'cups', number: i }, reversed, keywords: [], meaning: '' })
@@ -8,7 +9,7 @@ const card = (i: number, name: string, id: string, reversed = false): Reading['c
 describe('TarotSpread', () => {
   it('lays three cards in a row, each named by its position, reversed ones upside down', () => {
     const reading: Reading = { spread: { id: 'three', name: 'Past, present, future', description: '' }, question: 'Will it rain?', seed: 1, cards: [card(1, 'Ace of Cups', 'cups-01'), card(2, 'The Moon', 'major-18', true), card(3, 'Ten of Wands', 'wands-10')] }
-    render(<TarotSpread reading={reading} />)
+    render(<TarotSpread reading={reading} image={tarotImage} />)
     expect(screen.getByRole('figure', { name: 'Past, present, future: Will it rain?' })).toBeInTheDocument()
     const moon = screen.getByRole('img', { name: 'Position 2: The Moon, reversed' })
     expect(moon).toHaveAttribute('src', '/api/tarot/major-18.jpg')

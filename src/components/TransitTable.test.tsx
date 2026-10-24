@@ -16,7 +16,7 @@ const orbs = () => screen.getAllByText(/^orb /).map((el) => el.textContent)
 describe('ActiveTransits', () => {
   it('sorts by a column on a click, the other way on another, and back to its own order on a third or from the caption', async () => {
     const user = userEvent.setup()
-    render(<ActiveTransits wheel={wheel} />)
+    render(<ActiveTransits wheel={wheel} weights sortable />)
     const own = orbs()
     expect(own).toHaveLength(rows.length)
 
@@ -45,7 +45,7 @@ describe('ActiveTransits', () => {
 
   it('shows each transit\'s weight and sorts by it, the heaviest first on a second click', async () => {
     const user = userEvent.setup()
-    render(<ActiveTransits wheel={wheel} />)
+    render(<ActiveTransits wheel={wheel} weights sortable />)
     const weights = () => within(screen.getByRole('table')).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[4]!.childNodes[0]!.textContent!)
     expect(weights()).toEqual(rows.map((r) => (r.weight === null ? '—' : String(r.weight))))
     expect(screen.getByRole('button', { name: 'Weight' })).toHaveAccessibleDescription(/weight = slowness × aspect, doubled on a key point/)
@@ -63,7 +63,7 @@ describe('ForecastTransits', () => {
   it('shows a scanned week in its two groups, folds the backdrop, and flattens for a sort', async () => {
     const user = userEvent.setup()
     const table = parseForecast(fullWeek)!
-    render(<ForecastTransits table={table} />)
+    render(<ForecastTransits table={table} weights sortable />)
     expect(screen.getByText(/^Transits in orb · Oct 18–24/)).toBeInTheDocument()
     const heads = () => screen.getAllByRole('rowgroup').map((g) => g.textContent)
     expect(screen.getByText('Exact this week · 3')).toBeInTheDocument()
@@ -86,7 +86,7 @@ describe('ForecastTransits', () => {
 
   it('names a month\'s groups for the month', async () => {
     const user = userEvent.setup()
-    render(<ForecastTransits table={parseForecast(fullMonth)!} />)
+    render(<ForecastTransits table={parseForecast(fullMonth)!} weights sortable />)
     expect(screen.getByText(/^Transits in orb · October 2026/)).toBeInTheDocument()
     expect(screen.getByText('Exact this month · 6')).toBeInTheDocument()
     expect(screen.getByText('In orb all month, not exact in it · 6')).toBeInTheDocument()

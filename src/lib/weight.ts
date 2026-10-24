@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * How much a transit weighs: the forecasts' own ranking (astro-mcp's
  * forecast.py), worked out here for the aspects of a transit chart, which
@@ -7,7 +8,7 @@
  * The weight is the transiting planet's slowness -- the slower, the rarer
  * and longer the transit, the more it shapes a period -- doubled on a key
  * natal point (the Sun, Moon, Ascendant, MC or the chart ruler), times the
- * aspect. The Moon is Orrery's addition: the tool never headlines her, but
+ * aspect. The Moon is added here: the tool never headlines her, but
  * a day's table is full of her, so she weighs a little below Mercury.
  */
 

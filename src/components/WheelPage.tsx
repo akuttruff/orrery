@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
-import { WheelSvg } from './ChartWheel'
+import { WheelSvg } from './WheelSvg'
 import { api } from '../lib/api.ts'
 import { parseWheel, wheelTitle } from '../lib/chartWheel.ts'
 import { closeWheel } from '../lib/route.ts'
@@ -50,7 +50,7 @@ export default function WheelPage({ id }: { id: string }) {
       {casting && (!wheel || !title) && <p className="error-card">This casting has no wheel to draw.</p>}
       {wheel && title && (
         <>
-          <WheelSvg wheel={wheel} title={title} readings={casting?.transitReadings ?? undefined} />
+          <WheelSvg wheel={wheel} title={title} readings={casting?.transitReadings ?? undefined} degrees={false} />
           <p className="wheel-page-title">{title}</p>
         </>
       )}

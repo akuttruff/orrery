@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { type Wheel, displayName, ordinal } from '../lib/chartWheel.ts'
@@ -6,7 +7,7 @@ import { type ForecastRow, type ForecastTable, keyTransits, periodText, scanGrou
 import { nextSort, sortRows, type Sort, type SortKey, type Sortable } from '../lib/sortRows.ts'
 import { ASPECT_WEIGHT, MAX_WEIGHT, SLOWNESS, weightParts, weightText } from '../lib/weight.ts'
 
-/** The five columns, each sortable: a click sorts up, another down, a third goes back to the table's own order. */
+/** The columns, the last only with weights; sortable, a click sorts up, another down, a third goes back to the table's own order. */
 const COLUMNS: { key: SortKey; label: string; hint: string }[] = [
   { key: 'when', label: 'When', hint: 'by the moment it is exact' },
   { key: 'from', label: 'Transit', hint: 'by the transiting body' },
@@ -15,11 +16,22 @@ const COLUMNS: { key: SortKey; label: string; hint: string }[] = [
   { key: 'weight', label: 'Weight', hint: 'by how much it shapes the period' },
 ]
 
-function SortHead({ sort, onSort }: { sort: Sort | null; onSort: (key: SortKey) => void }) {
+/**
+ * What a table shows beyond its four plain columns, both off unless asked
+ * for: `weights`, a Weight column with each row's working; `sortable`,
+ * headers that sort the rows.
+ */
+export interface TableOptions { weights?: boolean; sortable?: boolean }
+
+const columnsFor = (weights: boolean) => (weights ? COLUMNS : COLUMNS.filter((c) => c.key !== 'weight'))
+
+function Head({ sort, onSort, weights, sortable }: { sort: Sort | null; onSort: (key: SortKey) => void; weights: boolean; sortable: boolean }) {
+  const columns = columnsFor(weights)
+  if (!sortable) return <thead><tr>{columns.map(({ key, label }) => <th key={key}>{label}</th>)}</tr></thead>
   return (
     <thead>
       <tr>
-        {COLUMNS.map(({ key, label, hint }) => {
+        {columns.map(({ key, label, hint }) => {
           const on = sort?.key === key ? sort.dir : null
           return (
             <th key={key} aria-sort={on === 'asc' ? 'ascending' : on === 'desc' ? 'descending' : 'none'} className={key === 'weight' ? 'tt-th-help' : undefined}>
@@ -178,9 +190,9 @@ function Run({ pass, others, on }: { pass: string; others: string[]; on: string 
  * The transits in play at the wheel's moment, under the wheel: each aspect
  * on it as a row in date order of its exact moment, past ones dimmed, with
  * whether it is applying or separating, each body over its position, the
- * natal house, the aspect over its orb, and its weight.
+ * natal house, the aspect over its orb, and (with weights) its weight.
  */
-export function ActiveTransits({ wheel }: { wheel: Wheel }) {
+export function ActiveTransits({ wheel, weights = false, sortable = false }: { wheel: Wheel } & TableOptions) {
   const all = useMemo(() => activeTransits(wheel), [wheel])
   const { rows, sort, onSort, reset } = useSorted(all)
   if (rows.length === 0) return null
@@ -188,7 +200,7 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
     <div className="tt-wrap">
       <table className="tt">
         <Caption text={`Transits on ${wheel.dateTime ? dayText(wheel.dateTime) : 'this day'}`} sort={sort} onReset={reset} />
-        <SortHead sort={sort} onSort={onSort} />
+        <Head sort={sort} onSort={onSort} weights={weights} sortable={sortable} />
         <tbody>
           {rows.map((r) => (
             <tr key={`${r.from}|${r.type}|${r.to}`}>
@@ -205,7 +217,7 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
                 <Natal name={r.to} retrograde={r.toRetrograde} house={r.toHouse} />
                 {r.toPosition && <div className="tt-pos">{r.toPosition}</div>}
               </td>
-              <Weight weight={r.weight} from={r.from} to={r.to} type={r.type} ruler={r.ruler} />
+              {weights && <Weight weight={r.weight} from={r.from} to={r.to} type={r.type} ruler={r.ruler} />}
             </tr>
           ))}
         </tbody>
@@ -215,7 +227,7 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
 }
 
 /** One forecast contact as a row. */
-function ForecastRowView({ r, table }: { r: ForecastRow; table: ForecastTable }) {
+function ForecastRowView({ r, table, weights }: { r: ForecastRow; table: ForecastTable; weights: boolean }) {
   return (
     <tr>
       <When
@@ -239,7 +251,7 @@ function ForecastRowView({ r, table }: { r: ForecastRow; table: ForecastTable })
         <Natal name={r.to} house={r.toHouse} />
         {r.toPosition && <div className="tt-pos">{r.toPosition}</div>}
       </td>
-      <Weight weight={r.weight} from={r.from} to={r.to} type={r.type} ruler={table.ruler} />
+      {weights && <Weight weight={r.weight} from={r.from} to={r.to} type={r.type} ruler={table.ruler} />}
     </tr>
   )
 }
@@ -255,17 +267,17 @@ export const BACKDROP_SHOWN = 4
  * order. For a week or a month with a scan, every contact in orb, in two
  * groups: the period's events, exact inside it in date order, then its
  * backdrop, in orb without perfecting, heaviest first and folded past the
- * first few. A sort runs over all the rows at once; the table's own order
- * brings the groups back.
+ * first few. A sort, when the table is sortable, runs over all the rows
+ * at once; the table's own order brings the groups back.
  *
- * Five columns, each with a dim second line so the table fits a phone:
+ * Four columns, each with a dim second line so the table fits a phone:
  * the moment it is exact over the days it is in orb (when it never
  * perfects within the period, the nearest exact moment before or after
  * it and whether it is applying or separating), each body over its
- * position, the aspect over its orb and, when a retrograde brings the
- * contact back, which pass this is, and the weight.
+ * position, and the aspect over its orb and, when a retrograde brings the
+ * contact back, which pass this is. With weights, a fifth: the weight.
  */
-export function ForecastTransits({ table }: { table: ForecastTable }) {
+export function ForecastTransits({ table, weights = false, sortable = false }: { table: ForecastTable } & TableOptions) {
   const all = useMemo(() => keyTransits(table), [table])
   const groups = useMemo(() => scanGroups(table), [table])
   const { rows, sort, onSort, reset } = useSorted(all)
@@ -277,8 +289,8 @@ export function ForecastTransits({ table }: { table: ForecastTable }) {
       <div className="tt-wrap">
         <table className="tt">
           <Caption text={caption} sort={sort} onReset={reset} />
-          <SortHead sort={sort} onSort={onSort} />
-          <tbody>{rows.map((r, i) => <ForecastRowView key={rowKey(r, i)} r={r} table={table} />)}</tbody>
+          <Head sort={sort} onSort={onSort} weights={weights} sortable={sortable} />
+          <tbody>{rows.map((r, i) => <ForecastRowView key={rowKey(r, i)} r={r} table={table} weights={weights} />)}</tbody>
         </table>
       </div>
     )
@@ -286,23 +298,24 @@ export function ForecastTransits({ table }: { table: ForecastTable }) {
   const hidden = unfolded ? 0 : Math.max(0, groups.backdrop.length - BACKDROP_SHOWN)
   const backdrop = hidden ? groups.backdrop.slice(0, BACKDROP_SHOWN) : groups.backdrop
   const period = table.horizon === 'month' ? 'month' : 'week'
+  const span = columnsFor(weights).length
   return (
     <div className="tt-wrap">
       <table className="tt">
         <Caption text={caption} sort={sort} onReset={reset} />
-        <SortHead sort={sort} onSort={onSort} />
+        <Head sort={sort} onSort={onSort} weights={weights} sortable={sortable} />
         {groups.events.length > 0 && (
           <tbody>
-            <tr className="tt-group"><th colSpan={5} scope="rowgroup">Exact this {period} · {groups.events.length}</th></tr>
-            {groups.events.map((r, i) => <ForecastRowView key={rowKey(r, i)} r={r} table={table} />)}
+            <tr className="tt-group"><th colSpan={span} scope="rowgroup">Exact this {period} · {groups.events.length}</th></tr>
+            {groups.events.map((r, i) => <ForecastRowView key={rowKey(r, i)} r={r} table={table} weights={weights} />)}
           </tbody>
         )}
         {groups.backdrop.length > 0 && (
           <tbody>
-            <tr className="tt-group"><th colSpan={5} scope="rowgroup">In orb all {period}, not exact in it · {groups.backdrop.length}</th></tr>
-            {backdrop.map((r, i) => <ForecastRowView key={rowKey(r, i)} r={r} table={table} />)}
+            <tr className="tt-group"><th colSpan={span} scope="rowgroup">In orb all {period}, not exact in it · {groups.backdrop.length}</th></tr>
+            {backdrop.map((r, i) => <ForecastRowView key={rowKey(r, i)} r={r} table={table} weights={weights} />)}
             {hidden > 0 && (
-              <tr className="tt-more"><td colSpan={5}><button type="button" className="link" onClick={() => setUnfolded(true)}>Show {hidden} more</button></td></tr>
+              <tr className="tt-more"><td colSpan={span}><button type="button" className="link" onClick={() => setUnfolded(true)}>Show {hidden} more</button></td></tr>
             )}
           </tbody>
         )}

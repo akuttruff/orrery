@@ -230,6 +230,13 @@ server/   api.ts (routes), store.ts (SQLite), astro.ts (astro-mcp over stdio),
           readings.ts (writing on the server), memory.ts, remember.ts
 src/      App.tsx, components/, lib/ (chartWheel, forecastTable, weight, route)
 public/   sw.js, the app shell cache
-scripts/  deploy.sh, fixtures.ts, seed-demo.ts, screenshots.mjs
+scripts/  deploy.sh, fixtures.ts, seed-demo.ts, screenshots.mjs, sync-shared.mjs
 docs/     screenshots/ for this README
 ```
+
+The chart wheel, the transit tables, the tarot spread and the app shell
+are shared with LM Chat, which holds the one real copy: the files listed in
+`src/shared.json`, each starting with a comment that says so. Change them in
+LM Chat, then run `npm run sync:shared` here (it looks for the checkout at
+`../mobile-ai-chat/lm-chat`, or `LM_CHAT_DIR`). `src/shared.test.ts` fails
+on a copy edited here, or on a change in LM Chat not yet synced.

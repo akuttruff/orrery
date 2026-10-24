@@ -68,8 +68,8 @@ function ToolCard({ use }: { use: ToolUse }) {
         </dl>
       )}
       {wheel && <ChartWheel wheel={wheel} />}
-      {wheel?.kind === 'transit' && <ActiveTransits wheel={wheel} />}
-      {forecast && <ForecastTransits table={forecast} />}
+      {wheel?.kind === 'transit' && <ActiveTransits wheel={wheel} weights sortable />}
+      {forecast && <ForecastTransits table={forecast} weights sortable />}
       {short && <div className="tc-short">{text}</div>}
       {text.length > SHORT && !open && <div className="tc-preview">{text.replace(/\s+/g, ' ').slice(0, 300)}</div>}
       {text.length > SHORT && open && <pre className="tc-output">{full}</pre>}

@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * The transits of a transit chart as table rows: the aspects in play at
  * the chart's moment, for the table under the wheel. Read from the parsed

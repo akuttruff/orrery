@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * A forecast's key transits as table rows.
  *
@@ -8,9 +9,9 @@
  * ones whose weight reaches the horizon's bar, in date order, with the
  * moment each is exact and both positions. TransitTable.tsx draws it.
  *
- * A week also carries `week_transits`, and a month `month_transits`
- * (server/cast.ts): every contact in orb over its days from the ephemeris
- * scan, with no cap. Then the table shows all of them in two groups, the
+ * A week may also carry `week_transits`, and a month `month_transits`
+ * (Orrery's server folds them in; the tool alone never does): every
+ * contact in orb over its days from the ephemeris scan, with no cap. Then the table shows all of them in two groups, the
  * period's events (exact inside it, in date order) and its backdrop (in
  * orb without perfecting, heaviest first), each weighed here the way the
  * forecasts weigh theirs.

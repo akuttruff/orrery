@@ -12,6 +12,7 @@ import { useReading } from '../hooks/useReading.ts'
 import { parseWheel } from '../lib/chartWheel.ts'
 import { parseForecast } from '../lib/forecastTable.ts'
 import { parseReading } from '../lib/tarotSpread.ts'
+import { tarotImage } from '../lib/tarotImage.ts'
 import { formatWhen } from '../lib/when.ts'
 import { styleOf, NOTE_MAX, type StyleId } from '../lib/styles.ts'
 import { isTarotKind } from '../types.ts'
@@ -63,10 +64,10 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
         <p className="casting-sub">Cast {formatWhen(casting.createdAt)} · {style.label}{casting.note ? <> · <q className="casting-note">{casting.note}</q></> : ''}</p>
       </header>
       {wheel && <ChartWheel wheel={wheel} castingId={casting.id} readings={casting.transitReadings ?? undefined} />}
-      {wheel?.kind === 'transit' && <Transits wheel={wheel} />}
-      {forecast && <Forecast table={forecast} />}
+      {wheel?.kind === 'transit' && <Transits wheel={wheel} weights sortable />}
+      {forecast && <Forecast table={forecast} weights sortable />}
       {casting.kind === 'moon' && <Moon result={casting.result} />}
-      {cards && <TarotSpread reading={cards} />}
+      {cards && <TarotSpread reading={cards} image={tarotImage} />}
       {!wheel && !forecast && !cards && casting.kind !== 'moon' && <p className="reading-status error">The tool's result could not be drawn.</p>}
       <div className="memory-switch">
         <button type="button" className={`chip${framing ? ' on' : ''}`} aria-expanded={framing} onClick={() => setFraming((f) => !f)}>

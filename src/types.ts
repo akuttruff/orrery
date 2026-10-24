@@ -1,3 +1,5 @@
+import type { DrawnCard } from './lib/tarotSpread.ts'
+
 /** What a shortcut button casts: a chart or forecast from the ephemeris, or a tarot draw. */
 export type Kind = 'today' | 'week' | 'month' | 'year' | 'natal' | 'moon' | 'card' | 'spread'
 
@@ -7,14 +9,8 @@ export const KINDS: Kind[] = ['today', 'week', 'month', 'year', 'natal', 'moon',
 export const TAROT_KINDS: Kind[] = ['card', 'spread']
 export const isTarotKind = (kind: Kind): boolean => TAROT_KINDS.includes(kind)
 
-/** One card as the tarot server dealt it: where it fell, which card, which way up, and what it means that way. */
-export interface TarotCard {
-  position: { index: number; name: string; meaning: string }
-  card: { id: string; name: string; arcana: 'major' | 'minor'; suit: string | null; number: number }
-  reversed: boolean
-  keywords: string[]
-  meaning: string
-}
+/** One card as the tarot server dealt it: where it fell, which card, which way up, and what it means that way (lib/tarotSpread.ts's DrawnCard). */
+export type TarotCard = DrawnCard
 
 /** Whose chart: one person, kept in Settings. */
 export interface Profile {

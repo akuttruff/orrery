@@ -8,7 +8,7 @@ import { api } from '../lib/api.ts'
 import { toolLabel } from '../lib/toolFormat.ts'
 import { pendingTools, thinking } from '../lib/trail.ts'
 import { formatWhen } from '../lib/when.ts'
-import { imageFor } from '../lib/tarotSpread.ts'
+import { tarotImage } from '../lib/tarotImage.ts'
 import { isTarotKind } from '../types.ts'
 import type { FollowUp, Kind, ReadingState } from '../types.ts'
 
@@ -173,7 +173,7 @@ function FollowUpItem({ followUp, onSettled, onAgain, onStop, onRemove, onForget
       <div className="followup-q">
         {followUp.card ? (
           <div className="followup-card">
-            <img src={imageFor(followUp.card.card.id)} alt={`${followUp.card.card.name}${followUp.card.reversed ? ', reversed' : ''}`} style={{ transform: followUp.card.reversed ? 'rotate(180deg)' : undefined }} loading="lazy" />
+            <img src={tarotImage(followUp.card.card.id)} alt={`${followUp.card.card.name}${followUp.card.reversed ? ', reversed' : ''}`} style={{ transform: followUp.card.reversed ? 'rotate(180deg)' : undefined }} loading="lazy" />
             <div className="followup-card-text">
               <p>Pulled a card: <b>{followUp.card.card.name}{followUp.card.reversed ? ', reversed' : ''}</b></p>
               <span className="followup-card-keys">{followUp.card.keywords.join(' · ')}</span>

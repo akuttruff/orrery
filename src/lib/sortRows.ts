@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * Sorting a transit table by a column: the moment it is exact, the
  * transiting body, how close the orb is, the natal point, or its weight. A click on a

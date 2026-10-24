@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { imageFor, layoutFor, looksLikeReading, parseReading, turnOf } from './tarotSpread.ts'
+import { tarotImage } from './tarotImage.ts'
 
 const card = (i: number, id: string, name: string, reversed = false) => ({ position: { index: i, name: `P${i}`, meaning: 'm' }, card: { id, name, arcana: 'major', suit: null, number: i }, reversed, keywords: ['k'], meaning: 'text' })
 const reading = { spread: { id: 'three', name: 'Past, present, future', description: 'd' }, question: 'Q?', drawnAt: 'x', seed: 1, cards: [card(1, 'major-00', 'The Fool'), card(2, 'cups-03', 'Three of Cups', true), card(3, 'major-16', 'The Tower')], summary: {} }
@@ -32,6 +33,8 @@ describe('tarotSpread', () => {
     expect(turnOf({ x: 0, y: 0, turn: 0 }, true)).toBe(180)
     expect(turnOf({ x: 0, y: 0, turn: 90 }, false)).toBe(90)
     expect(turnOf({ x: 0, y: 0, turn: 90 }, true)).toBe(270)
-    expect(imageFor('swords-03')).toBe('/api/tarot/swords-03.jpg')
+    expect(imageFor('swords-03')).toBe('/tarot/swords-03.jpg')
+    // Orrery's server serves the deck under the API.
+    expect(tarotImage('swords-03')).toBe('/api/tarot/swords-03.jpg')
   })
 })
