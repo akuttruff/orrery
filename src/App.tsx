@@ -45,6 +45,12 @@ const TRANSIT_POLLS = 45
 /** The history entry this page made for a casting, so Back can be told from an address someone arrived at. */
 const ENTRY = { orrery: true }
 
+/** The kind a shortcut straight to casting (#cast/<kind>) names, if it is one. */
+const shortcutKind = (hash: string): Kind | null => {
+  const kind = castKindIn(hash)
+  return kind && (KINDS as string[]).includes(kind) ? kind as Kind : null
+}
+
 export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [config, setConfig] = useState<Config | null>(null)
@@ -89,8 +95,9 @@ export default function App() {
   // The day's card, once drawn, is opened rather than drawn again.
   const todaysCard = recent.find((c) => c.kind === 'card' && c.period === todayKey())
   // A tile opens the popup for these choices; the cast waits for its button.
-  const [pending, setPending] = useState<Kind | null>(null)
-  const closeSheet = useCallback(() => setPending(null), [])
+  // A shortcut straight to casting (#cast/<kind>) opens it from the first render.
+  const [pending, setPending] = useState<Kind | null>(() => shortcutKind(window.location.hash))
+  const closeSheet = useCallback(() => setPending(null), [setPending])
 
   const refreshRecent = useCallback(() => { api.castings().then(setRecent).catch(() => { /* the list is a convenience */ }) }, [])
 
@@ -132,12 +139,8 @@ export default function App() {
   useEffect(() => {
     load()
     openAddressed()
-    // A shortcut straight to casting: the popup opens, and the address is cleared so a reload does not reopen it.
-    const kind = castKindIn(window.location.hash)
-    if (kind && (KINDS as string[]).includes(kind)) {
-      setPending(kind as Kind)
-      window.history.replaceState(null, '', window.location.pathname + window.location.search)
-    }
+    // A shortcut straight to casting has opened the popup; the address is cleared so a reload does not reopen it.
+    if (shortcutKind(window.location.hash)) window.history.replaceState(null, '', window.location.pathname + window.location.search)
     // The browser's Back or Forward: go where the address now says. A wheel over the open casting is Root's, not a move.
     const onPop = () => {
       if (wheelIdIn(window.location.hash)) return
