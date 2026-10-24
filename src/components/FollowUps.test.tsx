@@ -72,6 +72,19 @@ describe('FollowUps', () => {
     expect(screen.getByText('The Moon says yes.')).toBeInTheDocument()
     expect(box).toHaveValue('')
   })
+
+  it('asks on Enter, and keeps Shift+Enter for a new line', async () => {
+    const { asked } = serve([])
+    const user = userEvent.setup()
+    render(<FollowUps castingId="c1" readingState="done" readingText="A reading." />)
+    const box = await screen.findByLabelText('Ask about this reading')
+    await user.type(box, 'Two lines{Shift>}{Enter}{/Shift}of question')
+    expect(box).toHaveValue('Two lines\nof question')
+    expect(asked).toEqual([])
+    await user.type(box, '{Enter}')
+    await waitFor(() => expect(asked).toEqual(['Two lines\nof question']))
+    expect(box).toHaveValue('')
+  })
 })
 
 describe('a card beside the reading', () => {

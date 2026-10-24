@@ -136,7 +136,8 @@ export default function FollowUps({ castingId, kind = 'today', readingState, rea
             disabled={!ready || answering || sending}
             enterKeyHint="send"
             onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void ask() } }}
+            // Enter asks, as in LM Chat; Shift+Enter makes a new line.
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void ask() } }}
           />
           <button type="submit" className="ask-send" aria-label="Ask" disabled={!canAsk}>
             <SendHorizontal size={18} aria-hidden="true" />
