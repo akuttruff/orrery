@@ -20,6 +20,9 @@ const VOICE = [
 /** Room for a handful of sentences and the brackets around them. */
 const MAX_TOKENS = 1500
 
+/** How long the note-taking may take. It is a short answer; past this the model is stuck, and the follow-up should not wait on it forever. */
+export const REMEMBER_TIMEOUT_MS = 120_000
+
 export function rememberRequest(question: string, known: Memory[], profile: Profile, now = new Date()): WriteRequest {
   const system = [
     VOICE,

@@ -10,7 +10,7 @@ import { castResult, isSpreadId, periodFor, titleFor } from './cast.ts'
 import type { SpreadId } from './cast.ts'
 import { listModels, writeWithModel } from './model.ts'
 import { Memories, MemoryInputError, memoryPath } from './memory.ts'
-import { parseFacts, rememberRequest } from './remember.ts'
+import { REMEMBER_TIMEOUT_MS, parseFacts, rememberRequest } from './remember.ts'
 import { followUpRequest, readingRequest } from './prompt.ts'
 import { Readings, answerOf } from './readings.ts'
 import { NOTE_MAX, isStyleId } from '../src/lib/styles.ts'
@@ -167,12 +167,12 @@ export function createMiddleware(state: ApiState): Handler {
    * What a question reveals, saved to the pool and noted on the follow-up.
    * Runs beside the answer, not after it: the facts are in the question.
    * Nothing a failure here can do to the answer; it is logged and the note
-   * stays empty.
+   * stays empty. A model that never answers is given up on the same way.
    */
   const rememberFrom = async (followUp: FollowUp): Promise<void> => {
     try {
       const known = memories.list()
-      const { text } = await state.write(store.getConfig(), rememberRequest(followUp.question, known, store.getProfile()), () => {})
+      const { text } = await state.write(store.getConfig(), rememberRequest(followUp.question, known, store.getProfile()), () => {}, { signal: AbortSignal.timeout(REMEMBER_TIMEOUT_MS) })
       const kept: Remembered[] = []
       for (const fact of parseFacts(text)) {
         try {

@@ -7,6 +7,7 @@ import path from 'node:path'
 import { createApiState, createMiddleware, profilePatch } from './api.ts'
 import { Readings } from './readings.ts'
 import { Store } from './store.ts'
+import { REMEMBER_TIMEOUT_MS } from './remember.ts'
 import type { ApiState } from './api.ts'
 import type { Reply, WriteOptions, WriteRequest, writeWithModel } from './model.ts'
 import type { Casting, CastingSummary, FollowUp, Memory, Step, Written } from '../src/types.ts'
@@ -463,6 +464,29 @@ describe('memories', () => {
     expect(seen.at(-1)!.system).not.toContain('WHAT YOU KNOW')
     expect(((await (await fetch(`${ctx.base}/api/castings/${c.id}`)).json()) as Casting).memoriesUsed).toEqual([])
     writer = async (_r, onDelta) => { await tick(); onDelta('ok'); return plain('ok') }
+  })
+
+  it('gives up on note-taking that never ends, and the follow-up says nothing was remembered', async () => {
+    const timeout = new AbortController()
+    const spy = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => ms === REMEMBER_TIMEOUT_MS ? timeout.signal : new AbortController().signal)
+    writer = async (req, onDelta, opts) => {
+      if (!req.system.startsWith('You keep notes')) { onDelta('Known.'); return 'Known.' }
+      // Stuck until the signal gives up on it, as a wedged model would be.
+      return new Promise((_resolve, reject) => opts!.signal!.addEventListener('abort', () => reject(new Error('The operation timed out'))))
+    }
+    await send('PUT', `${ctx.base}/api/config`, { memoryDefault: 'on' })
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'week' })).json() as Casting
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await readAll(`${ctx.base}/api/castings/${c.id}/events`)
+    const f = await (await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'My sister visits Tuesday?' })).json() as FollowUp
+    await readAll(`${ctx.base}/api/followups/${f.id}/events`)
+    await tick()
+    expect(((await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json()) as FollowUp).remembered).toBeNull()
+    timeout.abort()
+    let kept = await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json() as FollowUp
+    for (let i = 0; i < 20 && kept.remembered === null; i++) { await tick(); kept = await (await fetch(`${ctx.base}/api/followups/${f.id}`)).json() as FollowUp }
+    expect(kept.remembered).toEqual([])
+    spy.mockRestore()
   })
 
   it('leaves the memories a casting unticks out of its reading and answers, and notes which went in', async () => {
