@@ -80,6 +80,15 @@ describe('settings', () => {
     expect(await put({ lmStudioUrl: 'http://other:1234', apiToken: 'new' })).toMatchObject({ lmStudioUrl: 'http://other:1234', hasToken: true })
   })
 
+  it('refuses a body over the limit with 413, and one that is not an object with 400', async () => {
+    const big = await fetch(`${ctx.base}/api/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'x'.repeat(1_100_000) }) })
+    expect(big.status).toBe(413)
+    expect(((await big.json()) as { error: string }).error).toMatch(/under/)
+    expect((await fetch(`${ctx.base}/api/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '[1]' })).status).toBe(400)
+    expect((await fetch(`${ctx.base}/api/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{nope' })).status).toBe(400)
+    expect(((await (await fetch(`${ctx.base}/api/profile`)).json()) as { name: string }).name).not.toMatch(/^x+$/)
+  })
+
   it('refuses a birth time the tools would reject', async () => {
     const r = await fetch(`${ctx.base}/api/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dateTime: 'June 15 1990' }) })
     expect(r.status).toBe(400)

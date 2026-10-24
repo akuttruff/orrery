@@ -60,14 +60,41 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body))
 }
 
-async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-  const chunks: Buffer[] = []
-  for await (const chunk of req) chunks.push(chunk as Buffer)
-  const text = Buffer.concat(chunks).toString('utf8')
-  if (!text.trim()) return {}
-  const parsed = JSON.parse(text) as unknown
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Expected a JSON object')
-  return parsed as Record<string, unknown>
+/**
+ * A request the person can put right (a bad field, a question asked too
+ * soon): answered with its status and message, and not logged. Anything
+ * else thrown is the server's own failure.
+ */
+export class UserError extends Error {
+  constructor(message: string, readonly status = 400) { super(message) }
+}
+
+/** The most a request body may be. The largest real one, a note or a question, is a few KB. */
+export const BODY_MAX = 1_000_000
+
+function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    const onData = (chunk: Buffer): void => {
+      size += chunk.length
+      if (size <= BODY_MAX) { chunks.push(chunk); return }
+      // The rest is read and dropped rather than the socket cut, so the 413 reaches the page.
+      req.off('data', onData).off('end', onEnd)
+      req.resume()
+      reject(new UserError(`Keep the request under ${BODY_MAX} bytes`, 413))
+    }
+    const onEnd = (): void => {
+      try {
+        const text = Buffer.concat(chunks).toString('utf8')
+        if (!text.trim()) { resolve({}); return }
+        const parsed = JSON.parse(text) as unknown
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new UserError('Expected a JSON object')
+        resolve(parsed as Record<string, unknown>)
+      } catch (err) { reject(err as Error) }
+    }
+    req.on('data', onData).on('end', onEnd).on('error', reject)
+  })
 }
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
@@ -78,14 +105,14 @@ export function profilePatch(body: Record<string, unknown>): Partial<Profile> {
   const out: Partial<Profile> = {}
   const dateTime = str(body.dateTime)
   if (dateTime !== undefined) {
-    if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(dateTime.trim())) throw new Error("Birth date and time must be 'YYYY-MM-DD HH:MM'")
+    if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(dateTime.trim())) throw new UserError("Birth date and time must be 'YYYY-MM-DD HH:MM'")
     out.dateTime = dateTime.trim()
   }
   for (const key of ['name', 'city', 'state', 'country'] as const) {
     const v = str(body[key])
     if (v !== undefined) out[key] = v.trim()
   }
-  if (out.city === '') throw new Error('A birth city is needed')
+  if (out.city === '') throw new UserError('A birth city is needed')
   return out
 }
 
@@ -183,25 +210,25 @@ export function createMiddleware(state: ApiState): Handler {
   const framePatch = (body: Record<string, unknown>): Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>> => {
     const out: Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>> = {}
     if ('starred' in body) {
-      if (typeof body.starred !== 'boolean') throw new Error('starred must be true or false')
+      if (typeof body.starred !== 'boolean') throw new UserError('starred must be true or false')
       out.starred = body.starred
     }
     if ('style' in body) {
-      if (body.style !== null && !isStyleId(body.style)) throw new Error('style must be one of the reading styles, or null')
+      if (body.style !== null && !isStyleId(body.style)) throw new UserError('style must be one of the reading styles, or null')
       out.style = body.style as string | null
     }
     if ('note' in body) {
-      if (typeof body.note !== 'string') throw new Error('note must be text')
-      if (body.note.length > NOTE_MAX) throw new Error(`Keep the note under ${NOTE_MAX} characters`)
+      if (typeof body.note !== 'string') throw new UserError('note must be text')
+      if (body.note.length > NOTE_MAX) throw new UserError(`Keep the note under ${NOTE_MAX} characters`)
       out.note = body.note.trim()
     }
     if ('memory' in body) {
-      if (body.memory !== null && typeof body.memory !== 'boolean') throw new Error('memory must be true, false or null')
+      if (body.memory !== null && typeof body.memory !== 'boolean') throw new UserError('memory must be true, false or null')
       out.memory = body.memory as boolean | null
     }
     if ('memoryExcluded' in body) {
       const ids = body.memoryExcluded
-      if (!Array.isArray(ids) || !ids.every((x) => typeof x === 'string')) throw new Error('memoryExcluded must be a list of memory ids')
+      if (!Array.isArray(ids) || !ids.every((x) => typeof x === 'string')) throw new UserError('memoryExcluded must be a list of memory ids')
       out.memoryExcluded = [...new Set(ids as string[])]
     }
     return out
@@ -213,9 +240,13 @@ export function createMiddleware(state: ApiState): Handler {
     const method = req.method ?? 'GET'
     if (!url.startsWith('/api/')) return next()
 
+    // A tool's refusal (a city it cannot find) and a request the person can fix are answered as theirs; anything else is the server's, and logged.
     const fail = (err: unknown): void => {
-      const status = err instanceof AstroToolError ? 422 : 400
-      if (!(err instanceof AstroToolError) && !(err instanceof MemoryInputError) && !(err instanceof SyntaxError) && !/^(Unknown kind|Ask something|Keep the question|Keep the note|Wait for the reading|One answer|Birth date|A birth city|Expected a JSON|Nothing to change|memory|style|note|starred)/.test((err as Error).message)) console.log(`[orrery] ${(err as Error).message}`)
+      const status = err instanceof UserError ? err.status
+        : err instanceof AstroToolError ? 422
+          : err instanceof MemoryInputError || err instanceof SyntaxError ? 400
+            : 500
+      if (status === 500) console.log(`[orrery] ${(err as Error).message}`)
       json(res, status, { error: (err as Error).message || String(err) })
     }
 
@@ -282,9 +313,9 @@ export function createMiddleware(state: ApiState): Handler {
     if (url === '/api/castings' && method === 'GET') return json(res, 200, store.listCastings())
     if (url === '/api/castings' && method === 'POST') {
       void readBody(req).then(async (body) => {
-        if (!isKind(body.kind)) throw new Error(`Unknown kind: ${String(body.kind)}`)
+        if (!isKind(body.kind)) throw new UserError(`Unknown kind: ${String(body.kind)}`)
         const { memory = null, memoryExcluded = [], style = null, note = '', starred = false } = framePatch(body)
-        if (body.spread !== undefined && !isSpreadId(body.spread)) throw new Error('spread must be single, three, situation or celtic-cross')
+        if (body.spread !== undefined && !isSpreadId(body.spread)) throw new UserError('spread must be single, three, situation or celtic-cross')
         json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }, isSpreadId(body.spread) ? body.spread : undefined))
       }).catch(fail)
       return undefined
@@ -300,7 +331,7 @@ export function createMiddleware(state: ApiState): Handler {
       if (!sub && method === 'PATCH') {
         void readBody(req).then((body) => {
           const patch = framePatch(body)
-          if (Object.keys(patch).length === 0) throw new Error('Nothing to change')
+          if (Object.keys(patch).length === 0) throw new UserError('Nothing to change')
           if (patch.memory !== undefined) store.setCastingMemory(id, patch.memory)
           if (patch.memoryExcluded !== undefined) store.setMemoryExcluded(id, patch.memoryExcluded)
           if (patch.style !== undefined || patch.note !== undefined) store.setFrame(id, patch)
@@ -332,9 +363,9 @@ export function createMiddleware(state: ApiState): Handler {
       if (sub === 'card' && method === 'POST') {
         void (async () => {
           const current = store.getCasting(id)!
-          if (current.readingState === 'writing' || !current.reading) throw new Error('Wait for the reading to be written, then pull a card')
+          if (current.readingState === 'writing' || !current.reading) throw new UserError('Wait for the reading to be written, then pull a card')
           const earlier = store.listFollowUps(id)
-          if (earlier.some((x) => x.state === 'writing')) throw new Error('One answer at a time')
+          if (earlier.some((x) => x.state === 'writing')) throw new UserError('One answer at a time')
           const dealt = await state.tarot('draw_cards', { spread: 'single', reversals: true, question: `A card beside this reading: ${current.title}${current.note ? ` (${current.note})` : ''}` })
           const card = (JSON.parse(dealt) as { cards?: TarotCard[] }).cards?.[0]
           if (!card?.card?.id) throw new Error('The tarot server dealt nothing')
@@ -349,12 +380,12 @@ export function createMiddleware(state: ApiState): Handler {
       if (sub === 'followups' && method === 'POST') {
         void readBody(req).then((body) => {
           const question = (str(body.question) ?? '').trim()
-          if (!question) throw new Error('Ask something first')
-          if (question.length > 2000) throw new Error('Keep the question under 2000 characters')
+          if (!question) throw new UserError('Ask something first')
+          if (question.length > 2000) throw new UserError('Keep the question under 2000 characters')
           const current = store.getCasting(id)!
-          if (current.readingState === 'writing' || !current.reading) throw new Error('Wait for the reading to be written, then ask')
+          if (current.readingState === 'writing' || !current.reading) throw new UserError('Wait for the reading to be written, then ask')
           const earlier = store.listFollowUps(id)
-          if (earlier.some((f) => f.state === 'writing')) throw new Error('One answer at a time')
+          if (earlier.some((f) => f.state === 'writing')) throw new UserError('One answer at a time')
           const memory = memoryFor(current)
           const followUp = store.addFollowUp(id, question, memory.ids)
           readings.start(followUp.id, followUpRequest(current, earlier, question, store.getProfile(), new Date(), memory.lines), answerOf(store, followUp.id))
