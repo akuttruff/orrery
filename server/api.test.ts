@@ -33,6 +33,9 @@ function serve(write: (req: WriteRequest, onDelta: (t: string) => void, opts?: W
   })
   fs.mkdirSync(path.join(dir, 'deck'))
   fs.writeFileSync(path.join(dir, 'deck', 'major-00.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]))
+  // Pictures that cannot be read: one locked, one a folder that opens but fails on the first read.
+  fs.writeFileSync(path.join(dir, 'deck', 'major-01.jpg'), 'x', { mode: 0o000 })
+  fs.mkdirSync(path.join(dir, 'deck', 'major-02.jpg'))
   const model: typeof writeWithModel = async (_config, req, onDelta, opts) => { const r = await write(req, onDelta, opts); return typeof r === 'string' ? plain(r) : r }
   const readings = new Readings(store, model, timeoutMs)
   // The memory pool lives in the scratch dir too, never in ~/.lm-memory.
@@ -569,6 +572,10 @@ describe('tarot', () => {
     expect(pic.headers.get('content-type')).toBe('image/jpeg')
     expect((await fetch(`${ctx.base}/api/tarot/major-99.jpg`)).status).toBe(404)
     expect((await fetch(`${ctx.base}/api/tarot/..%2F..%2Fetc.jpg`)).status).toBe(404)
+    // A picture that cannot be read is answered, or cut short, and the server goes on.
+    expect((await fetch(`${ctx.base}/api/tarot/major-01.jpg`)).status).toBe(500)
+    await fetch(`${ctx.base}/api/tarot/major-02.jpg`).then((r) => r.arrayBuffer()).catch(() => null)
+    expect((await fetch(`${ctx.base}/api/tarot/major-00.jpg`)).status).toBe(200)
   })
 
   it('pulls a card beside a chart reading, keeps it on a follow-up, and has the model read it against the reading', async () => {

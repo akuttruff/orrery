@@ -4,6 +4,7 @@ import type { Plugin } from 'vite'
 import { KINDS } from '../src/types.ts'
 import type { Casting, FollowUp, Kind, Profile, Remembered, TarotCard } from '../src/types.ts'
 import fs from 'node:fs'
+import { pipeline } from 'node:stream'
 import { Astro, AstroToolError, readTarotSpec, tarotDeckDir } from './astro.ts'
 import type { ToolCaller } from './astro.ts'
 import { castResult, isSpreadId, periodFor, titleFor } from './cast.ts'
@@ -305,10 +306,20 @@ export function createMiddleware(state: ApiState): Handler {
     // --- the card pictures, from tarot-mcp's deck -------------------------
     const pic = /^\/api\/tarot\/([a-z]+-\d{2})\.jpg$/.exec(url)
     if (pic && method === 'GET') {
-      const file = path.join(state.deckDir, `${pic[1]}.jpg`)
-      if (!fs.existsSync(file)) return json(res, 404, { error: 'No such card' })
-      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=604800' })
-      fs.createReadStream(file).pipe(res)
+      // The headers wait for the file to open, so a missing or unreadable one is still answered;
+      // a read that fails after that can only cut the response short, and pipeline does, without
+      // an unhandled stream error taking the server down.
+      const stream = fs.createReadStream(path.join(state.deckDir, `${pic[1]}.jpg`))
+      const failed = (err: NodeJS.ErrnoException): void => {
+        if (err.code !== 'ENOENT') console.log(`[orrery] card picture ${pic[1]}: ${err.message}`)
+        json(res, err.code === 'ENOENT' ? 404 : 500, { error: err.code === 'ENOENT' ? 'No such card' : 'Could not read the card' })
+      }
+      stream.once('error', failed)
+      stream.once('open', () => {
+        stream.off('error', failed)
+        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=604800' })
+        pipeline(stream, res, (err) => { if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') console.log(`[orrery] card picture ${pic[1]}: ${err.message}`) })
+      })
       return undefined
     }
 
