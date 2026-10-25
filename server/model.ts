@@ -22,6 +22,8 @@ export interface ChatEvent {
   arguments?: unknown
   output?: unknown
   reason?: string
+  /** model_load.progress and prompt_processing.progress: how far along, 0 to 1. */
+  progress?: number
   /** chat.end: the turn's stats. */
   result?: {
     stats?: {
@@ -108,6 +110,32 @@ export interface WriteOptions {
   onTrail?: (trail: Step[]) => void
   /** Each piece of thinking, for the open thinking step. */
   onThinking?: (piece: string) => void
+  /** What LM Studio is doing now, as lm-chat shows it: loading the model, reading the prompt (with how far), thinking, writing. */
+  onStatus?: (status: string) => void
+}
+
+/**
+ * The status line an event moves to, or null for one that does not change
+ * it (text and thinking pieces, tool results). The same steps lm-chat shows
+ * in its header while a reply is under way.
+ */
+export function statusOf(evt: ChatEvent): string | null {
+  const pct = (): string => `${Math.round((evt.progress ?? 0) * 100)}%`
+  switch (evt.type) {
+    case 'model_load.start': return 'Loading the model'
+    case 'model_load.progress': return `Loading the model ${pct()}`
+    case 'prompt_processing.start': return 'Reading the prompt'
+    case 'prompt_processing.progress': return `Reading the prompt ${pct()}`
+    case 'reasoning.start': return 'Thinking'
+    case 'message.start': return 'Writing'
+    case 'tool_call.start': return 'Calling a tool'
+    case 'tool_call.name':
+    case 'tool_call.arguments': {
+      const name = evt.tool_name || evt.tool
+      return name ? `Using ${name}` : null
+    }
+    default: return null
+  }
 }
 
 /** What an event did to the trail: nothing, changed its shape, or added a piece of thinking. */
@@ -296,7 +324,7 @@ export async function writeWithModel(
   config: ServerConfig,
   req: WriteRequest,
   onDelta: (text: string) => void,
-  { signal, fetchImpl = fetch, onTrail, onThinking }: WriteOptions = {},
+  { signal, fetchImpl = fetch, onTrail, onThinking, onStatus }: WriteOptions = {},
 ): Promise<Reply> {
   const fast = req.quick ? config.fastModel?.trim() : ''
   const model = fast || await effectiveModel(config, fetchImpl)
@@ -329,7 +357,13 @@ export async function writeWithModel(
   let text = ''
   let stats: ReplyStats | null = null
   const trail = new Trail()
+  let status = ''
   for await (const evt of sseEvents(res.body)) {
+    const next = statusOf(evt)
+    if (next && next !== status) {
+      status = next
+      onStatus?.(status)
+    }
     if (evt.type === 'message.delta') {
       const piece = evt.content || ''
       if (!piece) continue

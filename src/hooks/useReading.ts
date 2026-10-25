@@ -10,6 +10,8 @@ export interface LiveReading {
   error: string | null
   /** The model's trail so far, LM Studio's numbers once it is done, and when it started and finished. */
   written: Written
+  /** While it is being written, what LM Studio is doing: "Reading the prompt 63%", "Thinking". */
+  status?: string | null
 }
 
 const NOTHING: LiveReading = { text: '', state: 'none', error: null, written: NOT_WRITTEN }
@@ -34,6 +36,7 @@ export function useLiveText(id: string | null, stored: LiveReading, eventsUrl: (
     let written: Written = stored.written
     let state: ReadingState = 'writing'
     let error: string | null = null
+    let status: string | null = null
     let over = false
     // Pieces wait here and are applied together: one redraw per batch, not per piece.
     let pending: ReadingEvent[] = []
@@ -56,7 +59,11 @@ export function useLiveText(id: string | null, stored: LiveReading, eventsUrl: (
             written = event.written
             state = event.state
             error = event.error
+            status = event.status ?? null
             over = state !== 'writing'
+            break
+          case 'status':
+            status = event.text
             break
           case 'delta':
             text += event.text
@@ -71,18 +78,20 @@ export function useLiveText(id: string | null, stored: LiveReading, eventsUrl: (
             text = event.reading
             written = event.written
             state = 'done'
+            status = null
             over = true
             break
           case 'error':
             written = event.written
             state = 'failed'
             error = event.message
+            status = null
             over = true
             break
         }
       }
       think()
-      setLive({ id, reading: { text, state, error, written } })
+      setLive({ id, reading: { text, state, error, written, status } })
       // Written or failed: the stream is over, and whoever holds the record can fetch the kept copy.
       if (over) { source.close(); onSettled?.(id) }
     }

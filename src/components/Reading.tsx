@@ -2,9 +2,9 @@ import { RefreshCw, Square } from 'lucide-react'
 import Body from './Body'
 import Trail from './Trail'
 import WrittenMeta from './WrittenMeta'
+import LiveStatus from './LiveStatus'
 import DownloadButton from './DownloadButton'
 import type { LiveReading } from '../hooks/useReading.ts'
-import { thinking } from '../lib/trail.ts'
 import type { ReadingImage } from '../lib/readingImage.ts'
 import type { Brief } from '../types.ts'
 
@@ -35,7 +35,7 @@ export default function Reading({ reading, brief, onWrite, onStop, image }: Read
       </div>
       <Trail trail={written.trail} />
       {text && <Body text={text} writing={state === 'writing'} />}
-      {state === 'writing' && <p className="reading-status">{thinking(written.trail) ? 'Thinking' : text ? 'Writing' : 'Starting'}… This carries on if you go back and cast another.</p>}
+      {state === 'writing' && <LiveStatus reading={reading} note="This carries on if you go back and cast another." />}
       {state === 'failed' && <p className="reading-status error">{error ?? 'The reading failed.'}</p>}
       {state === 'none' && <p className="reading-status">No reading yet.</p>}
       {image && state === 'done' && text && (

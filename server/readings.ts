@@ -77,6 +77,8 @@ export const STALL_TIMEOUT_MS = 5 * 60_000
 interface Run {
   text: string
   trail: Step[]
+  /** LM Studio's step now, for a listener who joins mid-run. */
+  status: string | null
   startedAt: number
   listeners: Set<ServerResponse>
   controller: AbortController
@@ -97,7 +99,7 @@ export class Readings {
   /** Start writing into a target, unless it is already being written. */
   start(id: string, req: WriteRequest, target: Target = readingOf(this.store, id)): void {
     if (this.runs.has(id)) return
-    const run: Run = { text: '', trail: [], startedAt: Date.now(), listeners: new Set(), controller: new AbortController(), thought: '', thoughtTimer: null }
+    const run: Run = { text: '', trail: [], status: null, startedAt: Date.now(), listeners: new Set(), controller: new AbortController(), thought: '', thoughtTimer: null }
     this.runs.set(id, run)
     target.begin(req)
     // The stall clock: wound back by every piece the model sends, it fires only when the model has gone quiet for too long.
@@ -121,6 +123,11 @@ export class Readings {
             run.trail = trail
             target.trail(trail)
             this.broadcast(run, { type: 'trail', trail })
+          },
+          onStatus: (status) => {
+            heard()
+            run.status = status
+            this.broadcast(run, { type: 'status', text: status })
           },
           onThinking: (piece) => {
             heard()
@@ -174,7 +181,7 @@ export class Readings {
     // The snapshot carries the thinking so far; what is waiting to go out goes out first, so this listener does not get it twice.
     if (run) this.flushThinking(run)
     const snapshot: ReadingEvent = run
-      ? { type: 'snapshot', reading: run.text, state: 'writing', error: null, written: { trail: run.trail, stats: null, startedAt: run.startedAt, finishedAt: null } }
+      ? { type: 'snapshot', reading: run.text, state: 'writing', error: null, written: { trail: run.trail, stats: null, startedAt: run.startedAt, finishedAt: null }, status: run.status }
       : { type: 'snapshot', reading: kept.text, state: kept.state, error: kept.error, written: kept.written }
     res.write(frame(snapshot))
     if (!run) { res.end(); return true }

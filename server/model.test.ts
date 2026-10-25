@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { Trail, effectiveModel, fitReasoning, reasoningOptions, sseEvents, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
+import { Trail, effectiveModel, fitReasoning, reasoningOptions, sseEvents, statusOf, stripLeakedThinking, toolArgs, toolOutputText, writeWithModel } from './model.ts'
 import type { ServerConfig } from './store.ts'
 import type { Step } from '../src/types.ts'
 
@@ -60,6 +60,39 @@ describe('writeWithModel', () => {
     expect(reply.text).toBe('ok')
     expect(reply.trail).toEqual([{ kind: 'reasoning', text: 'hm', done: true, seconds: expect.any(Number) }])
     expect(reply.stats).toBeNull()
+  })
+})
+
+describe('the status line', () => {
+  it('names each step LM Studio is on, as lm-chat does', () => {
+    expect(statusOf({ type: 'model_load.start' })).toBe('Loading the model')
+    expect(statusOf({ type: 'model_load.progress', progress: 0.404 })).toBe('Loading the model 40%')
+    expect(statusOf({ type: 'prompt_processing.start' })).toBe('Reading the prompt')
+    expect(statusOf({ type: 'prompt_processing.progress', progress: 0.63 })).toBe('Reading the prompt 63%')
+    expect(statusOf({ type: 'reasoning.start' })).toBe('Thinking')
+    expect(statusOf({ type: 'message.start' })).toBe('Writing')
+    expect(statusOf({ type: 'tool_call.start' })).toBe('Calling a tool')
+    expect(statusOf({ type: 'tool_call.name', tool_name: 'forecast_week' })).toBe('Using forecast_week')
+    expect(statusOf({ type: 'message.delta', content: 'x' })).toBeNull()
+    expect(statusOf({ type: 'reasoning.delta', content: 'x' })).toBeNull()
+  })
+
+  it('reports each change once, in order, while the reply is written', async () => {
+    const lm = lmStudio([
+      { type: 'prompt_processing.start' },
+      { type: 'prompt_processing.progress', progress: 0.5 },
+      { type: 'prompt_processing.progress', progress: 0.5 },
+      { type: 'prompt_processing.progress', progress: 1 },
+      { type: 'reasoning.start' },
+      { type: 'reasoning.delta', content: 'hm' },
+      { type: 'reasoning.end' },
+      { type: 'message.start' },
+      { type: 'message.delta', content: 'ok' },
+      { type: 'chat.end', result: {} },
+    ])
+    const statuses: string[] = []
+    await writeWithModel(config, { system: 's', input: 'i' }, () => {}, { fetchImpl: lm.fetchImpl, onStatus: (s) => statuses.push(s) })
+    expect(statuses).toEqual(['Reading the prompt', 'Reading the prompt 50%', 'Reading the prompt 100%', 'Thinking', 'Writing'])
   })
 })
 

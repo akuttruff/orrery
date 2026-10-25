@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import Reading from './Reading'
 import CastingView from './CastingView'
+import { liveLabel } from '../lib/liveLabel.ts'
 import { NOT_WRITTEN } from '../types.ts'
 import type { Casting, ReadingState } from '../types.ts'
 import type { ReadingImage } from '../lib/readingImage.ts'
@@ -43,5 +44,26 @@ describe('CastingView: Download', () => {
     unmount()
     view(casting({ kind: 'today', result: '{}', title: 'Today · Oct 14' }))
     expect(download()).toBeNull()
+  })
+})
+
+describe('Reading: while it is written', () => {
+  it('shows LM Studio\'s step and the seconds since it started', () => {
+    vi.useFakeTimers({ now: 100_000 })
+    try {
+      const reading = { ...live('writing', ''), written: { ...NOT_WRITTEN, startedAt: 88_000 }, status: 'Reading the prompt 63%' }
+      render(<Reading reading={reading} brief={null} onWrite={() => {}} onStop={() => {}} />)
+      expect(screen.getByText(/Reading the prompt 63%… · 12s/)).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reads a tool call still out as what it looks up, and falls back without a status', () => {
+    const tool = { kind: 'tool' as const, name: 'forecast_week', ok: null }
+    expect(liveLabel({ text: '', written: { ...NOT_WRITTEN, trail: [tool] }, status: 'Using forecast_week' })).toMatch(/^Looking up /)
+    expect(liveLabel({ text: '', written: NOT_WRITTEN, status: 'Thinking' })).toBe('Thinking')
+    expect(liveLabel({ text: '', written: NOT_WRITTEN })).toBe('Starting')
+    expect(liveLabel({ text: 'Some', written: NOT_WRITTEN, status: null })).toBe('Writing')
   })
 })

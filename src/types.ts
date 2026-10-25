@@ -176,7 +176,9 @@ export interface FollowUp {
 
 /** What the reading stream sends: the text as pieces, the thinking as pieces, the trail whenever its shape changes. */
 export type ReadingEvent =
-  | { type: 'snapshot'; reading: string; state: ReadingState; error: string | null; written: Written }
+  | { type: 'snapshot'; reading: string; state: ReadingState; error: string | null; written: Written; status?: string | null }
+  /** What LM Studio is doing now: "Reading the prompt 63%", "Thinking", "Writing". */
+  | { type: 'status'; text: string }
   | { type: 'delta'; text: string }
   | { type: 'thinking'; text: string }
   | { type: 'trail'; trail: Step[] }

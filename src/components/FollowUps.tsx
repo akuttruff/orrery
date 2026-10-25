@@ -3,11 +3,10 @@ import { Brain, RefreshCw, SendHorizontal, Sparkles, Square, X } from 'lucide-re
 import Body from './Body'
 import Trail from './Trail'
 import WrittenMeta from './WrittenMeta'
+import LiveStatus from './LiveStatus'
 import DownloadButton from './DownloadButton'
 import { useAnswer } from '../hooks/useReading.ts'
 import { api } from '../lib/api.ts'
-import { toolLabel } from '../lib/toolFormat.ts'
-import { pendingTools, thinking } from '../lib/trail.ts'
 import { formatWhen } from '../lib/when.ts'
 import { tarotImage } from '../lib/tarotImage.ts'
 import { pulledImage } from '../lib/readingImage.ts'
@@ -170,9 +169,8 @@ interface FollowUpItemProps {
 }
 
 function FollowUpItem({ followUp, castingTitle, onSettled, onAgain, onStop, onRemove, onForget }: FollowUpItemProps) {
-  const { text, state, error, written } = useAnswer(followUp, onSettled)
-  const pending = pendingTools(written.trail)
-  const status = thinking(written.trail) ? 'Thinking…' : pending.length ? `Looking up ${pending.map((t) => toolLabel(t.name)).join(', ')}…` : written.trail.length ? 'Writing…' : 'Starting…'
+  const answer = useAnswer(followUp, onSettled)
+  const { text, state, error, written } = answer
   return (
     <li className="followup">
       <div className="followup-q">
@@ -193,7 +191,7 @@ function FollowUpItem({ followUp, castingTitle, onSettled, onAgain, onStop, onRe
       <div className="followup-a" aria-live="polite">
         <Trail trail={written.trail} />
         {text && <Body text={text} writing={state === 'writing'} />}
-        {state === 'writing' && !text && <p className="reading-status">{status}</p>}
+        {state === 'writing' && <LiveStatus reading={answer} />}
         {state === 'failed' && <p className="reading-status error">{error ?? 'The answer failed.'}</p>}
         <div className="followup-actions">
           {state === 'writing' && <button type="button" className="chip" onClick={onStop}><Square size={13} aria-hidden="true" /> Stop</button>}
