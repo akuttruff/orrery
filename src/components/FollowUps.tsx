@@ -189,9 +189,9 @@ function FollowUpItem({ followUp, castingTitle, onSettled, onAgain, onStop, onRe
         )}
       </div>
       <div className="followup-a" aria-live="polite">
+        {state === 'writing' && <LiveStatus reading={answer} />}
         <Trail trail={written.trail} />
         {text && <Body text={text} writing={state === 'writing'} />}
-        {state === 'writing' && <LiveStatus reading={answer} />}
         {state === 'failed' && <p className="reading-status error">{error ?? 'The answer failed.'}</p>}
         <div className="followup-actions">
           {state === 'writing' && <button type="button" className="chip" onClick={onStop}><Square size={13} aria-hidden="true" /> Stop</button>}

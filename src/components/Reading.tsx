@@ -33,9 +33,9 @@ export default function Reading({ reading, brief, onWrite, onStop, image }: Read
           </button>
         )}
       </div>
+      {state === 'writing' && <LiveStatus reading={reading} note="This carries on if you go back and cast another." />}
       <Trail trail={written.trail} />
       {text && <Body text={text} writing={state === 'writing'} />}
-      {state === 'writing' && <LiveStatus reading={reading} note="This carries on if you go back and cast another." />}
       {state === 'failed' && <p className="reading-status error">{error ?? 'The reading failed.'}</p>}
       {state === 'none' && <p className="reading-status">No reading yet.</p>}
       {image && state === 'done' && text && (
