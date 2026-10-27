@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import type { Plugin } from 'vite'
-import { KINDS } from '../src/types.ts'
+import { KINDS, isHouseSystem } from '../src/types.ts'
 import type { Casting, FollowUp, Kind, Profile, Remembered, TarotCard } from '../src/types.ts'
 import fs from 'node:fs'
 import { pipeline } from 'node:stream'
@@ -116,6 +116,10 @@ export function profilePatch(body: Record<string, unknown>): Partial<Profile> {
     if (v !== undefined) out[key] = v.trim()
   }
   if (out.city === '') throw new UserError('A birth city is needed')
+  if (body.houseSystem !== undefined) {
+    if (!isHouseSystem(body.houseSystem)) throw new UserError("Houses must be 'whole_sign' or 'placidus'")
+    out.houseSystem = body.houseSystem
+  }
   return out
 }
 

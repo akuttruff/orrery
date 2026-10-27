@@ -117,6 +117,17 @@ describe('settings', () => {
     expect(profilePatch({ name: ' Sam ', state: 'NY' })).toEqual({ name: 'Sam', state: 'NY' })
     expect(() => profilePatch({ city: '  ' })).toThrow(/city/)
   })
+
+  it('keeps the house system with the chart, and refuses one the tools do not cast in', async () => {
+    expect(((await (await fetch(`${ctx.base}/api/profile`)).json()) as { houseSystem: string }).houseSystem).toBe('whole_sign')
+    const put = (body: unknown) => fetch(`${ctx.base}/api/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const ok = await put({ houseSystem: 'placidus' })
+    expect(ok.status).toBe(200)
+    expect(((await ok.json()) as { houseSystem: string }).houseSystem).toBe('placidus')
+    expect(((await (await fetch(`${ctx.base}/api/profile`)).json()) as { houseSystem: string }).houseSystem).toBe('placidus')
+    expect((await put({ houseSystem: 'koch' })).status).toBe(400)
+    await put({ houseSystem: 'whole_sign' })
+  })
 })
 
 describe('castings', () => {

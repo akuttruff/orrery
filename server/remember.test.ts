@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { parseFacts, rememberRequest } from './remember.ts'
 import type { Memory, Profile } from '../src/types.ts'
 
-const sam: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
+const sam: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA', houseSystem: 'whole_sign' }
 const known: Memory[] = [{ id: 'a1', text: 'The user works nights.', createdAt: 1, updatedAt: 1 }]
 
 describe('rememberRequest', () => {

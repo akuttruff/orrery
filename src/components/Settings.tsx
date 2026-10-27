@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api.ts'
+import { HOUSE_SYSTEMS, isHouseSystem } from '../types.ts'
 import type { Config, Profile } from '../types.ts'
 
 interface SettingsProps {
@@ -89,6 +90,13 @@ export default function Settings({ profile, config, onSaved, onClose, onMemories
           <label className="field"><span>State</span><input value={p.state} onChange={(e) => setP({ ...p, state: e.target.value })} /></label>
           <label className="field"><span>Country</span><input value={p.country} onChange={(e) => setP({ ...p, country: e.target.value })} /></label>
         </div>
+        <label className="field">
+          <span>Houses</span>
+          <select value={p.houseSystem} onChange={(e) => { if (isHouseSystem(e.target.value)) setP({ ...p, houseSystem: e.target.value }) }}>
+            {HOUSE_SYSTEMS.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
+          </select>
+          <span className="field-hint">Every chart, transit and forecast is cast in these houses. Readings already cast keep theirs until you recast them. Placidus can't be cast within the polar circles.</span>
+        </label>
 
         <h3 className="section-title">Who writes</h3>
         <label className="field"><span>LM Studio address</span><input value={c.lmStudioUrl} inputMode="url" onChange={(e) => setC({ ...c, lmStudioUrl: e.target.value })} /></label>

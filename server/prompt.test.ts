@@ -11,7 +11,7 @@ import scanMonth from '../src/test/fixtures/scan-month.json?raw'
 import { NOT_WRITTEN } from '../src/types.ts'
 import type { Casting, FollowUp, Profile } from '../src/types.ts'
 
-const sam: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
+const sam: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA', houseSystem: 'whole_sign' }
 const casting = (over: Partial<Casting>): Casting => ({
   id: 'c1', kind: 'today', period: '2026-10-13', title: 'Today · Oct 13', result: transit,
   reading: '', readingState: 'none', readingError: null, createdAt: 0, updatedAt: 0, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: null, style: null, note: '', brief: null, starred: false, ...over,
@@ -69,6 +69,13 @@ describe('readingRequest', () => {
     expect(full.input).toContain("Then the month's lunations and eclipses")
     expect(full.input).toContain('"month_transits":{"range"')
     expect(full.input).toContain('"from_object":"Mars"')
+  })
+
+  it('tells the model which houses the chart uses, so its own tool calls match', () => {
+    const ws = readingRequest(casting({}), sam, new Date(2026, 9, 13)).system
+    expect(ws).toContain("whole sign houses: pass house_system='whole_sign'")
+    const pl = readingRequest(casting({}), { ...sam, houseSystem: 'placidus' }, new Date(2026, 9, 13)).system
+    expect(pl).toContain("placidus houses: pass house_system='placidus'")
   })
 
   it('speaks in the kind of reading chosen, and takes up what the person asked for', () => {
