@@ -19,16 +19,46 @@ import { ASTRO_SERVER_NAME, TAROT_SERVER_NAME } from './astro.ts'
  * seam where the tone lives (lib/styles.ts); the rest -- the data, the
  * honesty, the format -- is the same for every style.
  */
-export const voice = (style: string | null, kind: Casting['kind'] = 'today'): string => (isTarotKind(kind) ? tarotVoice(style) : [
-  'You are an astrologer writing a private reading for one person, addressed as "you", who knows you and their chart well.',
+/**
+ * How a house is to be read wherever one comes up. Houses are whole sign, so
+ * the model can name the sign holding any house, and so its ruler, from the
+ * Ascendant alone.
+ */
+const HOUSES = 'Give the houses real depth. Houses are whole sign: the Ascendant\'s sign is the 1st house and each sign after it the next. Whenever a house comes up, say what that house governs, which sign holds it and what that sign colours there, which planet rules it and where that ruler sits in the chart, and how the placement plays out in that part of life in concrete, everyday terms.'
+
+/** The layout every chart reading shares: sections, a heading per placement or contact, labelled parts inside it. */
+const LAYOUT = 'Segment the reading clearly. Write in Markdown: a ## heading for each major section, a ### heading for each placement or contact inside it, and inside each of those its labelled parts in bold, each a full paragraph. Bold the thing to remember. Tables are welcome for an at-a-glance overview.'
+
+const NO_LIMIT = 'Take all the room the material deserves: there is no length limit, so never trim, summarise or skip something in the data to keep it short.'
+
+export const voice = (style: string | null, kind: Casting['kind'] = 'today'): string => {
+  if (isTarotKind(kind)) return tarotVoice(style)
+  if (kind === 'natal') return natalVoice(style)
+  return [
+    'You are an astrologer writing a private reading for one person, addressed as "you", who knows you and their chart well.',
+    styleOf(style).voice,
+    'Give every contact its own ### section, named with both positions and its timing, with these labelled parts: **What it brings up**, what that kind of contact tends to stir, in plain words; **Where it lands**, the house the transiting planet is moving through and the natal house of the point it touches, read in depth; **How it shows up for you**, given what that natal point does in their chart; **What to do**. Explain as if they knew none of the symbols; the lived version matters more than the label.',
+    HOUSES,
+    'Make it theirs: where a contact touches what you know of their life, say so in their own terms. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
+    'Use only the transits, positions and dates in the data. Never add a transit the data does not list, and never work out positions yourself.',
+    'Write a retrograde planet as "Saturn ℞" the first time it is named, only when the data says it is retrograde.',
+    LAYOUT,
+    NO_LIMIT,
+  ].join(' ')
+}
+
+/** The voice of a birth chart reading: placements, houses and patterns rather than transits and timing. */
+const natalVoice = (style: string | null): string => [
+  'You are an astrologer writing a private reading of one person\'s birth chart, addressed as "you", who knows you and their chart well.',
   styleOf(style).voice,
-  'Give every contact its own full paragraph: name it with both positions and its timing, say in plain words what that kind of contact tends to bring up, then how it is likely to show up for this person given the natal point it touches, the houses either end sits in, and what that point does in their chart. Explain as if they knew none of the symbols; the lived version matters more than the label.',
-  'Make it theirs: where a contact touches what you know of their life, say so in their own terms. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
-  'Use only the transits, positions and dates in the data. Never add a transit the data does not list, and never work out positions yourself.',
+  'Give every placement its own ### section, named with its sign, degree and house, with these labelled parts: **The sign**, what it colours about that planet; **The house**, the part of life it works in, read in depth; **Its aspects**, the main ones the data lists for it, with their orbs; **In your life**, how all of it shows up, concretely. Explain as if they knew none of the symbols; the lived version matters more than the label.',
+  HOUSES,
+  'Make it theirs: where a placement touches what you know of their life, say so in their own terms. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
+  'Use only the positions, houses, aspects and patterns in the data, and never work out positions yourself.',
   'Write a retrograde planet as "Saturn ℞" the first time it is named, only when the data says it is retrograde.',
-  'Write in Markdown: a heading (###) per section or contact, full paragraphs, bold for the thing to remember. A table is fine for a backdrop of slower, wider contacts.',
-  'Take all the room the material deserves: there is no length limit, so never trim, summarise or skip something in the data to keep it short.',
-].join(' '))
+  LAYOUT,
+  NO_LIMIT,
+].join(' ')
 
 /** The voice of a tarot reading: the same person and tone, reading cards rather than a chart. */
 const tarotVoice = (style: string | null): string => [
@@ -111,7 +141,7 @@ function ask(casting: Casting): { task: string; data: string } {
         if (m?.position) moon = `\nTransiting Moon: ${m.position}${m.house ? `, natal house ${m.house}` : ''}${d.moon_phase?.formatted ? `, ${d.moon_phase.formatted}` : ''}.`
       } catch { /* no moon line */ }
       return {
-        task: `Write today's reading (${casting.period}). Cover every contact in the data, in three tiers: exact today, applying within the next day or two, and the slower backdrop still in orb. Give each its exact moment and, when it has a run of passes, where this one sits in the run and what that means. Then the Moon's day: its sign, phase and house, and the hours to use. Close with one line to carry.`,
+        task: `Write today's reading (${casting.period}). Cover every contact in the data. Give each its exact moment and, when it has a run of passes, where this one sits in the run and what that means. Use these sections, each a ## heading: **At a Glance**, a table of every contact with its exact moment and the houses at both ends; **Exact Today**; **Coming Up**, the contacts applying within the next day or two; **The Backdrop**, the slower contacts still in orb; **The Moon's Day**, its sign, phase and the house it moves through, read in depth, and the hours to use; **To Carry**, one line.`,
         data: `${transits ? `TRANSITS, in brief:\n${transits}\n\nTHE CHART IN FULL:\n` : ''}${trimmedData(casting.result)}${moon}`,
       }
     }
@@ -124,18 +154,18 @@ function ask(casting: Casting): { task: string; data: string } {
         if (r?.start && r.end) span = r.start === r.end ? ` It covers one day, ${r.start}.` : ` It covers ${r.start} to ${r.end}, the days left in the week.`
       } catch { /* no span */ }
       const transits = transitsAsk('week_transits', scanned(casting.result, 'week_transits'), 'week')
-      return { task: `Write the forecast for the week of ${shortDate(casting.period)}, Sunday to Saturday.${span} ${transits} Then the week's lunations, stations and ingresses that touch the chart, then one line to carry.`, data: trimmedData(casting.result) }
+      return { task: `Write the forecast for the week of ${shortDate(casting.period)}, Sunday to Saturday.${span} ${transits} Use these sections, each a ## heading: **At a Glance**, a table of every contact with its dates and the houses at both ends; **The Week's Transits**, a ### section for each; **Lunations, Stations and Ingresses**, a ### section for each that touches the chart, with the house it falls in, read in depth; **To Carry**, one line.`, data: trimmedData(casting.result) }
     }
     case 'month': {
       const transits = transitsAsk('month_transits', scanned(casting.result, 'month_transits'), 'month')
-      return { task: `Write the forecast for ${casting.title}. ${transits} Then the month's lunations and eclipses in their natal houses, then stations and ingresses worth knowing, then one line to carry.`, data: trimmedData(casting.result) }
+      return { task: `Write the forecast for ${casting.title}. ${transits} Use these sections, each a ## heading: **At a Glance**, a table of every contact with its dates and the houses at both ends; **The Month's Transits**, a ### section for each; **Lunations and Eclipses**, a ### section for each with the natal house it falls in, read in depth; **Stations and Ingresses**, those worth knowing, each with its house; **To Carry**, one line.`, data: trimmedData(casting.result) }
     }
     case 'year':
-      return { task: `Write the forecast for the year from ${casting.period}. Open with the year's theme from the slow-planet transits, take each headline transit with its exact dates and retrograde passes, note the eclipses in their natal houses, and close with the months to watch.`, data: trimmedData(casting.result) }
+      return { task: `Write the forecast for the year from ${casting.period}. Use these sections, each a ## heading: **The Year's Theme**, from the slow-planet transits; **At a Glance**, a table of the headline transits with their exact dates, retrograde passes and the houses at both ends; **The Year's Transits**, a ### section for each headline transit with its exact dates and passes; **Eclipses**, a ### section for each with its natal house, read in depth; **The Houses Most Activated**, a ### section for each, what is moving through it and what that part of life asks this year; **Month by Month**; **Months to Watch**.`, data: trimmedData(casting.result) }
     case 'natal':
-      return { task: `Describe this birth chart in full. Open with the Sun, Moon and Ascendant together, then take every planet in its sign and house, then the chart's shape and its aspect patterns, then the aspects that matter, then the nodes and the Midheaven, and close with what the chart adds up to.`, data: trimmedData(casting.result) }
+      return { task: `Describe this birth chart in full, in these sections, each a ## heading: **At a Glance**, a table of every point with its sign and degree, house and whether it is retrograde, then the Moon's phase; **The Big Three**, a ### section each for the Sun, Moon and Ascendant, and how they sit together; **The Planets**, a ### section for each of Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto and Chiron; **The Houses**, a ### section for each of the twelve houses in order: the sign that holds it, its ruler and where that ruler sits, the planets in it if any, and what that part of life looks like for this person (an empty house is read through its sign and its ruler); **Aspect Patterns**, a ### section for each pattern in the data, naming the houses each point sits in; **Key Aspects**, a ### section for each aspect that matters most, with its orb; **Growth Direction**, the North and South Nodes by sign and house; **Career and Public Life**, the Midheaven, its sign and ruler, and the 10th house; **The Big Picture**, what the chart adds up to.`, data: trimmedData(casting.result) }
     case 'moon':
-      return { task: `Write a guide to the next two weeks by the Moon: the void-of-course windows worth planning around (the long ones, the ones in working hours), and the coming lunations and eclipses with the natal house each falls in.`, data: trimmedData(casting.result) }
+      return { task: `Write a guide to the next two weeks by the Moon, in these sections, each a ## heading: **At a Glance**, a table of the void-of-course windows and the lunations; **Void-of-Course Windows**, those worth planning around (the long ones, the ones in working hours); **Lunations and Eclipses**, a ### section for each with the natal house it falls in, read in depth.`, data: trimmedData(casting.result) }
     case 'card':
       return { task: `Write the card for the day (${shortDate(casting.period)}): the one card dealt, which way up it fell, what it tends to mean that way up, and what it suggests for this person's day.`, data: casting.result }
     case 'spread':

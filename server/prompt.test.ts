@@ -18,6 +18,21 @@ const casting = (over: Partial<Casting>): Casting => ({
 })
 
 describe('readingRequest', () => {
+  it('segments every chart reading and reads the houses in depth; a birth chart gets its own voice and a full outline', () => {
+    const today = readingRequest(casting({}), sam, new Date(2026, 9, 13))
+    expect(today.system).toContain('a ## heading for each major section, a ### heading for each placement or contact')
+    expect(today.system).toContain('**Where it lands**')
+    expect(today.system).toContain("Houses are whole sign: the Ascendant's sign is the 1st house")
+    expect(today.system).toContain('which planet rules it and where that ruler sits')
+    expect(today.input).toContain('**At a Glance**')
+    const natal = readingRequest(casting({ kind: 'natal', period: 'natal' }), sam, new Date(2026, 9, 13))
+    expect(natal.system).toContain("reading of one person's birth chart")
+    expect(natal.system).toContain('**The house**, the part of life it works in, read in depth')
+    expect(natal.system).not.toContain('**Where it lands**')
+    expect(natal.input).toContain('**The Houses**, a ### section for each of the twelve houses in order')
+    expect(natal.input).toContain('**Growth Direction**')
+  })
+
   it("names the person and the day, and asks for today's reading from the transit list", () => {
     const req = readingRequest(casting({}), sam, new Date(2026, 9, 13))
     expect(req.system).toContain('Sam, born 1990-06-15 14:30 in New York, NY, USA')
@@ -67,7 +82,7 @@ describe('readingRequest', () => {
     const full = readingRequest(casting({ kind: 'month', result: withScan('month', month, scanMonth), title: 'October 2026', period: '2026-10' }), sam)
     expect(full.input).toContain('Under month_transits is every contact in orb over these days, 12 in all')
     expect(full.input).toContain("the month's events")
-    expect(full.input).toContain("Then the month's lunations and eclipses")
+    expect(full.input).toContain('**Lunations and Eclipses**, a ### section for each with the natal house it falls in')
     expect(full.input).toContain('"month_transits":{"range"')
     expect(full.input).toContain('"from_object":"Mars"')
   })
