@@ -131,6 +131,16 @@ describe('settings', () => {
 })
 
 describe('castings', () => {
+  it('casts in the houses chosen for the reading, Settings\' otherwise, and its prompts follow the casting', async () => {
+    const placidus = await post(`${ctx.base}/api/castings`, { kind: 'natal', houseSystem: 'placidus' })
+    expect(placidus.status).toBe(201)
+    const pc = (await placidus.json()) as { result: string }
+    expect(JSON.parse(pc.result).args.house_system).toBe('placidus')
+    const plain = (await (await post(`${ctx.base}/api/castings`, { kind: 'natal' })).json()) as { result: string }
+    expect(JSON.parse(plain.result).args.house_system).toBe('whole_sign')
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'natal', houseSystem: 'koch' })).status).toBe(400)
+  })
+
   it('casts anew on every tap and keeps the earlier castings', async () => {
     const first = await post(`${ctx.base}/api/castings`, { kind: 'today' })
     expect(first.status).toBe(201)

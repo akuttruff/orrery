@@ -1,4 +1,7 @@
 import { memo, useMemo, useState } from 'react'
+import { houseSystemOf } from '../lib/houses.ts'
+import { HOUSE_SYSTEMS } from '../types.ts'
+
 import { Brain, ListChecks, RotateCw, SlidersHorizontal, Trash2 } from 'lucide-react'
 import MemoryPicker from './MemoryPicker'
 import ChartWheel from './ChartWheel'
@@ -18,6 +21,8 @@ import { formatWhen } from '../lib/when.ts'
 import { styleOf, NOTE_MAX, type StyleId } from '../lib/styles.ts'
 import { isTarotKind } from '../types.ts'
 import type { Casting } from '../types.ts'
+
+const HOUSE_LABEL = Object.fromEntries(HOUSE_SYSTEMS.map((h) => [h.id, h.label])) as Record<string, string>
 
 interface CastingViewProps {
   casting: Casting
@@ -55,6 +60,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
   const wheel = useMemo(() => (casting.kind === 'today' || casting.kind === 'natal' ? parseWheel(casting.result) : null), [casting])
   const forecast = useMemo(() => (casting.kind === 'week' || casting.kind === 'month' || casting.kind === 'year' ? parseForecast(casting.result) : null), [casting])
   const cards = useMemo(() => (isTarotKind(casting.kind) ? parseReading(casting.result) : null), [casting])
+  const houses = houseSystemOf(casting.result)
   /** What the reading is written from, when memory is off. */
   const source = isTarotKind(casting.kind) ? 'the cards' : 'the chart'
 
@@ -62,7 +68,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
     <article className="casting">
       <header className="casting-head">
         <h2>{casting.title}</h2>
-        <p className="casting-sub">Cast {formatWhen(casting.createdAt)} · {style.label}{casting.note ? <> · <q className="casting-note">{casting.note}</q></> : ''}</p>
+        <p className="casting-sub">Cast {formatWhen(casting.createdAt)} · {style.label}{houses ? ` · ${HOUSE_LABEL[houses]} houses` : ''}{casting.note ? <> · <q className="casting-note">{casting.note}</q></> : ''}</p>
       </header>
       {wheel && <ChartWheel wheel={wheel} castingId={casting.id} readings={casting.transitReadings ?? undefined} />}
       {wheel?.kind === 'transit' && <Transits wheel={wheel} weights sortable />}

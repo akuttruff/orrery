@@ -2,6 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import type { Plugin } from 'vite'
 import { KINDS, isHouseSystem } from '../src/types.ts'
+import type { HouseSystem } from '../src/types.ts'
+import { houseSystemOf } from '../src/lib/houses.ts'
 import type { Casting, FollowUp, Kind, Profile, Remembered, TarotCard } from '../src/types.ts'
 import fs from 'node:fs'
 import { pipeline } from 'node:stream'
@@ -192,15 +194,22 @@ export function createMiddleware(state: ApiState): Handler {
     }
   }
 
+  /** The person as a casting's prompts should see them: with the houses that casting was cast in, so the model's own tool calls match it. */
+  const profileFor = (casting: Casting): Profile => {
+    const profile = store.getProfile()
+    return { ...profile, houseSystem: houseSystemOf(casting.result) ?? profile.houseSystem }
+  }
+
   /**
    * A new casting of a kind, cast now with the memory choice made before the
    * tap; the earlier ones stay. Two taps while the tools run share the one cast.
    */
-  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>, spread: SpreadId = 'three'): Promise<unknown> => {
-    const profile = store.getProfile()
+  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>, spread: SpreadId = 'three', houseSystem?: HouseSystem): Promise<unknown> => {
+    // The houses chosen for this reading, or the ones Settings keeps.
+    const profile = { ...store.getProfile(), ...(houseSystem ? { houseSystem } : {}) }
     const period = periodFor(kind, new Date())
-    // Only the same tap twice is shared: a different question deals different cards, and a different style or memory choice is a different reading.
-    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.memory, frame.memoryExcluded])
+    // Only the same tap twice is shared: a different question deals different cards, and a different style, memory choice or house system is a different reading.
+    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.memory, frame.memoryExcluded, profile.houseSystem])
     let pending = state.casting.get(key)
     if (!pending) {
       pending = (async () => {
@@ -334,7 +343,8 @@ export function createMiddleware(state: ApiState): Handler {
         if (!isKind(body.kind)) throw new UserError(`Unknown kind: ${String(body.kind)}`)
         const { memory = null, memoryExcluded = [], style = null, note = '', starred = false } = framePatch(body)
         if (body.spread !== undefined && !isSpreadId(body.spread)) throw new UserError('spread must be single, three, situation or celtic-cross')
-        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }, isSpreadId(body.spread) ? body.spread : undefined))
+        if (body.houseSystem !== undefined && !isHouseSystem(body.houseSystem)) throw new UserError("houseSystem must be 'whole_sign' or 'placidus'")
+        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }, isSpreadId(body.spread) ? body.spread : undefined, isHouseSystem(body.houseSystem) ? body.houseSystem : undefined))
       }).catch(fail)
       return undefined
     }
@@ -370,7 +380,7 @@ export function createMiddleware(state: ApiState): Handler {
         if (!readings.writing(id)) {
           const memory = memoryFor(casting)
           store.setMemoriesUsed(id, memory.ids)
-          readings.start(id, readingRequest(casting, store.getProfile(), new Date(), memory.lines))
+          readings.start(id, readingRequest(casting, profileFor(casting), new Date(), memory.lines))
         }
         return json(res, 202, store.getCasting(id))
       }
@@ -393,7 +403,7 @@ export function createMiddleware(state: ApiState): Handler {
             if (!store.getCasting(id)) { json(res, 404, { error: 'No such casting' }); return }
             const memory = memoryFor(current)
             const followUp = store.addFollowUp(id, `Pulled a card: ${card.card.name}${card.reversed ? ', reversed' : ''}`, memory.ids, card)
-            readings.start(followUp.id, followUpRequest(current, earlier, followUp.question, store.getProfile(), new Date(), memory.lines, card), answerOf(store, followUp.id))
+            readings.start(followUp.id, followUpRequest(current, earlier, followUp.question, profileFor(current), new Date(), memory.lines, card), answerOf(store, followUp.id))
             store.setRemembered(followUp.id, [])
             json(res, 202, store.getFollowUp(followUp.id))
           } finally {
@@ -413,7 +423,7 @@ export function createMiddleware(state: ApiState): Handler {
           if (pulling.has(id) || earlier.some((f) => f.state === 'writing')) throw new UserError('One answer at a time')
           const memory = memoryFor(current)
           const followUp = store.addFollowUp(id, question, memory.ids)
-          readings.start(followUp.id, followUpRequest(current, earlier, question, store.getProfile(), new Date(), memory.lines), answerOf(store, followUp.id))
+          readings.start(followUp.id, followUpRequest(current, earlier, question, profileFor(current), new Date(), memory.lines), answerOf(store, followUp.id))
           if (memoryOn(current)) void rememberFrom(followUp)
           else store.setRemembered(followUp.id, [])
           json(res, 202, store.getFollowUp(followUp.id))
@@ -439,7 +449,7 @@ export function createMiddleware(state: ApiState): Handler {
         const earlier = store.listFollowUps(casting.id).filter((x) => x.createdAt < followUp.createdAt || (x.createdAt === followUp.createdAt && x.id !== followUp.id && x.id < followUp.id))
         const memory = memoryFor(casting)
         store.setAnswerMemoriesUsed(id, memory.ids)
-        readings.start(id, followUpRequest(casting, earlier, followUp.question, store.getProfile(), new Date(), memory.lines, followUp.card), answerOf(store, id))
+        readings.start(id, followUpRequest(casting, earlier, followUp.question, profileFor(casting), new Date(), memory.lines, followUp.card), answerOf(store, id))
         return json(res, 202, store.getFollowUp(id))
       }
       if (sub === 'answer' && method === 'DELETE') return json(res, 200, { stopped: readings.stop(id) })
