@@ -13,13 +13,12 @@ import type { CastOptions } from './lib/api.ts'
 import { noReply } from './lib/reach.ts'
 import { DEFAULT_STYLE, isStyleId, type StyleId } from './lib/styles.ts'
 import { DEFAULT_SPREAD, isSpreadId, type SpreadId } from './lib/spreads.ts'
-import { houseSystemOf } from './lib/houses.ts'
 import type { Who } from './components/WhoseChart'
 import { KIND_LABEL } from './lib/kinds.ts'
 import { formatWhen } from './lib/when.ts'
 import { castKindIn, castingIdIn, hashFor, wheelIdIn } from './lib/route.ts'
 import { KINDS } from './types.ts'
-import type { Casting, CastingSummary, Config, Kind, Profile, HouseSystem, Person } from './types.ts'
+import type { Casting, CastingSummary, Config, Kind, Profile, Person } from './types.ts'
 
 /** The shortcut buttons: what one tap casts, anew each time. */
 const SHORTCUTS: { kind: Kind; label: string; hint: string; Icon: typeof Sun }[] = [
@@ -93,9 +92,6 @@ export default function App() {
     setSpreadState(id)
     try { localStorage.setItem('orrery.spread', id) } catch { /* a preference, not a record */ }
   }
-  // The houses for the next chart reading: Settings' choice until changed in the popup, then that until the page reloads.
-  const [houses, setHouses] = useState<HouseSystem | null>(null)
-  const houseChoice: HouseSystem = houses ?? profile?.houseSystem ?? 'whole_sign'
   // Whose chart the next reading is cast from: yours until someone else is picked, then them until the page reloads.
   const [people, setPeople] = useState<Person[]>([])
   const [whoPicked, setWho] = useState<Who>('me')
@@ -107,8 +103,8 @@ export default function App() {
     return person
   }
   const choice: CastOptions = who === 'me'
-    ? { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, note: note.trim(), spread, houseSystem: houseChoice }
-    : { memory: false, memoryExcluded: [], style, note: note.trim(), spread, houseSystem: houseChoice, personId: who }
+    ? { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, note: note.trim(), spread }
+    : { memory: false, memoryExcluded: [], style, note: note.trim(), spread, personId: who }
   // The day's card, once drawn, is opened rather than drawn again.
   const todaysCard = recent.find((c) => c.kind === 'card' && c.period === todayKey())
   // A tile opens the popup for these choices; the cast waits for its button.
@@ -298,7 +294,7 @@ export default function App() {
             onMemories={() => setMemoriesOpen(true)}
             onWrite={(again) => void write(again)}
             onStop={() => void stop()}
-            onRecast={(style) => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: style ?? current.style, note: current.note, spread, houseSystem: houseSystemOf(current.result) ?? houseChoice, ...(current.subject ? { personId: current.subject.id } : {}) })}
+            onRecast={(style) => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: style ?? current.style, note: current.note, spread, ...(current.subject ? { personId: current.subject.id } : {}) })}
             onDelete={() => void remove()}
             onSettled={settled}
           />
@@ -343,8 +339,6 @@ export default function App() {
           note={note}
           style={style}
           spread={spread}
-          houses={houseChoice}
-          onHouses={setHouses}
           me={profile?.name ?? ''}
           people={people}
           who={who}

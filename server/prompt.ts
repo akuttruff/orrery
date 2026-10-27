@@ -1,5 +1,5 @@
 import type { Casting, FollowUp, Profile, TarotCard } from '../src/types.ts'
-import { isTarotKind, HOUSE_SYSTEMS } from '../src/types.ts'
+import { isTarotKind } from '../src/types.ts'
 import { parseWheel } from '../src/lib/chartWheel.ts'
 import { readingsInput } from '../src/lib/readings.ts'
 import { styleOf } from '../src/lib/styles.ts'
@@ -157,10 +157,7 @@ const person = (profile: Subject, now: Date): string =>
   (profile.askedBy
     ? `This chart is ${profile.name}'s, cast at the request of ${profile.askedBy}, a friend. The reading is for ${profile.name} and may be shared with them, so address ${profile.name} as "you". `
     : '') +
-  `The person: ${profile.name}, born ${profile.dateTime} in ${[profile.city, profile.state, profile.country].filter(Boolean).join(', ')}. ` +
-  `Their chart uses ${HOUSE_LABEL[profile.houseSystem]} houses: pass house_system='${profile.houseSystem}' to every astrology tool that takes one. Today is ${now.toDateString()}.`
-
-const HOUSE_LABEL = Object.fromEntries(HOUSE_SYSTEMS.map((h) => [h.id, h.label.toLowerCase()])) as Record<Profile['houseSystem'], string>
+  `The person: ${profile.name}, born ${profile.dateTime} in ${[profile.city, profile.state, profile.country].filter(Boolean).join(', ')}. Today is ${now.toDateString()}.`
 
 /**
  * Ceilings on a reply, in tokens. LM Studio counts the model's reasoning

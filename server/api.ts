@@ -1,9 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import type { Plugin } from 'vite'
-import { KINDS, isHouseSystem } from '../src/types.ts'
-import type { HouseSystem } from '../src/types.ts'
-import { houseSystemOf } from '../src/lib/houses.ts'
+import { KINDS } from '../src/types.ts'
 import type { Casting, FollowUp, Kind, Person, Profile, Remembered, TarotCard } from '../src/types.ts'
 import fs from 'node:fs'
 import { pipeline } from 'node:stream'
@@ -132,10 +130,6 @@ export function profilePatch(body: Record<string, unknown>): Partial<Profile> {
     if (v !== undefined) out[key] = v.trim()
   }
   if (out.city === '') throw new UserError('A birth city is needed')
-  if (body.houseSystem !== undefined) {
-    if (!isHouseSystem(body.houseSystem)) throw new UserError("Houses must be 'whole_sign' or 'placidus'")
-    out.houseSystem = body.houseSystem
-  }
   return out
 }
 
@@ -209,26 +203,26 @@ export function createMiddleware(state: ApiState): Handler {
     }
   }
 
-  /** The person as a casting's prompts should see them: with the houses that casting was cast in, so the model's own tool calls match it. */
+  /** The person as a casting's prompts should see them: you, or the friend it was cast for, with you as the one asking. */
   const profileFor = (casting: Casting): Subject => {
     const me = store.getProfile()
-    const houseSystem = houseSystemOf(casting.result) ?? me.houseSystem
-    if (!casting.subject) return { ...me, houseSystem }
+    if (!casting.subject) return me
     const { id: _id, ...them } = casting.subject
-    return { ...them, houseSystem, askedBy: me.name }
+    return { ...them, askedBy: me.name }
   }
+
 
   /**
    * A new casting of a kind, cast now with the memory choice made before the
    * tap; the earlier ones stay. Two taps while the tools run share the one cast.
    */
-  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>, spread: SpreadId = 'three', houseSystem?: HouseSystem, subject: Person | null = null): Promise<unknown> => {
+  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>, spread: SpreadId = 'three', subject: Person | null = null): Promise<unknown> => {
+    // Whose chart: yours, or the friend chosen.
     const me = store.getProfile()
-    // Whose chart (yours, or the friend chosen), in the houses chosen for this reading or the ones Settings keeps.
-    const profile: Profile = { ...me, ...(subject ? { name: subject.name, dateTime: subject.dateTime, city: subject.city, state: subject.state, country: subject.country } : {}), ...(houseSystem ? { houseSystem } : {}) }
+    const profile: Profile = subject ? { name: subject.name, dateTime: subject.dateTime, city: subject.city, state: subject.state, country: subject.country } : me
     const period = periodFor(kind, new Date())
-    // Only the same tap twice is shared: a different question deals different cards, and a different style, memory choice, house system or person is a different reading.
-    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.memory, frame.memoryExcluded, profile.houseSystem, subject?.id ?? null])
+    // Only the same tap twice is shared: a different question deals different cards, and a different style, memory choice or person is a different reading.
+    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.memory, frame.memoryExcluded, subject?.id ?? null])
     let pending = state.casting.get(key)
     if (!pending) {
       pending = (async () => {
@@ -379,14 +373,13 @@ export function createMiddleware(state: ApiState): Handler {
         if (!isKind(body.kind)) throw new UserError(`Unknown kind: ${String(body.kind)}`)
         const { memory = null, memoryExcluded = [], style = null, note = '', starred = false } = framePatch(body)
         if (body.spread !== undefined && !isSpreadId(body.spread)) throw new UserError('spread must be single, three, situation or celtic-cross')
-        if (body.houseSystem !== undefined && !isHouseSystem(body.houseSystem)) throw new UserError("houseSystem must be 'whole_sign' or 'placidus'")
         // Whose chart: absent or 'me' for yours, else a saved person's id.
         let subject: Person | null = null
         if (body.personId !== undefined && body.personId !== null && body.personId !== 'me') {
           subject = typeof body.personId === 'string' ? store.getPerson(body.personId) ?? null : null
           if (!subject) throw new UserError('That person is no longer saved; add them again to cast for them')
         }
-        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }, isSpreadId(body.spread) ? body.spread : undefined, isHouseSystem(body.houseSystem) ? body.houseSystem : undefined, subject))
+        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }, isSpreadId(body.spread) ? body.spread : undefined, subject))
       }).catch(fail)
       return undefined
     }

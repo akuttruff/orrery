@@ -6,8 +6,6 @@ import StyleChips from './StyleChips'
 import { NOTE_MAX, type StyleId } from '../lib/styles.ts'
 import { KIND_LABEL } from '../lib/kinds.ts'
 import { SPREADS, SPREAD_HINT, SPREAD_LABEL, type SpreadId } from '../lib/spreads.ts'
-import { hasHouses } from '../lib/houses.ts'
-import { HOUSE_SYSTEMS, type HouseSystem } from '../types.ts'
 import { isTarotKind } from '../types.ts'
 import type { Kind, Person } from '../types.ts'
 
@@ -17,9 +15,6 @@ interface CastSheetProps {
   style: StyleId
   /** Which spread a card spread is dealt. */
   spread: SpreadId
-  /** The houses a chart reading is cast in. */
-  houses: HouseSystem
-  onHouses: (houses: HouseSystem) => void
   /** Whose chart: you, or someone saved; new people are added here. */
   me: string
   people: Person[]
@@ -45,7 +40,7 @@ interface CastSheetProps {
  * casts. Nothing is cast until that button; the X or Escape puts the tile
  * back untouched.
  */
-export default function CastSheet({ kind, note, style, spread, houses, onHouses, me, people, who, onWho, onAddPerson, memoryOn, excluded, busy, onNote, onStyle, onSpread, onMemory, onExclude, onManage, onCast, onClose }: CastSheetProps) {
+export default function CastSheet({ kind, note, style, spread, me, people, who, onWho, onAddPerson, memoryOn, excluded, busy, onNote, onStyle, onSpread, onMemory, onExclude, onManage, onCast, onClose }: CastSheetProps) {
   const tarot = isTarotKind(kind)
   const box = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
@@ -81,16 +76,6 @@ export default function CastSheet({ kind, note, style, spread, houses, onHouses,
                 <button key={id} type="button" role="radio" aria-checked={spread === id} className={`chip${spread === id ? ' on' : ''}`} title={SPREAD_HINT[id]} onClick={() => onSpread(id)}>{SPREAD_LABEL[id]}</button>
               ))}
               <span className="memory-note">{SPREAD_HINT[spread]}</span>
-            </div>
-          )}
-          {hasHouses(kind) && (
-            <div className="spread-choice" role="radiogroup" aria-label="Houses">
-              {HOUSE_SYSTEMS.map((h) => (
-                <button key={h.id} type="button" role="radio" aria-checked={houses === h.id} className={`chip${houses === h.id ? ' on' : ''}`} onClick={() => onHouses(h.id)}>
-                  {h.label}
-                </button>
-              ))}
-              <span className="memory-note">{houses === 'placidus' ? 'Placidus houses: unequal, the Ascendant and Midheaven on the 1st and 10th cusps.' : 'Whole sign houses: each sign one house, from the Ascendant’s sign.'}</span>
             </div>
           )}
           <StyleChips value={style} as="radio" onPick={onStyle} />

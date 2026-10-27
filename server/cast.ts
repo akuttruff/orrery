@@ -81,9 +81,8 @@ export interface TarotAsk {
   question?: string
 }
 
-/** The birth data every chart tool takes, with the house system, so the natal houses agree across tools. */
 const birth = (p: Profile): Record<string, unknown> => ({
-  date_time: p.dateTime, city: p.city, state: p.state || undefined, country: p.country || undefined, house_system: p.houseSystem,
+  date_time: p.dateTime, city: p.city, state: p.state || undefined, country: p.country || undefined,
 })
 
 /** The horizons whose forecast is cast with an ephemeris scan beside it. */

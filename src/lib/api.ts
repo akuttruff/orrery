@@ -1,9 +1,9 @@
 import { noReply, reachFetch } from './reach.ts'
-import type { Casting, CastingSummary, Config, FollowUp, Kind, Memory, Profile, HouseSystem, Person } from '../types.ts'
+import type { Casting, CastingSummary, Config, FollowUp, Kind, Memory, Profile, Person } from '../types.ts'
 import type { SpreadId } from './spreads.ts'
 
 /** The choices a casting is made with: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
-export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>> & { spread?: SpreadId; houseSystem?: HouseSystem; /** Whose chart: a saved person's id; absent for yours. */ personId?: string }
+export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>> & { spread?: SpreadId; /** Whose chart: a saved person's id; absent for yours. */ personId?: string }
 
 /** The server, from the page. Every call throws with the server's message on failure, or a plain one when it gave no reply (see lib/reach.ts). */
 

@@ -12,14 +12,6 @@ export const isTarotKind = (kind: Kind): boolean => TAROT_KINDS.includes(kind)
 /** One card as the tarot server dealt it: where it fell, which card, which way up, and what it means that way (lib/tarotSpread.ts's DrawnCard). */
 export type TarotCard = DrawnCard
 
-/** The house systems astro-mcp casts in, by the id its tools take and report. */
-export type HouseSystem = 'whole_sign' | 'placidus'
-export const HOUSE_SYSTEMS: { id: HouseSystem; label: string }[] = [
-  { id: 'whole_sign', label: 'Whole sign' },
-  { id: 'placidus', label: 'Placidus' },
-]
-export const isHouseSystem = (v: unknown): v is HouseSystem => HOUSE_SYSTEMS.some((h) => h.id === v)
-
 /** Someone else whose chart readings can be cast for: a friend, kept beside your own chart. */
 export interface Person {
   id: string
@@ -39,8 +31,6 @@ export interface Profile {
   city: string
   state: string
   country: string
-  /** The houses every chart is cast in: natal, transits, forecasts and lunations all use the same natal cusps. */
-  houseSystem: HouseSystem
 }
 
 /** How to reach LM Studio. The token never leaves the server; `hasToken` says whether one is set. */

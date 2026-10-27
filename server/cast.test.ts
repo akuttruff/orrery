@@ -8,7 +8,7 @@ import scan from '../src/test/fixtures/scan-week.json?raw'
 import month from '../src/test/fixtures/forecast-month.json?raw'
 import scanMonth from '../src/test/fixtures/scan-month.json?raw'
 
-const sam: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA', houseSystem: 'whole_sign' }
+const sam: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
 const oct15 = new Date(2026, 9, 15, 22, 8)
 
 describe('periods', () => {
@@ -46,7 +46,7 @@ describe('castResult', () => {
   it('passes the birth data by city, and the period as the tool wants it', async () => {
     const call = vi.fn(async (name: string) => `{"tool":"${name}"}`)
     await castResult('today', '2026-10-15', sam, call)
-    expect(call).toHaveBeenCalledWith('create_transit_chart', { date_time: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA', house_system: 'whole_sign' })
+    expect(call).toHaveBeenCalledWith('create_transit_chart', { date_time: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' })
     // The month's forecast and its scan over the calendar month, Mars outward, as the forecast itself ranks.
     await castResult('month', '2026-10', sam, call)
     expect(call).toHaveBeenCalledWith('forecast_month', expect.objectContaining({ month: '2026-10' }))
@@ -130,7 +130,7 @@ describe('castResult', () => {
   it('leaves an empty state or country out rather than sending blanks', async () => {
     const call = vi.fn(async (_name: string, _args: Record<string, unknown>) => '{}')
     await castResult('natal', 'natal', { ...sam, state: '', country: '' }, call)
-    expect(call.mock.calls[0]![1]).toEqual({ date_time: '1990-06-15 14:30', city: 'New York', state: undefined, country: undefined, house_system: 'whole_sign' })
+    expect(call.mock.calls[0]![1]).toEqual({ date_time: '1990-06-15 14:30', city: 'New York', state: undefined, country: undefined })
   })
 
   it('folds the two Moon tools into one result', async () => {
@@ -142,28 +142,11 @@ describe('castResult', () => {
   })
 })
 
-describe('the house system', () => {
-  it('goes with the birth data on every chart tool, so the natal houses agree across them', async () => {
-    const call = vi.fn(async () => '{}')
-    const placidus: Profile = { ...sam, houseSystem: 'placidus' }
-    await castResult('today', '2026-10-15', placidus, call, oct15)
-    await castResult('natal', 'natal', placidus, call, oct15)
-    await castResult('year', '2026-10-15', placidus, call, oct15)
-    await castResult('week', '2026-10-11', placidus, call, oct15)
-    await castResult('month', '2026-10', placidus, call, oct15)
-    await castResult('moon', '2026-10-15', placidus, call, oct15)
-    const birthTools = ['create_transit_chart', 'create_natal_chart', 'forecast_year', 'forecast_week', 'forecast_month', 'list_upcoming_transits', 'lunations_and_eclipses']
-    for (const tool of birthTools) expect(call).toHaveBeenCalledWith(tool, expect.objectContaining({ house_system: 'placidus' }))
-    // Void-of-course periods are about the Moon alone: no chart, no houses.
-    expect(call).toHaveBeenCalledWith('moon_void_periods', expect.not.objectContaining({ house_system: expect.anything() }))
-  })
-})
-
 describe('a tarot cast', () => {
   it('deals through the tarot server, one card for the day and the chosen spread otherwise', async () => {
     const tarot = vi.fn(async (name: string, args: Record<string, unknown>) => JSON.stringify({ tool: name, args }))
     const call = vi.fn(async () => '{}')
-    const sam: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA', houseSystem: 'whole_sign' }
+    const sam = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
     expect(JSON.parse(await castResult('card', '2026-10-15', sam, call, new Date(), { call: tarot, question: 'hm' }))).toEqual({ tool: 'draw_cards', args: { spread: 'single', reversals: true, question: 'hm' } })
     expect(JSON.parse(await castResult('spread', '2026-10-15', sam, call, new Date(), { call: tarot, spread: 'situation' }))).toEqual({ tool: 'draw_cards', args: { spread: 'situation', reversals: true } })
     await expect(castResult('card', '2026-10-15', sam, call)).rejects.toThrow(/tarot server/)

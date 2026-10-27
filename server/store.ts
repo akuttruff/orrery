@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { Brief, Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ReplyStats, Step, TarotCard, ToolUse, Written, Person } from '../src/types.ts'
-import { NOT_WRITTEN, isHouseSystem } from '../src/types.ts'
+import { NOT_WRITTEN } from '../src/types.ts'
 
 export interface ServerConfig extends Omit<Config, 'hasToken'> {
   apiToken: string
@@ -16,7 +16,7 @@ export interface ServerConfig extends Omit<Config, 'hasToken'> {
 const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', apiToken: '', model: '', preferredModel: '', fastModel: '', reasoning: 'low', memoryDefault: 'off' }
 
 /** The first chart the app opens with, until Settings says otherwise. */
-const DEFAULT_PROFILE: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA', houseSystem: 'whole_sign' }
+const DEFAULT_PROFILE: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
 
 /** The chat app's database, whose LM Studio settings seed ours on first run so there is nothing to type twice. */
 const LM_CHAT_DB = path.join(os.homedir(), 'Code', 'mobile-ai-chat', 'lm-chat', '.data', 'lm-chat.sqlite')
@@ -226,8 +226,6 @@ export class Store {
     if (!has('castings', 'brief')) this.db.exec('ALTER TABLE castings ADD COLUMN brief TEXT')
     if (!has('castings', 'starred')) this.db.exec('ALTER TABLE castings ADD COLUMN starred INTEGER NOT NULL DEFAULT 0')
     if (!has('castings', 'subject')) this.db.exec('ALTER TABLE castings ADD COLUMN subject TEXT')
-    // Whole sign was the only system before there was a choice.
-    if (!has('profile', 'house_system')) this.db.exec("ALTER TABLE profile ADD COLUMN house_system TEXT NOT NULL DEFAULT 'whole_sign'")
     this.db.exec('CREATE INDEX IF NOT EXISTS castings_updated ON castings (updated_at)')
     // A casting from before this was kept: its last change is its reading's or its latest question's.
     this.db.exec(`UPDATE castings SET updated_at = MAX(
@@ -239,8 +237,8 @@ export class Store {
   private seed(seedFrom: string): void {
     if (!this.db.prepare('SELECT 1 FROM profile WHERE id = 1').get()) {
       const p = DEFAULT_PROFILE
-      this.db.prepare('INSERT INTO profile (id, name, date_time, city, state, country, house_system) VALUES (1, ?, ?, ?, ?, ?, ?)')
-        .run(p.name, p.dateTime, p.city, p.state, p.country, p.houseSystem)
+      this.db.prepare('INSERT INTO profile (id, name, date_time, city, state, country) VALUES (1, ?, ?, ?, ?, ?)')
+        .run(p.name, p.dateTime, p.city, p.state, p.country)
     }
     if (this.db.prepare('SELECT 1 FROM config WHERE id = 1').get()) return
     const c = { ...DEFAULT_CONFIG, ...seedConfig(seedFrom) }
@@ -296,13 +294,13 @@ export class Store {
 
   getProfile(): Profile {
     const r = this.db.prepare('SELECT * FROM profile WHERE id = 1').get() as Record<string, string>
-    return { name: r.name!, dateTime: r.date_time!, city: r.city!, state: r.state!, country: r.country!, houseSystem: isHouseSystem(r.house_system) ? r.house_system : 'whole_sign' }
+    return { name: r.name!, dateTime: r.date_time!, city: r.city!, state: r.state!, country: r.country! }
   }
 
   setProfile(patch: Partial<Profile>): Profile {
     const next = { ...this.getProfile(), ...patch }
-    this.db.prepare('UPDATE profile SET name = ?, date_time = ?, city = ?, state = ?, country = ?, house_system = ? WHERE id = 1')
-      .run(next.name, next.dateTime, next.city, next.state, next.country, next.houseSystem)
+    this.db.prepare('UPDATE profile SET name = ?, date_time = ?, city = ?, state = ?, country = ? WHERE id = 1')
+      .run(next.name, next.dateTime, next.city, next.state, next.country)
     return next
   }
 

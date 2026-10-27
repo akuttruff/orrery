@@ -117,30 +117,9 @@ describe('settings', () => {
     expect(profilePatch({ name: ' Sam ', state: 'NY' })).toEqual({ name: 'Sam', state: 'NY' })
     expect(() => profilePatch({ city: '  ' })).toThrow(/city/)
   })
-
-  it('keeps the house system with the chart, and refuses one the tools do not cast in', async () => {
-    expect(((await (await fetch(`${ctx.base}/api/profile`)).json()) as { houseSystem: string }).houseSystem).toBe('whole_sign')
-    const put = (body: unknown) => fetch(`${ctx.base}/api/profile`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    const ok = await put({ houseSystem: 'placidus' })
-    expect(ok.status).toBe(200)
-    expect(((await ok.json()) as { houseSystem: string }).houseSystem).toBe('placidus')
-    expect(((await (await fetch(`${ctx.base}/api/profile`)).json()) as { houseSystem: string }).houseSystem).toBe('placidus')
-    expect((await put({ houseSystem: 'koch' })).status).toBe(400)
-    await put({ houseSystem: 'whole_sign' })
-  })
 })
 
 describe('castings', () => {
-  it('casts in the houses chosen for the reading, Settings\' otherwise, and its prompts follow the casting', async () => {
-    const placidus = await post(`${ctx.base}/api/castings`, { kind: 'natal', houseSystem: 'placidus' })
-    expect(placidus.status).toBe(201)
-    const pc = (await placidus.json()) as { result: string }
-    expect(JSON.parse(pc.result).args.house_system).toBe('placidus')
-    const plain = (await (await post(`${ctx.base}/api/castings`, { kind: 'natal' })).json()) as { result: string }
-    expect(JSON.parse(plain.result).args.house_system).toBe('whole_sign')
-    expect((await post(`${ctx.base}/api/castings`, { kind: 'natal', houseSystem: 'koch' })).status).toBe(400)
-  })
-
   it('casts anew on every tap and keeps the earlier castings', async () => {
     const first = await post(`${ctx.base}/api/castings`, { kind: 'today' })
     expect(first.status).toBe(201)
@@ -491,9 +470,9 @@ describe('memories', () => {
     expect(jo.name).toBe('Jo')
     expect(((await (await fetch(`${ctx.base}/api/people`)).json()) as { name: string }[]).map((p) => p.name)).toEqual(['Jo'])
 
-    const today = await (await post(`${ctx.base}/api/castings`, { kind: 'today', personId: jo.id, houseSystem: 'placidus' })).json() as Casting
+    const today = await (await post(`${ctx.base}/api/castings`, { kind: 'today', personId: jo.id })).json() as Casting
     const args = JSON.parse(today.result).args as Record<string, unknown>
-    expect(args).toMatchObject({ date_time: '1960-06-08 09:45', city: 'Pleasanton', state: 'CA', house_system: 'placidus' })
+    expect(args).toMatchObject({ date_time: '1960-06-08 09:45', city: 'Pleasanton', state: 'CA' })
     expect(today.title).toMatch(/^Jo · Today/)
     expect(today.subject?.name).toBe('Jo')
     expect(today.memory).toBe(false)
