@@ -33,7 +33,7 @@ describe('Reading: Download', () => {
 describe('CastingView: Download', () => {
   const casting = (over: Partial<Casting>): Casting => ({
     id: 'c1', kind: 'card', period: '2026-10-14', title: 'Card · Oct 14', result: single, reading: 'The Five of Pentacles, reversed.', readingState: 'done', readingError: null,
-    createdAt: 1, updatedAt: 1, memory: false, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: null, style: null, note: '', brief: null, starred: false, ...over,
+    createdAt: 1, updatedAt: 1, memory: false, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: null, style: null, note: '', brief: null, starred: false, subject: null, ...over,
   })
   const view = (c: Casting) => render(<CastingView casting={c} memoryDefault={false} onMemory={() => {}} onExclude={() => {}} onFrame={() => {}} onMemories={() => {}} onWrite={() => {}} onStop={() => {}} onRecast={() => {}} onDelete={() => {}} onSettled={() => {}} />)
 

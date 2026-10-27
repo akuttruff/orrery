@@ -147,7 +147,16 @@ function ask(casting: Casting): { task: string; data: string } {
   }
 }
 
-const person = (profile: Profile, now: Date): string =>
+/** Whose chart a prompt is about, and, when it is not the asker's own, who asked for it. */
+export type Subject = Profile & { askedBy?: string }
+
+/** Who wrote the note and asks the questions: the asker when the chart is someone else's. */
+const askerOf = (p: Subject): string => p.askedBy ?? p.name
+
+const person = (profile: Subject, now: Date): string =>
+  (profile.askedBy
+    ? `This chart is ${profile.name}'s, cast at the request of ${profile.askedBy}, a friend. The reading is for ${profile.name} and may be shared with them, so address ${profile.name} as "you". `
+    : '') +
   `The person: ${profile.name}, born ${profile.dateTime} in ${[profile.city, profile.state, profile.country].filter(Boolean).join(', ')}. ` +
   `Their chart uses ${HOUSE_LABEL[profile.houseSystem]} houses: pass house_system='${profile.houseSystem}' to every astrology tool that takes one. Today is ${now.toDateString()}.`
 
@@ -182,9 +191,9 @@ export function memoryBlock(profile: Profile, lines: string[]): string | null {
   ].join('\n')
 }
 
-export function readingRequest(casting: Casting, profile: Profile, now = new Date(), memory: string[] = []): WriteRequest {
+export function readingRequest(casting: Casting, profile: Subject, now = new Date(), memory: string[] = []): WriteRequest {
   const { task, data } = ask(casting)
-  const system = [voice(casting.style, casting.kind), person(profile, now), memoryBlock(profile, memory), noteBlock(profile, casting.note)].filter(Boolean).join('\n\n')
+  const system = [voice(casting.style, casting.kind), person(profile, now), memoryBlock(profile, memory), noteBlock({ ...profile, name: askerOf(profile) }, casting.note)].filter(Boolean).join('\n\n')
   return { system, input: `${task}\n\nDATA:\n${data}`, maxTokens: READING_MAX_TOKENS }
 }
 
@@ -221,23 +230,24 @@ export function cardBlock(card: TarotCard): string {
   ].join(' ')
 }
 
-export function followUpRequest(casting: Casting, earlier: FollowUp[], question: string, profile: Profile, now = new Date(), memory: string[] = [], card: TarotCard | null = null): WriteRequest {
+export function followUpRequest(casting: Casting, earlier: FollowUp[], question: string, profile: Subject, now = new Date(), memory: string[] = [], card: TarotCard | null = null): WriteRequest {
   const { data } = ask(casting)
   const system = [
     isTarotKind(casting.kind) ? TAROT_ANSWER_VOICE : ANSWER_VOICE,
     `The reading was written as this kind: ${styleOf(casting.style).voice} Answer in the same spirit.`,
     person(profile, now),
+    profile.askedBy ? `The questions below come from ${profile.askedBy}, not ${profile.name}: answer ${profile.askedBy} as "you", and speak of ${profile.name} by name.` : null,
     memoryBlock(profile, memory),
-    noteBlock(profile, casting.note),
+    noteBlock({ ...profile, name: askerOf(profile) }, casting.note),
     `THE CASTING: ${casting.title}.\nDATA:\n${data}`,
     `THE READING YOU WROTE:\n${casting.reading}`,
   ].filter(Boolean).join('\n\n')
   const thread = earlier
     .filter((f) => f.state === 'done' && f.answer)
-    .map((f) => `${profile.name} ${f.card ? `pulled a card: ${cardBlock(f.card)}` : `asked: ${f.question}`}\n\nYou answered: ${clip(f.answer, REPLAY_CHARS)}`)
+    .map((f) => `${askerOf(profile)} ${f.card ? `pulled a card: ${cardBlock(f.card)}` : `asked: ${f.question}`}\n\nYou answered: ${clip(f.answer, REPLAY_CHARS)}`)
   const turn = card
-    ? `${profile.name} pulled a tarot card beside this reading: ${cardBlock(card)}\n\nRead the card in the light of the reading above: what it adds, confirms or complicates, in two or three paragraphs. Name the card and which way up it fell; a reversal is a shading, not an opposite. Read it trauma-informed and expansive, leading with choice and agency, and do not predict the future with it.`
-    : `${profile.name} asks: ${question}`
+    ? `${askerOf(profile)} pulled a tarot card beside this reading: ${cardBlock(card)}\n\nRead the card in the light of the reading above: what it adds, confirms or complicates, in two or three paragraphs. Name the card and which way up it fell; a reversal is a shading, not an opposite. Read it trauma-informed and expansive, leading with choice and agency, and do not predict the future with it.`
+    : `${askerOf(profile)} asks: ${question}`
   const input = [...(thread.length ? ['THE CONVERSATION SO FAR:', ...thread] : []), turn].join('\n\n')
   return { system, input, maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN] }
 }

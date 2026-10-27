@@ -564,3 +564,11 @@ input, select { font: inherit; }
 .followup-card img { width: 72px; height: auto; border-radius: 4px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); flex: 0 0 auto; }
 .followup-card-text p { margin: 0; }
 .followup-card-keys { display: block; margin-top: 2px; font-size: 12px; color: var(--paper-dim); }
+
+/* whose chart, first in the cast popup; the new-person form opens under the chips */
+.whose { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.whose .spread-choice { margin: 0; }
+.whose-form { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.whose-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.people-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.people-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }

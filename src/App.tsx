@@ -14,11 +14,12 @@ import { noReply } from './lib/reach.ts'
 import { DEFAULT_STYLE, isStyleId, type StyleId } from './lib/styles.ts'
 import { DEFAULT_SPREAD, isSpreadId, type SpreadId } from './lib/spreads.ts'
 import { houseSystemOf } from './lib/houses.ts'
+import type { Who } from './components/WhoseChart'
 import { KIND_LABEL } from './lib/kinds.ts'
 import { formatWhen } from './lib/when.ts'
 import { castKindIn, castingIdIn, hashFor, wheelIdIn } from './lib/route.ts'
 import { KINDS } from './types.ts'
-import type { Casting, CastingSummary, Config, Kind, Profile, HouseSystem } from './types.ts'
+import type { Casting, CastingSummary, Config, Kind, Profile, HouseSystem, Person } from './types.ts'
 
 /** The shortcut buttons: what one tap casts, anew each time. */
 const SHORTCUTS: { kind: Kind; label: string; hint: string; Icon: typeof Sun }[] = [
@@ -95,7 +96,19 @@ export default function App() {
   // The houses for the next chart reading: Settings' choice until changed in the popup, then that until the page reloads.
   const [houses, setHouses] = useState<HouseSystem | null>(null)
   const houseChoice: HouseSystem = houses ?? profile?.houseSystem ?? 'whole_sign'
-  const choice: CastOptions = { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, note: note.trim(), spread, houseSystem: houseChoice }
+  // Whose chart the next reading is cast from: yours until someone else is picked, then them until the page reloads.
+  const [people, setPeople] = useState<Person[]>([])
+  const [whoPicked, setWho] = useState<Who>('me')
+  // Someone removed in Settings falls back to you.
+  const who: Who = whoPicked === 'me' || people.some((p) => p.id === whoPicked) ? whoPicked : 'me'
+  const addPerson = async (input: Omit<Person, 'id'>): Promise<Person> => {
+    const person = await api.addPerson(input)
+    setPeople((list) => [...list, person])
+    return person
+  }
+  const choice: CastOptions = who === 'me'
+    ? { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, note: note.trim(), spread, houseSystem: houseChoice }
+    : { memory: false, memoryExcluded: [], style, note: note.trim(), spread, houseSystem: houseChoice, personId: who }
   // The day's card, once drawn, is opened rather than drawn again.
   const todaysCard = recent.find((c) => c.kind === 'card' && c.period === todayKey())
   // A tile opens the popup for these choices; the cast waits for its button.
@@ -136,6 +149,7 @@ export default function App() {
   const load = useCallback(() => {
     const quiet = (e: Error) => { if (!noReply(e)) setError(e.message) }
     api.profile().then(setProfile).catch(quiet)
+    api.people().then(setPeople).catch(quiet)
     api.config().then(setConfig).catch(quiet)
     refreshRecent()
   }, [refreshRecent])
@@ -284,7 +298,7 @@ export default function App() {
             onMemories={() => setMemoriesOpen(true)}
             onWrite={(again) => void write(again)}
             onStop={() => void stop()}
-            onRecast={(style) => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: style ?? current.style, note: current.note, spread, houseSystem: houseSystemOf(current.result) ?? houseChoice })}
+            onRecast={(style) => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: style ?? current.style, note: current.note, spread, houseSystem: houseSystemOf(current.result) ?? houseChoice, ...(current.subject ? { personId: current.subject.id } : {}) })}
             onDelete={() => void remove()}
             onSettled={settled}
           />
@@ -331,6 +345,11 @@ export default function App() {
           spread={spread}
           houses={houseChoice}
           onHouses={setHouses}
+          me={profile?.name ?? ''}
+          people={people}
+          who={who}
+          onWho={setWho}
+          onAddPerson={addPerson}
           memoryOn={memoryOn}
           excluded={excluded}
           busy={busy !== null}
@@ -348,6 +367,8 @@ export default function App() {
         <Settings
           profile={profile}
           config={config}
+          people={people}
+          onRemovePerson={(id) => api.removePerson(id).then(() => setPeople((list) => list.filter((p) => p.id !== id)))}
           onSaved={(p, c) => { setProfile(p); setConfig(c); setSettingsOpen(false) }}
           onClose={() => setSettingsOpen(false)}
           onMemories={() => setMemoriesOpen(true)}

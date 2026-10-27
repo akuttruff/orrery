@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import MemoryChoice from './MemoryChoice'
+import WhoseChart, { type Who } from './WhoseChart'
 import StyleChips from './StyleChips'
 import { NOTE_MAX, type StyleId } from '../lib/styles.ts'
 import { KIND_LABEL } from '../lib/kinds.ts'
@@ -8,7 +9,7 @@ import { SPREADS, SPREAD_HINT, SPREAD_LABEL, type SpreadId } from '../lib/spread
 import { hasHouses } from '../lib/houses.ts'
 import { HOUSE_SYSTEMS, type HouseSystem } from '../types.ts'
 import { isTarotKind } from '../types.ts'
-import type { Kind } from '../types.ts'
+import type { Kind, Person } from '../types.ts'
 
 interface CastSheetProps {
   kind: Kind
@@ -19,6 +20,12 @@ interface CastSheetProps {
   /** The houses a chart reading is cast in. */
   houses: HouseSystem
   onHouses: (houses: HouseSystem) => void
+  /** Whose chart: you, or someone saved; new people are added here. */
+  me: string
+  people: Person[]
+  who: Who
+  onWho: (who: Who) => void
+  onAddPerson: (input: Omit<Person, 'id'>) => Promise<Person>
   memoryOn: boolean
   excluded: string[]
   busy: boolean
@@ -38,7 +45,7 @@ interface CastSheetProps {
  * casts. Nothing is cast until that button; the X or Escape puts the tile
  * back untouched.
  */
-export default function CastSheet({ kind, note, style, spread, houses, onHouses, memoryOn, excluded, busy, onNote, onStyle, onSpread, onMemory, onExclude, onManage, onCast, onClose }: CastSheetProps) {
+export default function CastSheet({ kind, note, style, spread, houses, onHouses, me, people, who, onWho, onAddPerson, memoryOn, excluded, busy, onNote, onStyle, onSpread, onMemory, onExclude, onManage, onCast, onClose }: CastSheetProps) {
   const tarot = isTarotKind(kind)
   const box = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
@@ -55,6 +62,7 @@ export default function CastSheet({ kind, note, style, spread, houses, onHouses,
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}><X size={20} aria-hidden="true" /></button>
         </header>
         <div className="sheet-body cast-body">
+          <WhoseChart me={me} people={people} value={who} onPick={onWho} onAdd={onAddPerson} />
           <textarea
             id="cast-note"
             ref={box}
@@ -86,7 +94,7 @@ export default function CastSheet({ kind, note, style, spread, houses, onHouses,
             </div>
           )}
           <StyleChips value={style} as="radio" onPick={onStyle} />
-          <MemoryChoice on={memoryOn} excluded={excluded} onToggle={onMemory} onExclude={onExclude} onManage={onManage} quiet />
+          {who === 'me' && <MemoryChoice on={memoryOn} excluded={excluded} onToggle={onMemory} onExclude={onExclude} onManage={onManage} quiet />}
         </div>
         <footer className="sheet-foot cast-foot">
           <button type="button" className="chip" onClick={onClose}>Cancel</button>

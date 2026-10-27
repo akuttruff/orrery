@@ -479,6 +479,51 @@ describe('memories', () => {
     expect(await (await fetch(`${ctx.base}/api/memories`)).json()).toHaveLength(1)
   })
 
+  it("casts for a friend in their own chart, without your memories, and remembers nothing from questions about them", async () => {
+    const seen: WriteRequest[] = []
+    writer = async (req, onDelta) => { seen.push(req); onDelta('Read.'); return 'Read.' }
+    await post(`${ctx.base}/api/memories`, { text: 'The user works nights.' })
+    await send('PUT', `${ctx.base}/api/config`, { memoryDefault: 'on' })
+
+    expect((await post(`${ctx.base}/api/people`, { name: 'Jo', dateTime: 'June 8 1960', city: 'Pleasanton' })).status).toBe(400)
+    expect((await post(`${ctx.base}/api/people`, { name: '', dateTime: '1960-06-08 09:45', city: 'Pleasanton' })).status).toBe(400)
+    const jo = await (await post(`${ctx.base}/api/people`, { name: ' Jo ', dateTime: '1960-06-08 09:45', city: 'Pleasanton', state: 'CA', country: 'USA' })).json() as { id: string; name: string }
+    expect(jo.name).toBe('Jo')
+    expect(((await (await fetch(`${ctx.base}/api/people`)).json()) as { name: string }[]).map((p) => p.name)).toEqual(['Jo'])
+
+    const today = await (await post(`${ctx.base}/api/castings`, { kind: 'today', personId: jo.id, houseSystem: 'placidus' })).json() as Casting
+    const args = JSON.parse(today.result).args as Record<string, unknown>
+    expect(args).toMatchObject({ date_time: '1960-06-08 09:45', city: 'Pleasanton', state: 'CA', house_system: 'placidus' })
+    expect(today.title).toMatch(/^Jo · Today/)
+    expect(today.subject?.name).toBe('Jo')
+    expect(today.memory).toBe(false)
+    const natal = await (await post(`${ctx.base}/api/castings`, { kind: 'natal', personId: jo.id })).json() as Casting
+    expect(natal.title).toBe("Jo's birth chart")
+    // The list carries whose reading each is.
+    const listed = await (await fetch(`${ctx.base}/api/castings`)).json() as { id: string; subject: { name: string } | null }[]
+    expect(listed.find((c) => c.id === today.id)?.subject?.name).toBe('Jo')
+
+    await post(`${ctx.base}/api/castings/${today.id}/reading`)
+    await readAll(`${ctx.base}/api/castings/${today.id}/events`)
+    expect(seen[0]!.system).toContain("This chart is Jo's, cast at the request of Sam")
+    expect(seen[0]!.system).toContain('born 1960-06-08 09:45 in Pleasanton')
+    expect(seen[0]!.system).not.toContain('WHAT YOU KNOW')
+    const f = await (await post(`${ctx.base}/api/castings/${today.id}/followups`, { question: 'Is Tuesday good for her?' })).json() as FollowUp
+    await readAll(`${ctx.base}/api/followups/${f.id}/events`)
+    const answer = seen.find((r) => r.system.includes('same astrologer'))!
+    expect(answer.system).toContain('The questions below come from Sam, not Jo')
+    expect(answer.input).toContain('Sam asks: Is Tuesday good for her?')
+    expect(seen.some((r) => r.system.startsWith('You keep notes'))).toBe(false)
+    expect(await (await fetch(`${ctx.base}/api/memories`)).json()).toHaveLength(1)
+
+    // Removing Jo leaves the readings cast for her as they were; casting for her again is refused plainly.
+    expect((await fetch(`${ctx.base}/api/people/${jo.id}`, { method: 'DELETE' })).status).toBe(200)
+    expect(((await (await fetch(`${ctx.base}/api/castings/${today.id}`)).json()) as Casting).subject?.name).toBe('Jo')
+    const gone = await post(`${ctx.base}/api/castings`, { kind: 'today', personId: jo.id })
+    expect(gone.status).toBe(400)
+    expect(((await gone.json()) as { error: string }).error).toMatch(/no longer saved/)
+  })
+
   it('with memory on, the reading and answers know the person, and a question adds what it reveals', async () => {
     const seen: WriteRequest[] = []
     writer = async (req, onDelta) => {

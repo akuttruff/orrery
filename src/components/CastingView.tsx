@@ -89,6 +89,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
           <StyleChips value={style.id} as="radio" onPick={(id) => onFrame({ style: id })} />
         </div>
       )}
+      {!casting.subject && (
       <div className="memory-switch">
         <button
           type="button"
@@ -113,6 +114,7 @@ export default function CastingView({ casting, memoryDefault, onMemory, onExclud
               : <>Written from {source} alone{memoryOn ? '. Write again to bring memories in.' : ''}</>}
         </span>
       </div>
+      )}
       {memoryOn && picking && <MemoryPicker excluded={casting.memoryExcluded} used={casting.memoriesUsed} onChange={onExclude} onManage={onMemories} />}
       <Reading reading={reading} brief={casting.brief} image={cards ? (text) => castingImage(casting, cards, text) : undefined} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
       <FollowUps key={casting.id} castingId={casting.id} castingTitle={casting.title} kind={casting.kind} readingState={reading.state} readingText={reading.text} />

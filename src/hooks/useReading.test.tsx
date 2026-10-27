@@ -24,7 +24,7 @@ class FakeSource {
 const casting = (over: Partial<Casting>): Casting => ({
   id: 'c1', kind: 'moon', period: '2026-10-18', title: 'Moon', result: '{}', reading: '', readingState: 'writing', readingError: null,
   createdAt: 0, updatedAt: 0, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: null,
-  style: null, note: '', brief: null, starred: false, ...over,
+  style: null, note: '', brief: null, starred: false, subject: null, ...over,
 })
 
 const last = (): FakeSource => FakeSource.opened.at(-1)!

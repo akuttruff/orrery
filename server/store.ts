@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { Brief, Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ReplyStats, Step, TarotCard, ToolUse, Written } from '../src/types.ts'
+import type { Brief, Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ReplyStats, Step, TarotCard, ToolUse, Written, Person } from '../src/types.ts'
 import { NOT_WRITTEN, isHouseSystem } from '../src/types.ts'
 
 export interface ServerConfig extends Omit<Config, 'hasToken'> {
@@ -36,6 +36,15 @@ CREATE TABLE IF NOT EXISTS profile (
   city TEXT NOT NULL,
   state TEXT NOT NULL,
   country TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS people (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  date_time TEXT NOT NULL,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  country TEXT NOT NULL,
+  created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS castings (
   id TEXT PRIMARY KEY,
@@ -72,7 +81,7 @@ interface CastingRow extends WrittenRow {
   reading_state: string; reading_error: string | null; created_at: number; updated_at: number | null
   memory: number | null; memories_used: string | null; memory_excluded: string | null
   transit_readings: string | null
-  style: string | null; note: string | null; brief: string | null; starred: number | null
+  style: string | null; note: string | null; brief: string | null; starred: number | null; subject: string | null
 }
 
 const parseIds = (text: string | null): string[] => {
@@ -120,12 +129,23 @@ const parseWritten = (r: WrittenRow & { tools?: string | null }): Written => ({
   stats: parseStats(r.stats), startedAt: r.started_at, finishedAt: r.finished_at,
 })
 
+/** Whose reading a casting is, from its saved snapshot; null for yours (or a snapshot that cannot be read). */
+const parseSubject = (text: string | null): Person | null => {
+  if (!text) return null
+  try {
+    const v = JSON.parse(text) as Partial<Person> | null
+    return v && typeof v.id === 'string' && typeof v.name === 'string' && typeof v.dateTime === 'string' && typeof v.city === 'string'
+      ? { id: v.id, name: v.name, dateTime: v.dateTime, city: v.city, state: v.state ?? '', country: v.country ?? '' }
+      : null
+  } catch { return null }
+}
+
 const fromRow = (r: CastingRow): Casting => ({
   id: r.id, kind: r.kind as Kind, period: r.period, title: r.title, result: r.result, reading: r.reading,
   readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
   memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
   written: parseWritten(r), transitReadings: parseReadingMap(r.transit_readings),
-  style: r.style, note: r.note ?? '', brief: parseBrief(r.brief), starred: r.starred === 1,
+  style: r.style, note: r.note ?? '', brief: parseBrief(r.brief), starred: r.starred === 1, subject: parseSubject(r.subject),
 })
 
 interface FollowUpRow extends WrittenRow {
@@ -205,6 +225,7 @@ export class Store {
     if (!has('castings', 'note')) this.db.exec('ALTER TABLE castings ADD COLUMN note TEXT')
     if (!has('castings', 'brief')) this.db.exec('ALTER TABLE castings ADD COLUMN brief TEXT')
     if (!has('castings', 'starred')) this.db.exec('ALTER TABLE castings ADD COLUMN starred INTEGER NOT NULL DEFAULT 0')
+    if (!has('castings', 'subject')) this.db.exec('ALTER TABLE castings ADD COLUMN subject TEXT')
     // Whole sign was the only system before there was a choice.
     if (!has('profile', 'house_system')) this.db.exec("ALTER TABLE profile ADD COLUMN house_system TEXT NOT NULL DEFAULT 'whole_sign'")
     this.db.exec('CREATE INDEX IF NOT EXISTS castings_updated ON castings (updated_at)')
@@ -251,6 +272,28 @@ export class Store {
     return this.getPublicConfig()
   }
 
+  /** The other people readings can be cast for, in the order they were added. */
+  listPeople(): Person[] {
+    return (this.db.prepare('SELECT * FROM people ORDER BY created_at, rowid').all() as Record<string, string>[])
+      .map((r) => ({ id: r.id!, name: r.name!, dateTime: r.date_time!, city: r.city!, state: r.state!, country: r.country! }))
+  }
+
+  getPerson(id: string): Person | undefined {
+    return this.listPeople().find((p) => p.id === id)
+  }
+
+  addPerson(input: Omit<Person, 'id'>): Person {
+    const person = { id: newId(), ...input }
+    this.db.prepare('INSERT INTO people (id, name, date_time, city, state, country, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(person.id, person.name, person.dateTime, person.city, person.state, person.country, Date.now())
+    return person
+  }
+
+  /** Readings already cast for them keep their own copy of the person. */
+  removePerson(id: string): void {
+    this.db.prepare('DELETE FROM people WHERE id = ?').run(id)
+  }
+
   getProfile(): Profile {
     const r = this.db.prepare('SELECT * FROM profile WHERE id = 1').get() as Record<string, string>
     return { name: r.name!, dateTime: r.date_time!, city: r.city!, state: r.state!, country: r.country!, houseSystem: isHouseSystem(r.house_system) ? r.house_system : 'whole_sign' }
@@ -266,7 +309,7 @@ export class Store {
   /** The castings, the most recently changed first: a reading written or a question asked moves one up. */
   listCastings(limit = 60): CastingSummary[] {
     const rows = this.db.prepare(
-      `SELECT id, kind, period, title, reading_state, reading_error, created_at, updated_at, memory, memories_used, memory_excluded, stats, started_at, finished_at, style, note, starred,
+      `SELECT id, kind, period, title, reading_state, reading_error, created_at, updated_at, memory, memories_used, memory_excluded, stats, started_at, finished_at, style, note, starred, subject,
         (SELECT COUNT(*) FROM follow_ups f WHERE f.casting_id = castings.id) AS questions
       FROM castings ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC, rowid DESC LIMIT ?`,
     ).all(limit) as unknown as (Omit<CastingRow, 'result' | 'reading' | 'trail' | 'transit_readings' | 'brief'> & { questions: number })[]
@@ -275,6 +318,7 @@ export class Store {
       readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
       memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
       written: parseWritten({ ...r, trail: null }), questions: Number(r.questions), style: r.style, note: r.note ?? '', starred: r.starred === 1,
+      subject: parseSubject(r.subject),
     }))
   }
 
@@ -284,15 +328,15 @@ export class Store {
   }
 
   /** A casting, with the choices made before it was cast: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
-  addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'> & Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>>): Casting {
+  addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'> & Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred' | 'subject'>>): Casting {
     const now = Date.now()
     const casting: Casting = {
-      memory: null, memoryExcluded: [], style: null, note: '', starred: false, ...input,
+      memory: null, memoryExcluded: [], style: null, note: '', starred: false, subject: null, ...input,
       id: newId(), reading: '', readingState: 'none', readingError: null, createdAt: now, updatedAt: now, memoriesUsed: [],
       written: { ...NOT_WRITTEN }, transitReadings: null, brief: null,
     }
-    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded, style, note, starred) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded), casting.style, casting.note, casting.starred ? 1 : 0)
+    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded, style, note, starred, subject) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded), casting.style, casting.note, casting.starred ? 1 : 0, casting.subject ? JSON.stringify(casting.subject) : null)
     return casting
   }
 

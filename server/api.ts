@@ -4,7 +4,7 @@ import type { Plugin } from 'vite'
 import { KINDS, isHouseSystem } from '../src/types.ts'
 import type { HouseSystem } from '../src/types.ts'
 import { houseSystemOf } from '../src/lib/houses.ts'
-import type { Casting, FollowUp, Kind, Profile, Remembered, TarotCard } from '../src/types.ts'
+import type { Casting, FollowUp, Kind, Person, Profile, Remembered, TarotCard } from '../src/types.ts'
 import fs from 'node:fs'
 import { pipeline } from 'node:stream'
 import { Astro, AstroToolError, readTarotSpec, tarotDeckDir } from './astro.ts'
@@ -15,6 +15,7 @@ import { listModels, writeWithModel } from './model.ts'
 import { Memories, MemoryInputError, memoryPath } from './memory.ts'
 import { REMEMBER_TIMEOUT_MS, parseFacts, rememberRequest } from './remember.ts'
 import { followUpRequest, readingRequest } from './prompt.ts'
+import type { Subject } from './prompt.ts'
 import { Readings, answerOf } from './readings.ts'
 import { NOTE_MAX, isStyleId } from '../src/lib/styles.ts'
 import { Store } from './store.ts'
@@ -106,6 +107,19 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : und
 const isKind = (v: unknown): v is Kind => typeof v === 'string' && (KINDS as string[]).includes(v)
 
 /** A profile patch, checked: the date is what the tools accept, the city is not blank. */
+/** A new person to cast for, checked as the profile is: a name, a birth time the tools accept, and a city. */
+export function personInput(body: Record<string, unknown>): Omit<Person, 'id'> {
+  const text = (key: string): string => (typeof body[key] === 'string' ? (body[key] as string).trim() : '')
+  const name = text('name')
+  const dateTime = text('dateTime')
+  const city = text('city')
+  if (!name) throw new UserError('A name is needed')
+  if (name.length > 80) throw new UserError('Keep the name under 80 characters')
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(dateTime)) throw new UserError("Birth date and time must be 'YYYY-MM-DD HH:MM'")
+  if (!city) throw new UserError('A birth city is needed')
+  return { name, dateTime, city, state: text('state'), country: text('country') }
+}
+
 export function profilePatch(body: Record<string, unknown>): Partial<Profile> {
   const out: Partial<Profile> = {}
   const dateTime = str(body.dateTime)
@@ -165,7 +179,8 @@ export function createMiddleware(state: ApiState): Handler {
 
   /** The memory lines for a casting's reading or answer, and the ids they came from; none when memory is off. */
   const memoryFor = (casting: Casting): { lines: string[]; ids: string[] } => {
-    if (!memoryOn(casting)) return { lines: [], ids: [] }
+    // What Orrery has learned is about you: a friend's reading never draws on it.
+    if (casting.subject || !memoryOn(casting)) return { lines: [], ids: [] }
     const { lines, used } = memories.context(undefined, casting.memoryExcluded)
     return { lines, ids: used.map((m) => m.id) }
   }
@@ -195,26 +210,37 @@ export function createMiddleware(state: ApiState): Handler {
   }
 
   /** The person as a casting's prompts should see them: with the houses that casting was cast in, so the model's own tool calls match it. */
-  const profileFor = (casting: Casting): Profile => {
-    const profile = store.getProfile()
-    return { ...profile, houseSystem: houseSystemOf(casting.result) ?? profile.houseSystem }
+  const profileFor = (casting: Casting): Subject => {
+    const me = store.getProfile()
+    const houseSystem = houseSystemOf(casting.result) ?? me.houseSystem
+    if (!casting.subject) return { ...me, houseSystem }
+    const { id: _id, ...them } = casting.subject
+    return { ...them, houseSystem, askedBy: me.name }
   }
 
   /**
    * A new casting of a kind, cast now with the memory choice made before the
    * tap; the earlier ones stay. Two taps while the tools run share the one cast.
    */
-  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>, spread: SpreadId = 'three', houseSystem?: HouseSystem): Promise<unknown> => {
-    // The houses chosen for this reading, or the ones Settings keeps.
-    const profile = { ...store.getProfile(), ...(houseSystem ? { houseSystem } : {}) }
+  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>, spread: SpreadId = 'three', houseSystem?: HouseSystem, subject: Person | null = null): Promise<unknown> => {
+    const me = store.getProfile()
+    // Whose chart (yours, or the friend chosen), in the houses chosen for this reading or the ones Settings keeps.
+    const profile: Profile = { ...me, ...(subject ? { name: subject.name, dateTime: subject.dateTime, city: subject.city, state: subject.state, country: subject.country } : {}), ...(houseSystem ? { houseSystem } : {}) }
     const period = periodFor(kind, new Date())
-    // Only the same tap twice is shared: a different question deals different cards, and a different style, memory choice or house system is a different reading.
-    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.memory, frame.memoryExcluded, profile.houseSystem])
+    // Only the same tap twice is shared: a different question deals different cards, and a different style, memory choice, house system or person is a different reading.
+    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.memory, frame.memoryExcluded, profile.houseSystem, subject?.id ?? null])
     let pending = state.casting.get(key)
     if (!pending) {
       pending = (async () => {
         const result = await castResult(kind, period, profile, call, new Date(), { call: state.tarot, spread, question: frame.note })
-        const casting = store.addCasting({ kind, period, title: titleFor(kind, period, profile, spread), result, ...frame })
+        // A friend's reading says whose it is; the birth chart's title already names them.
+        const title = titleFor(kind, period, profile, spread)
+        const casting = store.addCasting({
+          kind, period, result, ...frame, subject,
+          title: subject && kind !== 'natal' ? `${subject.name} · ${title}` : title,
+          // What Orrery knows is about you, so a friend's reading is cast without it.
+          ...(subject ? { memory: false, memoryExcluded: [] } : {}),
+        })
         state.transits.ensure(casting.id)
         return casting
       })().finally(() => state.casting.delete(key))
@@ -275,6 +301,16 @@ export function createMiddleware(state: ApiState): Handler {
     if (url === '/api/profile' && method === 'PUT') {
       void readBody(req).then((body) => json(res, 200, store.setProfile(profilePatch(body)))).catch(fail)
       return undefined
+    }
+    if (url === '/api/people' && method === 'GET') return json(res, 200, store.listPeople())
+    if (url === '/api/people' && method === 'POST') {
+      void readBody(req).then((body) => json(res, 201, store.addPerson(personInput(body)))).catch(fail)
+      return undefined
+    }
+    const pm = /^\/api\/people\/([^/]+)$/.exec(url)
+    if (pm && method === 'DELETE') {
+      store.removePerson(decodeURIComponent(pm[1]!))
+      return json(res, 200, { ok: true })
     }
     if (url === '/api/config' && method === 'GET') return json(res, 200, store.getPublicConfig())
     if (url === '/api/config' && method === 'PUT') {
@@ -344,7 +380,13 @@ export function createMiddleware(state: ApiState): Handler {
         const { memory = null, memoryExcluded = [], style = null, note = '', starred = false } = framePatch(body)
         if (body.spread !== undefined && !isSpreadId(body.spread)) throw new UserError('spread must be single, three, situation or celtic-cross')
         if (body.houseSystem !== undefined && !isHouseSystem(body.houseSystem)) throw new UserError("houseSystem must be 'whole_sign' or 'placidus'")
-        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }, isSpreadId(body.spread) ? body.spread : undefined, isHouseSystem(body.houseSystem) ? body.houseSystem : undefined))
+        // Whose chart: absent or 'me' for yours, else a saved person's id.
+        let subject: Person | null = null
+        if (body.personId !== undefined && body.personId !== null && body.personId !== 'me') {
+          subject = typeof body.personId === 'string' ? store.getPerson(body.personId) ?? null : null
+          if (!subject) throw new UserError('That person is no longer saved; add them again to cast for them')
+        }
+        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }, isSpreadId(body.spread) ? body.spread : undefined, isHouseSystem(body.houseSystem) ? body.houseSystem : undefined, subject))
       }).catch(fail)
       return undefined
     }
@@ -424,7 +466,8 @@ export function createMiddleware(state: ApiState): Handler {
           const memory = memoryFor(current)
           const followUp = store.addFollowUp(id, question, memory.ids)
           readings.start(followUp.id, followUpRequest(current, earlier, question, profileFor(current), new Date(), memory.lines), answerOf(store, followUp.id))
-          if (memoryOn(current)) void rememberFrom(followUp)
+          // A question about a friend's chart says nothing to remember about you.
+          if (memoryOn(current) && !current.subject) void rememberFrom(followUp)
           else store.setRemembered(followUp.id, [])
           json(res, 202, store.getFollowUp(followUp.id))
         }).catch(fail)

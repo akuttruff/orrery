@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api.ts'
 import { HOUSE_SYSTEMS, isHouseSystem } from '../types.ts'
-import type { Config, Profile } from '../types.ts'
+import type { Config, Person, Profile } from '../types.ts'
 
 interface SettingsProps {
   profile: Profile
@@ -10,6 +10,9 @@ interface SettingsProps {
   onSaved: (profile: Profile, config: Config) => void
   onClose: () => void
   onMemories: () => void
+  /** The other people readings are cast for; added from the cast popup, removed here. */
+  people: Person[]
+  onRemovePerson: (id: string) => Promise<void>
 }
 
 const REASONING = [
@@ -43,7 +46,7 @@ function ModelPicker({ value, onChange, empty, keepEmpty = false, models }: Mode
 }
 
 /** Whose chart, and which model writes about it. */
-export default function Settings({ profile, config, onSaved, onClose, onMemories }: SettingsProps) {
+export default function Settings({ profile, config, onSaved, onClose, onMemories, people, onRemovePerson }: SettingsProps) {
   const [p, setP] = useState(profile)
   const [c, setC] = useState({ lmStudioUrl: config.lmStudioUrl, model: config.model, preferredModel: config.preferredModel, fastModel: config.fastModel ?? '', reasoning: config.reasoning, memoryDefault: config.memoryDefault })
   const [token, setToken] = useState('')
@@ -97,6 +100,20 @@ export default function Settings({ profile, config, onSaved, onClose, onMemories
           </select>
           <span className="field-hint">Every chart, transit and forecast is cast in these houses. Readings already cast keep theirs until you recast them. Placidus can't be cast within the polar circles.</span>
         </label>
+
+        <h3 className="section-title">Other people</h3>
+        {people.length === 0
+          ? <p className="field-hint">Readings for someone else start from the cast popup: choose “Someone else” and add their birth details once.</p>
+          : (
+            <ul className="people-list">
+              {people.map((p) => (
+                <li key={p.id}>
+                  <span><b>{p.name}</b> · {p.dateTime} · {[p.city, p.state, p.country].filter(Boolean).join(', ')}</span>
+                  <button type="button" className="chip" onClick={() => { if (window.confirm(`Remove ${p.name}? Readings already cast for them stay.`)) void onRemovePerson(p.id).catch((e: Error) => setError(e.message)) }}>Remove</button>
+                </li>
+              ))}
+            </ul>
+          )}
 
         <h3 className="section-title">Who writes</h3>
         <label className="field"><span>LM Studio address</span><input value={c.lmStudioUrl} inputMode="url" onChange={(e) => setC({ ...c, lmStudioUrl: e.target.value })} /></label>

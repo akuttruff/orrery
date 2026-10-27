@@ -20,6 +20,17 @@ export const HOUSE_SYSTEMS: { id: HouseSystem; label: string }[] = [
 ]
 export const isHouseSystem = (v: unknown): v is HouseSystem => HOUSE_SYSTEMS.some((h) => h.id === v)
 
+/** Someone else whose chart readings can be cast for: a friend, kept beside your own chart. */
+export interface Person {
+  id: string
+  name: string
+  /** Birth date and time, 'YYYY-MM-DD HH:MM', local to the birthplace. */
+  dateTime: string
+  city: string
+  state: string
+  country: string
+}
+
 /** Whose chart: one person, kept in Settings. */
 export interface Profile {
   name: string
@@ -150,6 +161,11 @@ export interface Casting {
   brief: Brief | null
   /** Starred by the person: kept at the top of its kind in the lists. */
   starred: boolean
+  /**
+   * Whose reading it is when not yours: the person as they were when it was
+   * cast, so editing or removing them later leaves it as it was; null for yours.
+   */
+  subject: Person | null
 }
 
 /** The prompt a reading was written with: the system part, and the task without the data under it. */
