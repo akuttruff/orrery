@@ -27,6 +27,7 @@ export const voice = (style: string | null, kind: Casting['kind'] = 'today'): st
   'Use only the transits, positions and dates in the data. Never add a transit the data does not list, and never work out positions yourself.',
   'Write a retrograde planet as "Saturn ℞" the first time it is named, only when the data says it is retrograde.',
   'Write in Markdown: a heading (###) per section or contact, full paragraphs, bold for the thing to remember. A table is fine for a backdrop of slower, wider contacts.',
+  'Take all the room the material deserves: there is no length limit, so never trim, summarise or skip something in the data to keep it short.',
 ].join(' '))
 
 /** The voice of a tarot reading: the same person and tone, reading cards rather than a chart. */
@@ -79,11 +80,6 @@ export function trimmedData(result: string): string {
   return JSON.stringify(kept)
 }
 
-/** Room to write: a full paragraph per contact, so a day's reading runs to several hundred words and a year's to over a thousand. */
-const WORDS: Record<Casting['kind'], string> = {
-  today: '500 to 700 words', week: '700 to 1000 words', month: '800 to 1100 words', year: '900 to 1200 words',
-  natal: '800 to 1000 words', moon: '300 to 450 words', card: '200 to 350 words', spread: '500 to 900 words',
-}
 
 /** How many contacts the scan folded into a forecast found (server/cast.ts); none when it was cast without one. */
 function scanned(result: string, key: 'week_transits' | 'month_transits'): number {
@@ -115,7 +111,7 @@ function ask(casting: Casting): { task: string; data: string } {
         if (m?.position) moon = `\nTransiting Moon: ${m.position}${m.house ? `, natal house ${m.house}` : ''}${d.moon_phase?.formatted ? `, ${d.moon_phase.formatted}` : ''}.`
       } catch { /* no moon line */ }
       return {
-        task: `Write today's reading (${casting.period}). Cover every contact in the data, in three tiers: exact today, applying within the next day or two, and the slower backdrop still in orb. Give each its exact moment and, when it has a run of passes, where this one sits in the run and what that means. Then the Moon's day: its sign, phase and house, and the hours to use. Close with one line to carry. ${WORDS.today}.`,
+        task: `Write today's reading (${casting.period}). Cover every contact in the data, in three tiers: exact today, applying within the next day or two, and the slower backdrop still in orb. Give each its exact moment and, when it has a run of passes, where this one sits in the run and what that means. Then the Moon's day: its sign, phase and house, and the hours to use. Close with one line to carry.`,
         data: `${transits ? `TRANSITS, in brief:\n${transits}\n\nTHE CHART IN FULL:\n` : ''}${trimmedData(casting.result)}${moon}`,
       }
     }
@@ -128,22 +124,22 @@ function ask(casting: Casting): { task: string; data: string } {
         if (r?.start && r.end) span = r.start === r.end ? ` It covers one day, ${r.start}.` : ` It covers ${r.start} to ${r.end}, the days left in the week.`
       } catch { /* no span */ }
       const transits = transitsAsk('week_transits', scanned(casting.result, 'week_transits'), 'week')
-      return { task: `Write the forecast for the week of ${shortDate(casting.period)}, Sunday to Saturday.${span} ${transits} Then the week's lunations, stations and ingresses that touch the chart, then one line to carry. ${WORDS.week}.`, data: trimmedData(casting.result) }
+      return { task: `Write the forecast for the week of ${shortDate(casting.period)}, Sunday to Saturday.${span} ${transits} Then the week's lunations, stations and ingresses that touch the chart, then one line to carry.`, data: trimmedData(casting.result) }
     }
     case 'month': {
       const transits = transitsAsk('month_transits', scanned(casting.result, 'month_transits'), 'month')
-      return { task: `Write the forecast for ${casting.title}. ${transits} Then the month's lunations and eclipses in their natal houses, then stations and ingresses worth knowing, then one line to carry. ${WORDS.month}.`, data: trimmedData(casting.result) }
+      return { task: `Write the forecast for ${casting.title}. ${transits} Then the month's lunations and eclipses in their natal houses, then stations and ingresses worth knowing, then one line to carry.`, data: trimmedData(casting.result) }
     }
     case 'year':
-      return { task: `Write the forecast for the year from ${casting.period}. Open with the year's theme from the slow-planet transits, take each headline transit with its exact dates and retrograde passes, note the eclipses in their natal houses, and close with the months to watch. ${WORDS.year}.`, data: trimmedData(casting.result) }
+      return { task: `Write the forecast for the year from ${casting.period}. Open with the year's theme from the slow-planet transits, take each headline transit with its exact dates and retrograde passes, note the eclipses in their natal houses, and close with the months to watch.`, data: trimmedData(casting.result) }
     case 'natal':
-      return { task: `Describe this birth chart. Open with the Sun, Moon and Ascendant together, then the chart's shape and patterns, then the four or five aspects that say most, then the houses that are busiest. ${WORDS.natal}.`, data: trimmedData(casting.result) }
+      return { task: `Describe this birth chart in full. Open with the Sun, Moon and Ascendant together, then take every planet in its sign and house, then the chart's shape and its aspect patterns, then the aspects that matter, then the nodes and the Midheaven, and close with what the chart adds up to.`, data: trimmedData(casting.result) }
     case 'moon':
-      return { task: `Write a short guide to the next two weeks by the Moon: the void-of-course windows worth planning around (the long ones, the ones in working hours), and the coming lunations and eclipses with the natal house each falls in. ${WORDS.moon}.`, data: trimmedData(casting.result) }
+      return { task: `Write a guide to the next two weeks by the Moon: the void-of-course windows worth planning around (the long ones, the ones in working hours), and the coming lunations and eclipses with the natal house each falls in.`, data: trimmedData(casting.result) }
     case 'card':
-      return { task: `Write the card for the day (${shortDate(casting.period)}): the one card dealt, which way up it fell, what it tends to mean that way up, and what it suggests for this person's day. ${WORDS.card}.`, data: casting.result }
+      return { task: `Write the card for the day (${shortDate(casting.period)}): the one card dealt, which way up it fell, what it tends to mean that way up, and what it suggests for this person's day.`, data: casting.result }
     case 'spread':
-      return { task: `Write the reading for this spread: take each position in order, then say what the cards make together and close with one line to carry. ${WORDS.spread}.`, data: casting.result }
+      return { task: `Write the reading for this spread: take each position in order, then say what the cards make together and close with one line to carry.`, data: casting.result }
   }
 }
 
@@ -166,9 +162,9 @@ const person = (profile: Subject, now: Date): string =>
  * word (an 8000 cap cut a 750-word day off mid-sentence), so these are far
  * above the reading's own length: a stop for a runaway, not a budget.
  */
-const READING_MAX_TOKENS = 16000
+const READING_MAX_TOKENS = 40000
 /** An answer may call tools, each round costing it more of the ceiling. */
-const ANSWER_MAX_TOKENS = 6000
+const ANSWER_MAX_TOKENS = 24000
 
 /** LM Studio's ids for astro-mcp and tarot-mcp, as the answer's integrations: LM Studio runs the tool calls itself. */
 export const ASTRO_PLUGIN = `mcp/${ASTRO_SERVER_NAME}`
@@ -196,14 +192,14 @@ export function readingRequest(casting: Casting, profile: Subject, now = new Dat
 
 const TAROT_ANSWER_VOICE = [
   'You are the same tarot reader, now answering a question the person asks about a reading you wrote for them.',
-  'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown. Short: a paragraph or two, a list if the question wants one. No preamble, no sign-off, no caveats about tarot itself, no emoji.',
+  'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown, as long as the question needs; a list if it wants one. No preamble, no sign-off, no caveats about tarot itself, no emoji.',
   'Draw on the cards and the reading below. For what they do not cover, the tarot tools can deal another card or spread (draw_cards) or explain a card (card_meaning); the astrology tools can cast the sky for a day. Never invent a card that was not dealt. When you drew or looked something up, say so in a few words.',
   'Stay trauma-informed and expansive, leading with safety, choice and agency, and never predict the future: what is ahead is what is opening up or wants attention, not what will happen.',
 ].join(' ')
 
 const ANSWER_VOICE = [
   'You are the same astrologer, now answering a question the person asks about a reading you wrote for them.',
-  'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown. Short: a paragraph or two, a list if the question wants one. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
+  'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown, as long as the question needs; a list if it wants one. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
   'Draw on the chart data and the reading below. For what they do not cover, use the astrology tools: another day or a date range (create_transit_chart, list_upcoming_transits, forecast_week, forecast_month, forecast_year), when an aspect is exact (verify_claim), a solar return, a progressed chart, Moon void periods, lunations and eclipses, planetary hours, or a horary question. The person\'s birth date, time and place are given below; pass them as a tool asks.',
   'Never state a transit or position that neither the data nor a tool returned, and never work out positions yourself. When you looked something up, say so in a few words.',
   'The tarot tools are there too: if they ask for a card, deal one with draw_cards and read it against this reading.',
@@ -243,7 +239,7 @@ export function followUpRequest(casting: Casting, earlier: FollowUp[], question:
     .filter((f) => f.state === 'done' && f.answer)
     .map((f) => `${askerOf(profile)} ${f.card ? `pulled a card: ${cardBlock(f.card)}` : `asked: ${f.question}`}\n\nYou answered: ${clip(f.answer, REPLAY_CHARS)}`)
   const turn = card
-    ? `${askerOf(profile)} pulled a tarot card beside this reading: ${cardBlock(card)}\n\nRead the card in the light of the reading above: what it adds, confirms or complicates, in two or three paragraphs. Name the card and which way up it fell; a reversal is a shading, not an opposite. Read it trauma-informed and expansive, leading with choice and agency, and do not predict the future with it.`
+    ? `${askerOf(profile)} pulled a tarot card beside this reading: ${cardBlock(card)}\n\nRead the card in the light of the reading above: what it adds, confirms or complicates. Name the card and which way up it fell; a reversal is a shading, not an opposite. Read it trauma-informed and expansive, leading with choice and agency, and do not predict the future with it.`
     : `${askerOf(profile)} asks: ${question}`
   const input = [...(thread.length ? ['THE CONVERSATION SO FAR:', ...thread] : []), turn].join('\n\n')
   return { system, input, maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN] }
