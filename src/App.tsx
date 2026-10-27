@@ -97,8 +97,8 @@ export default function App() {
   const [whoPicked, setWho] = useState<Who>('me')
   // Someone removed in Settings falls back to you.
   const who: Who = whoPicked === 'me' || people.some((p) => p.id === whoPicked) ? whoPicked : 'me'
-  const addPerson = async (input: Omit<Person, 'id'>): Promise<Person> => {
-    const person = await api.addPerson(input)
+  const addPerson = async (text: string): Promise<Person> => {
+    const person = await api.addPerson(text)
     setPeople((list) => [...list, person])
     return person
   }

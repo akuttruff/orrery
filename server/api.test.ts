@@ -458,6 +458,27 @@ describe('memories', () => {
     expect(await (await fetch(`${ctx.base}/api/memories`)).json()).toHaveLength(1)
   })
 
+  it('adds a friend from a typed sentence the model reads, checked like typed fields', async () => {
+    const asked: WriteRequest[] = []
+    let reply = '{"name":"Jo","date":"1960-06-08","time":"09:45","city":"Pleasanton","state":"CA","country":"USA"}'
+    writer = async (req) => { asked.push(req); return reply }
+    const r = await post(`${ctx.base}/api/people`, { text: 'Jo, born June 8 1960 at 9:45 AM in Pleasanton, CA' })
+    expect(r.status).toBe(201)
+    expect(await r.json()).toMatchObject({ name: 'Jo', dateTime: '1960-06-08 09:45', city: 'Pleasanton', state: 'CA', country: 'USA' })
+    expect(asked[0]!.input).toContain('Jo, born June 8 1960 at 9:45 AM in Pleasanton, CA')
+    expect(asked[0]!.quick).toBe(true)
+
+    reply = '{"error":"the birth time is missing"}'
+    const missing = await post(`${ctx.base}/api/people`, { text: 'Ana, June 1 1990, Oakland' })
+    expect(missing.status).toBe(400)
+    expect(((await missing.json()) as { error: string }).error).toBe('The birth time is missing. Add it and try again.')
+    // A reply in the wrong shape is caught by the same checks as typed fields.
+    reply = '{"name":"Ana","dateTime":"June 1 1990 3pm","city":"Oakland"}'
+    expect((await post(`${ctx.base}/api/people`, { text: 'Ana, June 1 1990 3pm, Oakland' })).status).toBe(400)
+    expect((await post(`${ctx.base}/api/people`, { text: '   ' })).status).toBe(400)
+    expect(((await (await fetch(`${ctx.base}/api/people`)).json()) as unknown[]).length).toBe(1)
+  })
+
   it("casts for a friend in their own chart, without your memories, and remembers nothing from questions about them", async () => {
     const seen: WriteRequest[] = []
     writer = async (req, onDelta) => { seen.push(req); onDelta('Read.'); return 'Read.' }

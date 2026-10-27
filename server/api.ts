@@ -20,6 +20,7 @@ import { Store } from './store.ts'
 import { HealthCheck, UNKNOWN } from './health.ts'
 import type { ServerConfig } from './store.ts'
 import { TransitReadings } from './transits.ts'
+import { birthRequest, parseBirth } from './people.ts'
 
 export interface ApiOptions {
   dir?: string
@@ -105,6 +106,9 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : und
 const isKind = (v: unknown): v is Kind => typeof v === 'string' && (KINDS as string[]).includes(v)
 
 /** A profile patch, checked: the date is what the tools accept, the city is not blank. */
+/** How long reading a typed birth description may take before giving up. */
+const PEOPLE_TIMEOUT_MS = 90_000
+
 /** A new person to cast for, checked as the profile is: a name, a birth time the tools accept, and a city. */
 export function personInput(body: Record<string, unknown>): Omit<Person, 'id'> {
   const text = (key: string): string => (typeof body[key] === 'string' ? (body[key] as string).trim() : '')
@@ -298,7 +302,23 @@ export function createMiddleware(state: ApiState): Handler {
     }
     if (url === '/api/people' && method === 'GET') return json(res, 200, store.listPeople())
     if (url === '/api/people' && method === 'POST') {
-      void readBody(req).then((body) => json(res, 201, store.addPerson(personInput(body)))).catch(fail)
+      void readBody(req).then(async (body) => {
+        // Typed as a sentence ("Jo, born June 8 1960 at 9:45 AM in Pleasanton, CA"): the model reads it, then it is checked like the fields.
+        if (typeof body.text === 'string') {
+          if (!body.text.trim()) throw new UserError('Type their name, birth date, time and place')
+          if (body.text.length > 500) throw new UserError('Keep it under 500 characters')
+          let reply: string
+          try {
+            reply = (await state.write(store.getConfig(), birthRequest(body.text), () => {}, { signal: AbortSignal.timeout(PEOPLE_TIMEOUT_MS) })).text
+          } catch (err) {
+            throw new UserError(`The model couldn't read those details: ${(err as Error).message}`)
+          }
+          const read = parseBirth(reply)
+          if ('error' in read) throw new UserError(read.error)
+          return json(res, 201, store.addPerson(personInput(read.person)))
+        }
+        return json(res, 201, store.addPerson(personInput(body)))
+      }).catch(fail)
       return undefined
     }
     const pm = /^\/api\/people\/([^/]+)$/.exec(url)

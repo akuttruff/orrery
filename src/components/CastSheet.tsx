@@ -20,7 +20,7 @@ interface CastSheetProps {
   people: Person[]
   who: Who
   onWho: (who: Who) => void
-  onAddPerson: (input: Omit<Person, 'id'>) => Promise<Person>
+  onAddPerson: (text: string) => Promise<Person>
   memoryOn: boolean
   excluded: string[]
   busy: boolean

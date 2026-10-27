@@ -11,30 +11,33 @@ interface WhoseChartProps {
   people: Person[]
   value: Who
   onPick: (who: Who) => void
-  /** Save a new person; resolves to them (then picked), or throws with what to fix. */
-  onAdd: (input: Omit<Person, 'id'>) => Promise<Person>
+  /** Save a new person from their details typed as a sentence; resolves to them (then picked), or throws with what to fix. */
+  onAdd: (text: string) => Promise<Person>
 }
 
-const BLANK = { name: '', dateTime: '', city: '', state: '', country: '' }
+/** "1960-06-08 09:45 · Pleasanton, CA, USA": a saved person's details, to check at a glance. */
+const detailsOf = (p: Person): string => `Born ${p.dateTime} in ${[p.city, p.state, p.country].filter(Boolean).join(', ')}`
 
 /**
  * The first choice in the cast popup: your own chart, someone already
- * saved, or someone new, whose birth details are typed in here once and
- * kept for next time.
+ * saved, or someone new, whose details are typed as one sentence and read
+ * by the model, then kept for next time.
  */
 export default function WhoseChart({ me, people, value, onPick, onAdd }: WhoseChartProps) {
   const [adding, setAdding] = useState(false)
-  const [form, setForm] = useState(BLANK)
+  const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const chosen = people.find((p) => p.id === value)
 
   const save = async (): Promise<void> => {
+    if (!text.trim()) return
     setSaving(true)
     setError(null)
     try {
-      const person = await onAdd(form)
+      const person = await onAdd(text)
       onPick(person.id)
-      setForm(BLANK)
+      setText('')
       setAdding(false)
     } catch (e) {
       setError((e as Error).message)
@@ -60,24 +63,28 @@ export default function WhoseChart({ me, people, value, onPick, onAdd }: WhoseCh
       </div>
       {adding && (
         <div className="whose-form" role="group" aria-label="Someone else's birth details">
-          <label className="field"><span>Name</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-          <label className="field">
-            <span>Born (local time at the birthplace)</span>
-            <input value={form.dateTime} placeholder="YYYY-MM-DD HH:MM" inputMode="numeric" onChange={(e) => setForm({ ...form, dateTime: e.target.value })} />
-          </label>
-          <label className="field"><span>City</span><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></label>
-          <div className="field-row">
-            <label className="field"><span>State</span><input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></label>
-            <label className="field"><span>Country</span><input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} /></label>
-          </div>
+          <textarea
+            aria-label="Their name and birth details"
+            className="ask-box"
+            rows={3}
+            maxLength={500}
+            value={text}
+            placeholder="Their name, birth date, time and place, any way you like: “Jo, born June 8 1960 at 9:45 AM in Pleasanton, CA”"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void save() } }}
+          />
           {error && <p className="reading-status error">{error}</p>}
           <div className="whose-actions">
             <button type="button" className="chip" onClick={() => { setAdding(false); setError(null) }}>Cancel</button>
-            <button type="button" className="primary" disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save and choose'}</button>
+            <button type="button" className="primary" disabled={saving || !text.trim()} onClick={() => void save()}>{saving ? 'Reading…' : 'Add'}</button>
           </div>
         </div>
       )}
-      {value !== 'me' && <span className="memory-note">Cast from their chart. Your memories stay out of it, and nothing you ask about them is remembered as being about you.</span>}
+      {chosen && (
+        <span className="memory-note">
+          {detailsOf(chosen)}. Cast from their chart; your memories stay out of it, and nothing you ask about them is remembered as being about you.
+        </span>
+      )}
     </div>
   )
 }

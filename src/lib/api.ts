@@ -29,7 +29,8 @@ export const api = {
   saveProfile: (patch: Partial<Profile>) => request<Profile>('/api/profile', jsonInit('PUT', patch)),
   /** The other people readings can be cast for. */
   people: () => request<Person[]>('/api/people'),
-  addPerson: (input: Omit<Person, 'id'>) => request<Person>('/api/people', jsonInit('POST', input)),
+  /** A new person from their details typed as a sentence; the server has the model read it. */
+  addPerson: (text: string) => request<Person>('/api/people', jsonInit('POST', { text })),
   removePerson: (id: string) => request<{ ok: boolean }>(`/api/people/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   config: () => request<Config>('/api/config'),
   saveConfig: (patch: Record<string, string>) => request<Config>('/api/config', jsonInit('PUT', patch)),
