@@ -29,8 +29,10 @@ describe('readingRequest', () => {
     expect(natal.system).toContain("reading of one person's birth chart")
     expect(natal.system).toContain('**The house**, the part of life it works in, read in depth')
     expect(natal.system).not.toContain('**Where it lands**')
-    expect(natal.input).toContain('**The Houses**, a ### section for each of the twelve houses in order')
+    expect(natal.input).toContain('**The Houses**, a short ### section for each of the twelve houses in order')
     expect(natal.input).toContain('**Growth Direction**')
+    expect(natal.input).toContain('Aim for about 2,500 words')
+    expect(natal.input).toContain('adding to what The Planets already said rather than repeating it')
   })
 
   it("names the person and the day, and asks for today's reading from the transit list", () => {
@@ -47,8 +49,8 @@ describe('readingRequest', () => {
     expect(req.input).toContain('THE CHART IN FULL:\n{"chart_type"')
     expect(req.input).toContain('"houses"')
     expect(req.input).toContain('"note":"This chart reflects')
-    expect(req.input).not.toMatch(/\d+ to \d+ words/)
-    expect(req.system).toContain('there is no length limit')
+    expect(req.input).toContain('Aim for about 1,000 words: enough to cover everything above properly, without repeating yourself.')
+    expect(req.system).not.toContain('no length limit')
   })
 
   it('hands a forecast over as its JSON, minus the notes written for a tool-picking model', () => {
@@ -78,7 +80,7 @@ describe('readingRequest', () => {
     const alone = readingRequest(casting({ kind: 'month', result: month, title: 'October 2026', period: '2026-10' }), sam)
     expect(alone.input).toContain('Write the forecast for October 2026. Take every headline transit in order')
     expect(alone.input).not.toContain('month_transits')
-    expect(alone.input).not.toMatch(/words/)
+    expect(alone.input).toContain('Aim for about 1,600 words')
     const full = readingRequest(casting({ kind: 'month', result: withScan('month', month, scanMonth), title: 'October 2026', period: '2026-10' }), sam)
     expect(full.input).toContain('Under month_transits is every contact in orb over these days, 12 in all')
     expect(full.input).toContain("the month's events")

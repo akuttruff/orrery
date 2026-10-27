@@ -27,9 +27,16 @@ import { ASTRO_SERVER_NAME, TAROT_SERVER_NAME } from './astro.ts'
 const HOUSES = 'Give the houses real depth. Houses are whole sign: the Ascendant\'s sign is the 1st house and each sign after it the next. Whenever a house comes up, say what that house governs, which sign holds it and what that sign colours there, which planet rules it and where that ruler sits in the chart, and how the placement plays out in that part of life in concrete, everyday terms.'
 
 /** The layout every chart reading shares: sections, a heading per placement or contact, labelled parts inside it. */
-const LAYOUT = 'Segment the reading clearly. Write in Markdown: a ## heading for each major section, a ### heading for each placement or contact inside it, and inside each of those its labelled parts in bold, each a full paragraph. Bold the thing to remember. Tables are welcome for an at-a-glance overview.'
+const LAYOUT = 'Segment the reading clearly. Write in Markdown: a ## heading for each major section, a ### heading for each placement or contact inside it, and inside each of those its labelled parts in bold, each a few sentences. Bold the thing to remember. Tables are welcome for an at-a-glance overview.'
 
-const NO_LIMIT = 'Take all the room the material deserves: there is no length limit, so never trim, summarise or skip something in the data to keep it short.'
+/**
+ * Roughly how long each kind of reading runs: a target, not a cap. Between the
+ * old tight limits and none at all, which ran a birth chart past 5,000 words.
+ */
+const LENGTH: Record<Casting['kind'], number> = {
+  today: 1000, week: 1400, month: 1600, year: 1800, natal: 2500, moon: 600, card: 400, spread: 1000,
+}
+const lengthOf = (kind: Casting['kind']): string => ` Aim for about ${LENGTH[kind].toLocaleString('en-US')} words: enough to cover everything above properly, without repeating yourself.`
 
 export const voice = (style: string | null, kind: Casting['kind'] = 'today'): string => {
   if (isTarotKind(kind)) return tarotVoice(style)
@@ -43,7 +50,6 @@ export const voice = (style: string | null, kind: Casting['kind'] = 'today'): st
     'Use only the transits, positions and dates in the data. Never add a transit the data does not list, and never work out positions yourself.',
     'Write a retrograde planet as "Saturn ℞" the first time it is named, only when the data says it is retrograde.',
     LAYOUT,
-    NO_LIMIT,
   ].join(' ')
 }
 
@@ -57,7 +63,6 @@ const natalVoice = (style: string | null): string => [
   'Use only the positions, houses, aspects and patterns in the data, and never work out positions yourself.',
   'Write a retrograde planet as "Saturn ℞" the first time it is named, only when the data says it is retrograde.',
   LAYOUT,
-  NO_LIMIT,
 ].join(' ')
 
 /** The voice of a tarot reading: the same person and tone, reading cards rather than a chart. */
@@ -163,7 +168,7 @@ function ask(casting: Casting): { task: string; data: string } {
     case 'year':
       return { task: `Write the forecast for the year from ${casting.period}. Use these sections, each a ## heading: **The Year's Theme**, from the slow-planet transits; **At a Glance**, a table of the headline transits with their exact dates, retrograde passes and the houses at both ends; **The Year's Transits**, a ### section for each headline transit with its exact dates and passes; **Eclipses**, a ### section for each with its natal house, read in depth; **The Houses Most Activated**, a ### section for each, what is moving through it and what that part of life asks this year; **Month by Month**; **Months to Watch**.`, data: trimmedData(casting.result) }
     case 'natal':
-      return { task: `Describe this birth chart in full, in these sections, each a ## heading: **At a Glance**, a table of every point with its sign and degree, house and whether it is retrograde, then the Moon's phase; **The Big Three**, a ### section each for the Sun, Moon and Ascendant, and how they sit together; **The Planets**, a ### section for each of Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto and Chiron; **The Houses**, a ### section for each of the twelve houses in order: the sign that holds it, its ruler and where that ruler sits, the planets in it if any, and what that part of life looks like for this person (an empty house is read through its sign and its ruler); **Aspect Patterns**, a ### section for each pattern in the data, naming the houses each point sits in; **Key Aspects**, a ### section for each aspect that matters most, with its orb; **Growth Direction**, the North and South Nodes by sign and house; **Career and Public Life**, the Midheaven, its sign and ruler, and the 10th house; **The Big Picture**, what the chart adds up to.`, data: trimmedData(casting.result) }
+      return { task: `Describe this birth chart in full, in these sections, each a ## heading: **At a Glance**, a table of every point with its sign and degree, house and whether it is retrograde, then the Moon's phase; **The Big Three**, a ### section each for the Sun, Moon and Ascendant, and how they sit together; **The Planets**, a ### section for each of Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto and Chiron; **The Houses**, a short ### section for each of the twelve houses in order: the sign that holds it, its ruler and where that ruler sits, and what that part of life looks like for this person, adding to what The Planets already said rather than repeating it (an empty house is read through its sign and its ruler); **Aspect Patterns**, a ### section for each pattern in the data, naming the houses each point sits in; **Key Aspects**, a ### section for each aspect that matters most, with its orb; **Growth Direction**, the North and South Nodes by sign and house; **Career and Public Life**, the Midheaven, its sign and ruler, and the 10th house; **The Big Picture**, what the chart adds up to.`, data: trimmedData(casting.result) }
     case 'moon':
       return { task: `Write a guide to the next two weeks by the Moon, in these sections, each a ## heading: **At a Glance**, a table of the void-of-course windows and the lunations; **Void-of-Course Windows**, those worth planning around (the long ones, the ones in working hours); **Lunations and Eclipses**, a ### section for each with the natal house it falls in, read in depth.`, data: trimmedData(casting.result) }
     case 'card':
@@ -217,7 +222,7 @@ export function memoryBlock(profile: Profile, lines: string[]): string | null {
 export function readingRequest(casting: Casting, profile: Subject, now = new Date(), memory: string[] = []): WriteRequest {
   const { task, data } = ask(casting)
   const system = [voice(casting.style, casting.kind), person(profile, now), memoryBlock(profile, memory), noteBlock({ ...profile, name: askerOf(profile) }, casting.note)].filter(Boolean).join('\n\n')
-  return { system, input: `${task}\n\nDATA:\n${data}`, maxTokens: READING_MAX_TOKENS }
+  return { system, input: `${task}${lengthOf(casting.kind)}\n\nDATA:\n${data}`, maxTokens: READING_MAX_TOKENS }
 }
 
 const TAROT_ANSWER_VOICE = [
