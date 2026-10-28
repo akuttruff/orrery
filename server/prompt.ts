@@ -26,8 +26,14 @@ import { ASTRO_SERVER_NAME, TAROT_SERVER_NAME } from './astro.ts'
  */
 const HOUSES = 'Give the houses real depth. Houses are whole sign: the Ascendant\'s sign is the 1st house and each sign after it the next. Whenever a house comes up, say what that house governs, which sign holds it and what that sign colours there, which planet rules it and where that ruler sits in the chart, and how the placement plays out in that part of life in concrete, everyday terms.'
 
+/**
+ * How text sits under a heading, for every reading and answer: short blocks
+ * a reader can scan, never paragraph after paragraph.
+ */
+const BLOCKS = 'Keep every block short: no paragraph runs past three sentences. Write each labelled part as a #### heading with its label (#### What to do), then its text below it, never the label run into the text. Wherever a part names several things (actions, signs to watch for, themes, dates), make it a bulleted list, a line each, not a paragraph. Bold the one thing to remember in each section.'
+
 /** The layout every chart reading shares: sections, a heading per placement or contact, labelled parts inside it. */
-const LAYOUT = 'Segment the reading clearly. Write in Markdown: a ## heading for each major section, a ### heading for each placement or contact inside it, and inside each of those its labelled parts in bold, each a few sentences. Bold the thing to remember. Tables are welcome for an at-a-glance overview.'
+const LAYOUT = `Segment the reading clearly. Write in Markdown: a ## heading for each major section, a ### heading for each placement or contact inside it, and inside each of those its labelled parts. ${BLOCKS} Tables are welcome for an at-a-glance overview. Keep each part tight, so that every contact or placement the task asks for gets its own section within the length; never drop one to save words.`
 
 /**
  * Roughly how long each kind of reading runs: a target, not a cap. Between the
@@ -44,7 +50,7 @@ export const voice = (style: string | null, kind: Casting['kind'] = 'today'): st
   return [
     'You are an astrologer writing a private reading for one person, addressed as "you", who knows you and their chart well.',
     styleOf(style).voice,
-    'Give every contact its own ### section, named with both positions and its timing, with these labelled parts: **What it brings up**, what that kind of contact tends to stir, in plain words; **Where it lands**, the house the transiting planet is moving through and the natal house of the point it touches, read in depth; **How it shows up for you**, given what that natal point does in their chart; **What to do**. Explain as if they knew none of the symbols; the lived version matters more than the label.',
+    'Give every contact its own ### section, named with both positions and its timing, with these labelled parts: **What it brings up**, what that kind of contact tends to stir, in plain words; **Where it lands**, the house the transiting planet is moving through and the natal house of the point it touches, read in depth; **How it shows up for you**, given what that natal point does in their chart; **What to do**, two or three concrete actions as a bulleted list. Explain as if they knew none of the symbols; the lived version matters more than the label.',
     HOUSES,
     'Make it theirs: where a contact touches what you know of their life, say so in their own terms. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
     'Use only the transits, positions and dates in the data. Never add a transit the data does not list, and never work out positions yourself.',
@@ -57,7 +63,7 @@ export const voice = (style: string | null, kind: Casting['kind'] = 'today'): st
 const natalVoice = (style: string | null): string => [
   'You are an astrologer writing a private reading of one person\'s birth chart, addressed as "you", who knows you and their chart well.',
   styleOf(style).voice,
-  'Give every placement its own ### section, named with its sign, degree and house, with these labelled parts: **The sign**, what it colours about that planet; **The house**, the part of life it works in, read in depth; **Its aspects**, the main ones the data lists for it, with their orbs; **In your life**, how all of it shows up, concretely. Explain as if they knew none of the symbols; the lived version matters more than the label.',
+  'Give every placement its own ### section, named with its sign, degree and house, with these labelled parts: **The sign**, what it colours about that planet; **The house**, the part of life it works in, read in depth; **Its aspects**, the main ones the data lists for it, with their orbs; **In your life**, how all of it shows up, concretely, as a few bullets. Explain as if they knew none of the symbols; the lived version matters more than the label.',
   HOUSES,
   'Make it theirs: where a placement touches what you know of their life, say so in their own terms. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
   'Use only the positions, houses, aspects and patterns in the data, and never work out positions yourself.',
@@ -74,7 +80,7 @@ const tarotVoice = (style: string | null): string => [
   'Never predict the future. A position about what is ahead describes what is opening up, what wants attention or what they could move toward as things stand; it never says what will happen.',
   'Make it theirs: where a card touches what you know of their life, say so in their own terms. No preamble, no sign-off, no caveats about tarot itself, no emoji.',
   'Use only the cards in the data. Never add a card that was not dealt, and never change which way up one fell.',
-  'Write in Markdown: a heading (###) per position, full paragraphs, bold for the thing to remember, and close with one line to carry.',
+  `Write in Markdown, segmented clearly, in the sections the task names, each a ## heading. ${BLOCKS}`,
 ].join(' ')
 
 /** What the person said they wanted from the reading, in their words, for the brief; nothing when they said nothing. */
@@ -130,8 +136,8 @@ function scanned(result: string, key: 'week_transits' | 'month_transits'): numbe
  * the headlines still carry more on each.
  */
 function transitsAsk(key: 'week_transits' | 'month_transits', total: number, period: string): string {
-  if (!total) return 'Take every headline transit in order with its dates, a full paragraph each.'
-  return `Under ${key} is every contact in orb over these days, ${total} in all: those whose exact moment falls inside the range are the ${period}'s events, the rest its backdrop, in orb without perfecting (headline_transits is the tool's own pick of the same contacts, with each one's movement and passes). Take every event in date order with a full paragraph each. Then the backdrop: a paragraph for each slow planet on the Sun, Moon, Ascendant, MC or chart ruler, and the rest in a table, each with a line on what it colours.`
+  if (!total) return 'Take every headline transit in order with its dates, each its own ### section.'
+  return `Under ${key} is every contact in orb over these days, ${total} in all: those whose exact moment falls inside the range are the ${period}'s events, the rest its backdrop, in orb without perfecting (headline_transits is the tool's own pick of the same contacts, with each one's movement and passes). Take every event in date order, each its own ### section. Then the backdrop: a short ### section for each slow planet on the Sun, Moon, Ascendant, MC or chart ruler, and the rest in a table, each with a line on what it colours.`
 }
 
 function ask(casting: Casting): { task: string; data: string } {
@@ -172,9 +178,9 @@ function ask(casting: Casting): { task: string; data: string } {
     case 'moon':
       return { task: `Write a guide to the next two weeks by the Moon, in these sections, each a ## heading: **At a Glance**, a table of the void-of-course windows and the lunations; **Void-of-Course Windows**, those worth planning around (the long ones, the ones in working hours); **Lunations and Eclipses**, a ### section for each with the natal house it falls in, read in depth.`, data: trimmedData(casting.result) }
     case 'card':
-      return { task: `Write the card for the day (${shortDate(casting.period)}): the one card dealt, which way up it fell, what it tends to mean that way up, and what it suggests for this person's day.`, data: casting.result }
+      return { task: `Write the card for the day (${shortDate(casting.period)}) in these sections, each a ## heading: **The Card**, its name and which way up it fell, then its keywords in a line; **What It Means**, what it tends to mean that way up, in plain words; **For Your Day**, what it suggests for this person today, with **What may come up** and **What could help** as labelled parts, each a short bulleted list; **To Carry**, one line.`, data: casting.result }
     case 'spread':
-      return { task: `Write the reading for this spread: take each position in order, then say what the cards make together and close with one line to carry.`, data: casting.result }
+      return { task: `Write the reading for this spread: take each position in order, in these sections, each a ## heading: **At a Glance**, a table of each position, its card, which way up it fell and a few words on what it brings; **The Cards**, a ### section per position, named with the position and the card, with **The card**, what it tends to mean that way up, and **Here, for you**, what it suggests in this position for this person, as labelled parts; **Together**, what the cards make as a whole, the thread between them; **What You Might Do**, two or three options as a bulleted list, offered, not prescribed; **To Carry**, one line.`, data: casting.result }
   }
 }
 
@@ -225,16 +231,21 @@ export function readingRequest(casting: Casting, profile: Subject, now = new Dat
   return { system, input: `${task}${lengthOf(casting.kind)}\n\nDATA:\n${data}`, maxTokens: READING_MAX_TOKENS }
 }
 
+/** How an answer is laid out: the answer first, then sections once it runs past a few lines. */
+const ANSWER_SHAPE = `Shape the answer to be scanned: open with the direct answer in a sentence or two. When it runs longer than that, segment it: a ### heading for each part of the answer, and inside each, short blocks. ${BLOCKS}`
+
 const TAROT_ANSWER_VOICE = [
   'You are the same tarot reader, now answering a question the person asks about a reading you wrote for them.',
-  'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown, as long as the question needs; a list if it wants one. No preamble, no sign-off, no caveats about tarot itself, no emoji.',
+  'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown, as long as the question needs. No preamble, no sign-off, no caveats about tarot itself, no emoji.',
+  ANSWER_SHAPE,
   'Draw on the cards and the reading below. For what they do not cover, the tarot tools can deal another card or spread (draw_cards) or explain a card (card_meaning); the astrology tools can cast the sky for a day. Never invent a card that was not dealt. When you drew or looked something up, say so in a few words.',
   'Stay trauma-informed and expansive, leading with safety, choice and agency, and never predict the future: what is ahead is what is opening up or wants attention, not what will happen.',
 ].join(' ')
 
 const ANSWER_VOICE = [
   'You are the same astrologer, now answering a question the person asks about a reading you wrote for them.',
-  'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown, as long as the question needs; a list if it wants one. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
+  'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown, as long as the question needs. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
+  ANSWER_SHAPE,
   'Draw on the chart data and the reading below. For what they do not cover, use the astrology tools: another day or a date range (create_transit_chart, list_upcoming_transits, forecast_week, forecast_month, forecast_year), when an aspect is exact (verify_claim), a solar return, a progressed chart, Moon void periods, lunations and eclipses, planetary hours, or a horary question. The person\'s birth date, time and place are given below; pass them as a tool asks.',
   'Never state a transit or position that neither the data nor a tool returned, and never work out positions yourself. When you looked something up, say so in a few words.',
   'The tarot tools are there too: if they ask for a card, deal one with draw_cards and read it against this reading.',
@@ -274,7 +285,7 @@ export function followUpRequest(casting: Casting, earlier: FollowUp[], question:
     .filter((f) => f.state === 'done' && f.answer)
     .map((f) => `${askerOf(profile)} ${f.card ? `pulled a card: ${cardBlock(f.card)}` : `asked: ${f.question}`}\n\nYou answered: ${clip(f.answer, REPLAY_CHARS)}`)
   const turn = card
-    ? `${askerOf(profile)} pulled a tarot card beside this reading: ${cardBlock(card)}\n\nRead the card in the light of the reading above: what it adds, confirms or complicates. Name the card and which way up it fell; a reversal is a shading, not an opposite. Read it trauma-informed and expansive, leading with choice and agency, and do not predict the future with it.`
+    ? `${askerOf(profile)} pulled a tarot card beside this reading: ${cardBlock(card)}\n\nRead the card in the light of the reading above, in ### sections: **The Card**, its name, which way up it fell and what it tends to mean that way; **What It Adds**; **What It Confirms or Complicates**; **What to Do**, a short bulleted list; then one line to carry. Name the card and which way up it fell; a reversal is a shading, not an opposite. Read it trauma-informed and expansive, leading with choice and agency, and do not predict the future with it.`
     : `${askerOf(profile)} asks: ${question}`
   const input = [...(thread.length ? ['THE CONVERSATION SO FAR:', ...thread] : []), turn].join('\n\n')
   return { system, input, maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN] }

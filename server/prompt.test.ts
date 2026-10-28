@@ -189,3 +189,42 @@ describe('a tarot reading', () => {
     expect(q.system).toMatch(/never predict the future/)
   })
 })
+
+describe('structure', () => {
+  const card = casting({ kind: 'card', result: '{}', title: 'Card · Oct 15', period: '2026-10-15' })
+  const spread = casting({ kind: 'spread', result: '{}', title: 'Past, present, future · Oct 15', period: '2026-10-15' })
+
+  it('asks every reading for short blocks, labelled parts as #### headings and lists, never paragraph after paragraph', () => {
+    for (const c of [casting({}), casting({ kind: 'natal' }), card, spread]) {
+      const { system } = readingRequest(c, sam)
+      expect(system).toContain('no paragraph runs past three sentences')
+      expect(system).toContain('#### heading with its label')
+      expect(system).toContain('make it a bulleted list')
+    }
+    expect(readingRequest(casting({}), sam).system).toContain('**What to do**, two or three concrete actions as a bulleted list')
+    expect(readingRequest(casting({}), sam).system).toContain('never drop one to save words')
+  })
+
+  it('gives tarot readings sections of their own', () => {
+    expect(readingRequest(card, sam).input).toContain('**The Card**')
+    expect(readingRequest(card, sam).input).toContain('**For Your Day**')
+    const s = readingRequest(spread, sam).input
+    expect(s).toContain('**At a Glance**, a table of each position')
+    expect(s).toContain('**The Cards**, a ### section per position')
+    expect(s).toContain('**Together**')
+  })
+
+  it('has a week take each contact as its own section, not a paragraph', () => {
+    const full = readingRequest(casting({ kind: 'week', result: withScan('week', weekOct18, scan), title: 'Week of Oct 18', period: '2026-10-18' }), sam)
+    expect(full.input).toContain('Take every event in date order, each its own ### section')
+    expect(full.input).not.toContain('full paragraph')
+  })
+
+  it('has answers lead with the answer, then break into sections when they run long', () => {
+    for (const c of [casting({ reading: 'r', readingState: 'done' }), { ...spread, reading: 'r', readingState: 'done' as const }]) {
+      const { system } = followUpRequest(c, [], 'q', sam)
+      expect(system).toContain('open with the direct answer in a sentence or two')
+      expect(system).toContain('a ### heading for each part of the answer')
+    }
+  })
+})
