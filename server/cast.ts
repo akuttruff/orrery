@@ -28,13 +28,13 @@ export function shortDate(iso: string): string {
   return `${MONTHS[(m ?? 1) - 1]!.slice(0, 3)} ${d}`
 }
 
-/** The Sunday a day's week starts on. */
-export const sundayOf = (d: Date): string => addDays(localDate(d), -d.getDay())
+/** The Monday a day's week starts on. */
+export const mondayOf = (d: Date): string => addDays(localDate(d), -((d.getDay() + 6) % 7))
 
 /**
- * The days a week casting covers: the week is anchored to Sunday whatever
- * day it is cast on, and the forecast runs from that day to the Saturday,
- * so a Sunday gets seven days and a Saturday one.
+ * The days a week casting covers: the week is anchored to Monday whatever
+ * day it is cast on, and the forecast runs from that day to the Sunday,
+ * so a Monday gets seven days and a Sunday one.
  */
 export function weekSpan(period: string, now: Date): { start: string; end: string; days: number } {
   const end = addDays(period, 6)
@@ -43,11 +43,11 @@ export function weekSpan(period: string, now: Date): { start: string; end: strin
   return { start, end, days: Math.round((new Date(`${end}T12:00:00`).getTime() - new Date(`${start}T12:00:00`).getTime()) / DAY_MS) + 1 }
 }
 
-/** The period a kind is cast for: a day, the week's Sunday, a month, 'natal'. */
+/** The period a kind is cast for: a day, the week's Monday, a month, 'natal'. */
 export function periodFor(kind: Kind, now: Date): string {
   switch (kind) {
     case 'today': return localDate(now)
-    case 'week': return sundayOf(now)
+    case 'week': return mondayOf(now)
     case 'month': return localMonth(now)
     case 'year': return localDate(now)
     case 'moon': return localDate(now)

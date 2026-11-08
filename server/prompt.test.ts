@@ -59,7 +59,7 @@ describe('readingRequest', () => {
     expect(req.input).not.toContain('how_to_read')
     expect(req.input).not.toContain('left_out')
     expect(req.input).toContain('headline_note')
-    expect(req.input).toContain('week of Oct 12, Sunday to Saturday. It covers 2026-10-12 to 2026-10-18, the days left in the week.')
+    expect(req.input).toContain('week of Oct 12, Monday to Sunday. It covers 2026-10-12 to 2026-10-18, the days left in the week.')
     expect(req.input).toContain('Take every headline transit in order')
     expect(req.input).not.toContain('week_transits')
     // With the scan folded in, the brief asks for every contact: the events, then the backdrop.

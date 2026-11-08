@@ -123,8 +123,8 @@ Every tap casts anew. The earlier castings of that kind stay, so a day can
 hold several readings of the same kind, and Recast adds one more. A casting
 is `#/c/<id>` in the address, so Back and a reload both land where expected.
 
-A week runs Sunday to Saturday, so a cast made on a Thursday covers
-Thursday to Saturday.
+A week runs Monday to Sunday, so a cast made on a Thursday covers
+Thursday to Sunday.
 
 A week and a month list every transit. The forecast tool picks a few
 headlines, and both castings also run the ephemeris scan over the same days

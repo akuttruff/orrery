@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { addDays, castResult, localDate, monthSpan, periodFor, shortDate, sundayOf, titleFor, trimWeek, weekSpan, withScan, SCAN_OBJECTS, WEEK_SCAN_OBJECTS } from './cast.ts'
+import { addDays, castResult, localDate, monthSpan, periodFor, shortDate, mondayOf, titleFor, trimWeek, weekSpan, withScan, SCAN_OBJECTS, WEEK_SCAN_OBJECTS } from './cast.ts'
 import type { Profile } from '../src/types.ts'
 import week from '../src/test/fixtures/forecast-week.json?raw'
 import weekOct18 from '../src/test/fixtures/forecast-week-oct18.json?raw'
@@ -14,8 +14,8 @@ const oct15 = new Date(2026, 9, 15, 22, 8)
 describe('periods', () => {
   it('keys each kind by the span it covers', () => {
     expect(periodFor('today', oct15)).toBe('2026-10-15')
-    // A Thursday: its week began on Sunday the 11th.
-    expect(periodFor('week', oct15)).toBe('2026-10-11')
+    // A Thursday: its week began on Monday the 12th.
+    expect(periodFor('week', oct15)).toBe('2026-10-12')
     expect(periodFor('month', oct15)).toBe('2026-10')
     expect(periodFor('year', oct15)).toBe('2026-10-15')
     expect(periodFor('moon', oct15)).toBe('2026-10-15')
@@ -92,12 +92,14 @@ describe('castResult', () => {
     expect(mars.filter((t) => t.exact?.startsWith('2026-10'))).toHaveLength(5)
   })
 
-  it('anchors the week to Sunday and covers the days left in it, seven at most and one at least', () => {
-    expect(weekSpan('2026-10-11', new Date(2026, 9, 11, 9))).toEqual({ start: '2026-10-11', end: '2026-10-17', days: 7 })
-    expect(weekSpan('2026-10-11', oct15)).toEqual({ start: '2026-10-15', end: '2026-10-17', days: 3 })
-    expect(weekSpan('2026-10-11', new Date(2026, 9, 17, 23, 50))).toEqual({ start: '2026-10-17', end: '2026-10-17', days: 1 })
-    expect(sundayOf(new Date(2026, 9, 18, 0, 5))).toBe('2026-10-18')
-    expect(sundayOf(new Date(2026, 9, 24, 12))).toBe('2026-10-18')
+  it('anchors the week to Monday and covers the days left in it, seven at most and one at least', () => {
+    expect(weekSpan('2026-10-12', new Date(2026, 9, 12, 9))).toEqual({ start: '2026-10-12', end: '2026-10-18', days: 7 })
+    expect(weekSpan('2026-10-12', oct15)).toEqual({ start: '2026-10-15', end: '2026-10-18', days: 4 })
+    expect(weekSpan('2026-10-12', new Date(2026, 9, 18, 23, 50))).toEqual({ start: '2026-10-18', end: '2026-10-18', days: 1 })
+    // A Sunday ends its week; a Monday starts the next.
+    expect(mondayOf(new Date(2026, 9, 18, 23, 50))).toBe('2026-10-12')
+    expect(mondayOf(new Date(2026, 9, 19, 0, 5))).toBe('2026-10-19')
+    expect(mondayOf(new Date(2026, 9, 24, 12))).toBe('2026-10-19')
     expect(monthSpan('2026-10')).toEqual({ start: '2026-10-01', end: '2026-10-31' })
     expect(monthSpan('2028-02')).toEqual({ start: '2028-02-01', end: '2028-02-29' })
   })

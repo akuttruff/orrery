@@ -157,7 +157,7 @@ function ask(casting: Casting): { task: string; data: string } {
       }
     }
     case 'week': {
-      // The week is Sunday to Saturday; the data covers the days left in it from the day it was cast.
+      // The week is Monday to Sunday; the data covers the days left in it from the day it was cast.
       let span = ''
       try {
         const d = JSON.parse(casting.result) as { range?: { start?: string; end?: string } }
@@ -165,7 +165,7 @@ function ask(casting: Casting): { task: string; data: string } {
         if (r?.start && r.end) span = r.start === r.end ? ` It covers one day, ${r.start}.` : ` It covers ${r.start} to ${r.end}, the days left in the week.`
       } catch { /* no span */ }
       const transits = transitsAsk('week_transits', scanned(casting.result, 'week_transits'), 'week')
-      return { task: `Write the forecast for the week of ${shortDate(casting.period)}, Sunday to Saturday.${span} ${transits} Use these sections, each a ## heading: **At a Glance**, a table of every contact with its dates and the houses at both ends; **The Week's Transits**, a ### section for each; **Lunations, Stations and Ingresses**, a ### section for each that touches the chart, with the house it falls in, read in depth; **To Carry**, one line.`, data: trimmedData(casting.result) }
+      return { task: `Write the forecast for the week of ${shortDate(casting.period)}, Monday to Sunday.${span} ${transits} Use these sections, each a ## heading: **At a Glance**, a table of every contact with its dates and the houses at both ends; **The Week's Transits**, a ### section for each; **Lunations, Stations and Ingresses**, a ### section for each that touches the chart, with the house it falls in, read in depth; **To Carry**, one line.`, data: trimmedData(casting.result) }
     }
     case 'month': {
       const transits = transitsAsk('month_transits', scanned(casting.result, 'month_transits'), 'month')
