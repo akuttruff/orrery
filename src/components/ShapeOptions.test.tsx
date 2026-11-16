@@ -5,21 +5,18 @@ import ShapeOptions from './ShapeOptions'
 import { DEFAULT_SHAPE, shapeOf } from '../lib/shape.ts'
 
 describe('ShapeOptions', () => {
-  it('folds behind one chip that says what differs from the usual', async () => {
-    const user = userEvent.setup()
-    const { rerender } = render(<ShapeOptions kind="today" value={null} onChange={vi.fn()} thinking={null} />)
-    expect(screen.getByText('Standard: every part, as usual.')).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: 'Shape of the reading' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Shape' }))
-    expect(screen.getByRole('group', { name: 'Shape of the reading' })).toBeInTheDocument()
-    rerender(<ShapeOptions kind="today" value={shapeOf({ length: 'short', organise: 'house' })} onChange={vi.fn()} thinking={null} />)
-    expect(screen.getByText('Short · by house')).toBeInTheDocument()
+  it('lays every choice out in a labelled row, nothing folded away', () => {
+    render(<ShapeOptions kind="today" value={null} onChange={vi.fn()} thinking={null} />)
+    const shape = screen.getByRole('group', { name: 'Shape of the reading' })
+    for (const name of ['Length', 'Organise', 'Writing', 'Thinking']) expect(within(shape).getByRole('radiogroup', { name })).toBeInTheDocument()
+    for (const name of ['Include', 'Lead with', 'Life areas']) expect(within(shape).getByRole('group', { name })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Shape' })).not.toBeInTheDocument()
   })
 
   it('picks one length, organisation, writing and thinking level, and toggles any mix of parts and focus', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
-    render(<ShapeOptions kind="week" value={null} onChange={onChange} thinking={null} open />)
+    render(<ShapeOptions kind="week" value={null} onChange={onChange} thinking={null} />)
     await user.click(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: 'Short' }))
     expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_SHAPE, length: 'short' })
     await user.click(within(screen.getByRole('radiogroup', { name: 'Organise' })).getByRole('radio', { name: 'By time' }))
@@ -45,7 +42,7 @@ describe('ShapeOptions', () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
     // A week's 'by time' is not a card's to offer, nor to lose.
-    render(<ShapeOptions kind="card" value={shapeOf({ organise: 'time' })} onChange={onChange} thinking={null} open />)
+    render(<ShapeOptions kind="card" value={shapeOf({ organise: 'time' })} onChange={onChange} thinking={null} />)
     expect(screen.queryByRole('radiogroup', { name: 'Organise' })).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Lead with' })).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Life areas' })).not.toBeInTheDocument()
@@ -55,18 +52,18 @@ describe('ShapeOptions', () => {
   })
 
   it('offers the thinking levels the model takes, and none when it takes none', () => {
-    const { rerender } = render(<ShapeOptions kind="today" value={null} onChange={vi.fn()} thinking={['off', 'on']} open />)
+    const { rerender } = render(<ShapeOptions kind="today" value={null} onChange={vi.fn()} thinking={['off', 'on']} />)
     expect(within(screen.getByRole('radiogroup', { name: 'Thinking' })).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Settings', 'Off', 'On'])
-    rerender(<ShapeOptions kind="today" value={null} onChange={vi.fn()} thinking={[]} open />)
+    rerender(<ShapeOptions kind="today" value={null} onChange={vi.fn()} thinking={[]} />)
     expect(screen.queryByRole('radiogroup', { name: 'Thinking' })).not.toBeInTheDocument()
   })
 
   it('goes back to the usual shape', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
-    const { rerender } = render(<ShapeOptions kind="today" value={null} onChange={onChange} thinking={null} open />)
+    const { rerender } = render(<ShapeOptions kind="today" value={null} onChange={onChange} thinking={null} />)
     expect(screen.queryByRole('button', { name: 'Back to the usual shape' })).not.toBeInTheDocument()
-    rerender(<ShapeOptions kind="today" value={shapeOf({ length: 'deep' })} onChange={onChange} thinking={null} open />)
+    rerender(<ShapeOptions kind="today" value={shapeOf({ length: 'deep' })} onChange={onChange} thinking={null} />)
     await user.click(screen.getByRole('button', { name: 'Back to the usual shape' }))
     expect(onChange).toHaveBeenLastCalledWith(DEFAULT_SHAPE)
   })

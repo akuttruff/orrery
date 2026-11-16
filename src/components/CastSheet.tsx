@@ -85,6 +85,7 @@ export default function CastSheet({ kind, note, style, shape, thinking = null, s
               <span className="memory-note">{SPREAD_HINT[spread]}</span>
             </div>
           )}
+          <span className="shape-label tone-label" aria-hidden="true">Tone</span>
           <StyleChips value={style} as="radio" onPick={onStyle} />
           {onShape && <ShapeOptions kind={kind} value={shape ?? null} onChange={onShape} thinking={thinking} />}
           {who === 'me' && <MemoryChoice on={memoryOn} excluded={excluded} onToggle={onMemory} onExclude={onExclude} onManage={onManage} quiet />}
