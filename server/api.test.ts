@@ -10,6 +10,7 @@ import { Store } from './store.ts'
 import { REMEMBER_TIMEOUT_MS } from './remember.ts'
 import type { ApiState } from './api.ts'
 import type { Reply, WriteOptions, WriteRequest, writeWithModel } from './model.ts'
+import { DEFAULT_SHAPE } from '../src/lib/shape.ts'
 import type { Casting, CastingSummary, FollowUp, Memory, Step, Written } from '../src/types.ts'
 import { parseWheel } from '../src/lib/chartWheel.ts'
 import { READINGS_PROMPT, aspectKey } from '../src/lib/readings.ts'
@@ -223,6 +224,37 @@ describe('castings', () => {
     expect((await fetch(`${ctx.base}/api/castings/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ starred: 'yes' }) })).status).toBe(400)
     const list = await (await fetch(`${ctx.base}/api/castings`)).json() as CastingSummary[]
     expect(list.find((x) => x.id === c.id)).toMatchObject({ style: 'plain', starred: true })
+  })
+
+  it('casts with a shape, keeps it, writes the reading by it at its thinking level, and refuses a shape it cannot read', async () => {
+    const seen: WriteRequest[] = []
+    writer = async (req) => { seen.push(req); return 'A reading.' }
+    const shape = { ...DEFAULT_SHAPE, length: 'short', organise: 'house', focus: ['challenges'], parts: ['glance', 'carry', 'moon', 'tables', 'reflect'], thinking: 'high' }
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'today', shape })).json() as Casting
+    expect(c.shape).toEqual(shape)
+    // The same tap with another shape is another reading, not a shared cast.
+    const other = await (await post(`${ctx.base}/api/castings`, { kind: 'today', shape: { ...shape, length: 'deep' } })).json() as Casting
+    expect(other.id).not.toBe(c.id)
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'today', shape: { ...shape, length: 'epic' } })).status).toBe(400)
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'today', shape: 'short' })).status).toBe(400)
+    // The default shape is kept as none.
+    expect((await (await post(`${ctx.base}/api/castings`, { kind: 'week', shape: DEFAULT_SHAPE })).json() as Casting).shape).toBeNull()
+
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await (await fetch(`${ctx.base}/api/castings/${c.id}/events`)).text()
+    expect(seen[0]!.reasoning).toBe('high')
+    expect(seen[0]!.input).toContain('**By House**')
+    expect(seen[0]!.input).toContain('**To Reflect On**')
+    expect(seen[0]!.system).toContain('Lead with the hard contacts')
+    expect(seen[0]!.system).toContain('Give no advice and no actions')
+
+    // Changed before a Write again, and back to the usual.
+    const changed = await (await fetch(`${ctx.base}/api/castings/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shape: { ...shape, writing: 'mixed' } }) })).json() as Casting
+    expect(changed.shape).toMatchObject({ writing: 'mixed', length: 'short' })
+    const list = await (await fetch(`${ctx.base}/api/castings`)).json() as CastingSummary[]
+    expect(list.find((x) => x.id === c.id)!.shape).toMatchObject({ writing: 'mixed' })
+    const reset = await (await fetch(`${ctx.base}/api/castings/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shape: null }) })).json() as Casting
+    expect(reset.shape).toBeNull()
   })
 
   it('keeps a casting starred from the start', async () => {

@@ -9,12 +9,15 @@ import scan from '../src/test/fixtures/scan-week.json?raw'
 import month from '../src/test/fixtures/forecast-month.json?raw'
 import scanMonth from '../src/test/fixtures/scan-month.json?raw'
 import { NOT_WRITTEN } from '../src/types.ts'
+import { DEFAULT_SHAPE, type ReadingShape } from '../src/lib/shape.ts'
+import natalChart from '../src/test/fixtures/natal-chart.json?raw'
+import three from '../src/test/fixtures/tarot-three.json?raw'
 import type { Casting, FollowUp, Profile } from '../src/types.ts'
 
 const sam: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
 const casting = (over: Partial<Casting>): Casting => ({
   id: 'c1', kind: 'today', period: '2026-10-13', title: 'Today · Oct 13', result: transit,
-  reading: '', readingState: 'none', readingError: null, createdAt: 0, updatedAt: 0, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: null, style: null, note: '', brief: null, starred: false, subject: null, ...over,
+  reading: '', readingState: 'none', readingError: null, createdAt: 0, updatedAt: 0, memory: null, memoriesUsed: [], memoryExcluded: [], written: NOT_WRITTEN, transitReadings: null, style: null, note: '', shape: null, brief: null, starred: false, subject: null, ...over,
 })
 
 describe('readingRequest', () => {
@@ -226,5 +229,98 @@ describe('structure', () => {
       expect(system).toContain('open with the direct answer in a sentence or two')
       expect(system).toContain('a ### heading for each part of the answer')
     }
+  })
+})
+
+describe('the shape of a reading', () => {
+  const day = new Date(2026, 9, 13)
+  const shaped = (shape: Partial<ReadingShape>, over: Partial<Casting> = {}) => readingRequest(casting({ ...over, shape: { ...DEFAULT_SHAPE, ...shape } }), sam, day)
+
+  it('asks for exactly the usual reading and answer when the shape is the default or none', () => {
+    for (const kind of ['today', 'week', 'natal', 'spread'] as const) {
+      const result = kind === 'natal' ? natalChart : kind === 'spread' ? three : kind === 'week' ? week : transit
+      expect(readingRequest(casting({ kind, result, shape: DEFAULT_SHAPE }), sam, day)).toEqual(readingRequest(casting({ kind, result }), sam, day))
+      const c = casting({ kind, result, reading: 'R', readingState: 'done' })
+      expect(followUpRequest({ ...c, shape: DEFAULT_SHAPE }, [], 'why?', sam, day)).toEqual(followUpRequest(c, [], 'why?', sam, day))
+    }
+    expect(readingRequest(casting({}), sam, day)).not.toHaveProperty('reasoning')
+  })
+
+  it('scales the length, and a glance keeps only the summary, the table and the line to carry', () => {
+    expect(shaped({ length: 'short' }).input).toContain('Aim for about 500 words')
+    expect(shaped({ length: 'deep' }).input).toContain('Aim for about 1,600 words')
+    expect(shaped({ length: 'deep' }).system).toContain('Go deep:')
+    const glance = shaped({ length: 'glance', parts: ['carry', 'tables'] })
+    expect(glance.input).toContain('**In Short**')
+    expect(glance.input).toContain('**At a Glance**')
+    expect(glance.input).toContain('**To Carry**')
+    expect(glance.input).not.toContain('**Exact Today**')
+    expect(glance.system).toContain('no section per contact')
+    expect(glance.system).not.toContain('Give the houses real depth')
+    const short = shaped({ length: 'short' })
+    expect(short.system).toContain('in two or three bullets')
+    expect(short.system).not.toContain('**Where it lands**')
+  })
+
+  it('groups the contacts by house, planet or time in place of a section each', () => {
+    const house = shaped({ organise: 'house' })
+    expect(house.input).toContain('**By House**')
+    expect(house.input).not.toContain('**Exact Today**')
+    expect(house.input).toContain("**The Moon's Day**")
+    expect(house.system).toContain('a #### heading for each contact or placement in a group')
+    expect(house.system).toContain('as a bold label opening its line')
+    expect(shaped({ organise: 'planet' }).input).toContain('**By Planet**')
+    // A day cannot be read by time: it is read by contact, as usual.
+    expect(shaped({ organise: 'time' })).toEqual(readingRequest(casting({}), sam, day))
+    const weekByTime = shaped({ organise: 'time' }, { kind: 'week', result: week })
+    expect(weekByTime.input).toContain('**Day by Day**')
+    expect(weekByTime.input).not.toContain("**The Week's Transits**")
+    const natal = shaped({ organise: 'house' }, { kind: 'natal', result: natalChart })
+    expect(natal.input).toContain('**The Houses**, a ### section for each of the twelve houses in order, named with the house')
+    expect(natal.input).not.toContain('**The Planets**')
+    expect(natal.system).not.toContain('**The house**')
+  })
+
+  it('adds and drops parts', () => {
+    const more = shaped({ parts: ['summary', 'theme', 'timing', 'reflect', 'mantra', 'glance', 'carry', 'moon', 'actions', 'tables'] })
+    const order = ['**In Short**', '**The Thread**', '**At a Glance**', '**Best Times**', '**To Reflect On**', '**A Line to Keep**', '**To Carry**'].map((h) => more.input.indexOf(h))
+    expect(order.every((i) => i >= 0)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+    const fewer = shaped({ parts: [] })
+    for (const h of ['**At a Glance**', '**To Carry**', "**The Moon's Day**", '**What to do**']) expect(`${fewer.system}${fewer.input}`).not.toContain(h)
+    expect(fewer.system).toContain('Give no advice and no actions')
+    expect(fewer.system).toContain('Use no tables')
+    const spread = shaped({ parts: ['glance', 'carry', 'tables'] }, { kind: 'spread', result: three })
+    expect(spread.input).not.toContain('**What You Might Do**')
+  })
+
+  it('writes in bullets, prose and lists mixed, or prose, for the reading and its answers', () => {
+    expect(shaped({ writing: 'mixed' }).system).toContain('Mix prose and lists')
+    expect(shaped({ writing: 'prose' }).system).toContain('Write in short flowing paragraphs')
+    expect(shaped({ writing: 'prose' }).system).not.toContain('make it a bulleted list, a line each, not a paragraph')
+    const c = casting({ reading: 'R', readingState: 'done', shape: { ...DEFAULT_SHAPE, writing: 'prose' } })
+    expect(followUpRequest(c, [], 'why?', sam, day).system).toContain('Write in short flowing paragraphs')
+  })
+
+  it('leads with the focus asked for, in the reading and its answers, and never at the cost of a contact', () => {
+    const r = shaped({ focus: ['challenges', 'supports'], areas: ['love', 'work'] })
+    expect(r.system).toContain('FOCUS, as they asked: Lead with the hard contacts')
+    expect(r.system).toContain('then the easy contacts (trines and sextiles)')
+    expect(r.system).toContain('love and relationships (the 5th, 7th and 8th houses, Venus), and work and money')
+    expect(r.system).toContain('Never drop one silently, never invent one to fill the focus')
+    const personal = shaped({ focus: ['personal'] })
+    expect(personal.system).toContain('Keep to the personal planets')
+    expect(personal.input).not.toContain('**The Backdrop**')
+    expect(shaped({}).system).not.toContain('FOCUS')
+    const c = casting({ reading: 'R', readingState: 'done', shape: { ...DEFAULT_SHAPE, areas: ['home'] } })
+    expect(followUpRequest(c, [], 'why?', sam, day).system).toContain('what touches home and family')
+    // Tarot takes no focus.
+    expect(shaped({ focus: ['challenges'] }, { kind: 'spread', result: three }).system).not.toContain('FOCUS')
+  })
+
+  it('asks for the thinking level chosen, for the reading and its answers', () => {
+    expect(shaped({ thinking: 'high' }).reasoning).toBe('high')
+    const c = casting({ reading: 'R', readingState: 'done', shape: { ...DEFAULT_SHAPE, thinking: 'off' } })
+    expect(followUpRequest(c, [], 'why?', sam, day).reasoning).toBe('off')
   })
 })

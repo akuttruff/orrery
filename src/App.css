@@ -363,6 +363,15 @@ input, select { font: inherit; }
 .memory-choice .memory-switch { margin-top: 0; }
 .memory-choice .memory-note { flex: 1 1 100%; }
 .chip.on { border-color: var(--moss); color: var(--moss); }
+/* The shape of a reading, folded under one chip: a labelled row of chips per choice. */
+.shape { margin-top: 14px; }
+.shape .memory-switch { margin-top: 0; }
+.shape-panel { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-raised); }
+.shape-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.shape-group + .shape-group { margin-top: 10px; }
+.shape-label { flex: 0 0 100%; font-size: 12px; color: var(--paper-dim); }
+.shape-group .chip { padding: 5px 10px; font-size: 13px; }
+.shape-reset { display: inline-block; margin-top: 10px; font-size: 12px; }
 .memory-note { font-size: 13px; color: var(--paper-dim); line-height: 1.4; }
 /* Which memories go to the model for this casting. */
 .memory-picker { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-raised); }

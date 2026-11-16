@@ -3,7 +3,9 @@ import { X } from 'lucide-react'
 import MemoryChoice from './MemoryChoice'
 import WhoseChart, { type Who } from './WhoseChart'
 import StyleChips from './StyleChips'
+import ShapeOptions from './ShapeOptions'
 import { NOTE_MAX, type StyleId } from '../lib/styles.ts'
+import type { ReadingShape } from '../lib/shape.ts'
 import { KIND_LABEL } from '../lib/kinds.ts'
 import { SPREADS, SPREAD_HINT, SPREAD_LABEL, type SpreadId } from '../lib/spreads.ts'
 import { isTarotKind } from '../types.ts'
@@ -13,6 +15,10 @@ interface CastSheetProps {
   kind: Kind
   note: string
   style: StyleId
+  /** Its length, organisation, parts, focus, writing and thinking (lib/shape.ts). */
+  shape?: ReadingShape
+  /** The thinking levels the model takes; null when LM Studio can't say. */
+  thinking?: string[] | null
   /** Which spread a card spread is dealt. */
   spread: SpreadId
   /** Whose chart: you, or someone saved; new people are added here. */
@@ -26,6 +32,7 @@ interface CastSheetProps {
   busy: boolean
   onNote: (note: string) => void
   onStyle: (style: StyleId) => void
+  onShape?: (shape: ReadingShape) => void
   onSpread: (spread: SpreadId) => void
   onMemory: (on: boolean) => void
   onExclude: (ids: string[]) => void
@@ -36,11 +43,11 @@ interface CastSheetProps {
 
 /**
  * The popup a tile opens: what the reading is for, in the person's words,
- * the kind of reading, and whether it draws on memory, then the button that
+ * the kind of reading and its shape, and whether it draws on memory, then the button that
  * casts. Nothing is cast until that button; the X or Escape puts the tile
  * back untouched.
  */
-export default function CastSheet({ kind, note, style, spread, me, people, who, onWho, onAddPerson, memoryOn, excluded, busy, onNote, onStyle, onSpread, onMemory, onExclude, onManage, onCast, onClose }: CastSheetProps) {
+export default function CastSheet({ kind, note, style, shape, thinking = null, spread, me, people, who, onWho, onAddPerson, memoryOn, excluded, busy, onNote, onStyle, onShape, onSpread, onMemory, onExclude, onManage, onCast, onClose }: CastSheetProps) {
   const tarot = isTarotKind(kind)
   const box = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
@@ -79,6 +86,7 @@ export default function CastSheet({ kind, note, style, spread, me, people, who, 
             </div>
           )}
           <StyleChips value={style} as="radio" onPick={onStyle} />
+          {onShape && <ShapeOptions kind={kind} value={shape ?? null} onChange={onShape} thinking={thinking} />}
           {who === 'me' && <MemoryChoice on={memoryOn} excluded={excluded} onToggle={onMemory} onExclude={onExclude} onManage={onManage} quiet />}
         </div>
         <footer className="sheet-foot cast-foot">

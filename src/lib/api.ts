@@ -3,7 +3,7 @@ import type { Casting, CastingSummary, Config, FollowUp, Kind, Memory, Profile, 
 import type { SpreadId } from './spreads.ts'
 
 /** The choices a casting is made with: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
-export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>> & { spread?: SpreadId; /** Whose chart: a saved person's id; absent for yours. */ personId?: string }
+export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'shape' | 'starred'>> & { spread?: SpreadId; /** Whose chart: a saved person's id; absent for yours. */ personId?: string }
 
 /** The server, from the page. Every call throws with the server's message on failure, or a plain one when it gave no reply (see lib/reach.ts). */
 
@@ -35,6 +35,8 @@ export const api = {
   config: () => request<Config>('/api/config'),
   saveConfig: (patch: Record<string, string>) => request<Config>('/api/config', jsonInit('PUT', patch)),
   models: () => request<{ models: string[]; loaded: string[]; error: string | null }>('/api/models'),
+  /** The thinking levels the chosen model takes; null when LM Studio can't say. */
+  reasoning: () => request<{ options: string[] | null }>('/api/reasoning'),
   castings: () => request<CastingSummary[]>('/api/castings'),
   /** A new casting of the kind, cast now with the memory choice made beforehand; the earlier ones stay in the list. */
   cast: (kind: Kind, options: CastOptions = {}) => request<Casting>('/api/castings', jsonInit('POST', { kind, ...options })),

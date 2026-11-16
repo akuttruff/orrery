@@ -4,6 +4,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { Brief, Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ReplyStats, Step, TarotCard, ToolUse, Written, Person } from '../src/types.ts'
 import { NOT_WRITTEN } from '../src/types.ts'
+import { shapeOf, type ReadingShape } from '../src/lib/shape.ts'
 
 export interface ServerConfig extends Omit<Config, 'hasToken'> {
   apiToken: string
@@ -81,7 +82,13 @@ interface CastingRow extends WrittenRow {
   reading_state: string; reading_error: string | null; created_at: number; updated_at: number | null
   memory: number | null; memories_used: string | null; memory_excluded: string | null
   transit_readings: string | null
-  style: string | null; note: string | null; brief: string | null; starred: number | null; subject: string | null
+  style: string | null; note: string | null; shape: string | null; brief: string | null; starred: number | null; subject: string | null
+}
+
+/** A kept shape, made whole (lib/shape.ts); null when none was chosen or it cannot be read. */
+const parseShape = (text: string | null): ReadingShape | null => {
+  if (!text) return null
+  try { return shapeOf(JSON.parse(text)) } catch { return null }
 }
 
 const parseIds = (text: string | null): string[] => {
@@ -145,7 +152,7 @@ const fromRow = (r: CastingRow): Casting => ({
   readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
   memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
   written: parseWritten(r), transitReadings: parseReadingMap(r.transit_readings),
-  style: r.style, note: r.note ?? '', brief: parseBrief(r.brief), starred: r.starred === 1, subject: parseSubject(r.subject),
+  style: r.style, note: r.note ?? '', shape: parseShape(r.shape), brief: parseBrief(r.brief), starred: r.starred === 1, subject: parseSubject(r.subject),
 })
 
 interface FollowUpRow extends WrittenRow {
@@ -223,6 +230,7 @@ export class Store {
     if (!has('castings', 'transit_readings')) this.db.exec('ALTER TABLE castings ADD COLUMN transit_readings TEXT')
     if (!has('castings', 'style')) this.db.exec('ALTER TABLE castings ADD COLUMN style TEXT')
     if (!has('castings', 'note')) this.db.exec('ALTER TABLE castings ADD COLUMN note TEXT')
+    if (!has('castings', 'shape')) this.db.exec('ALTER TABLE castings ADD COLUMN shape TEXT')
     if (!has('castings', 'brief')) this.db.exec('ALTER TABLE castings ADD COLUMN brief TEXT')
     if (!has('castings', 'starred')) this.db.exec('ALTER TABLE castings ADD COLUMN starred INTEGER NOT NULL DEFAULT 0')
     if (!has('castings', 'subject')) this.db.exec('ALTER TABLE castings ADD COLUMN subject TEXT')
@@ -307,7 +315,7 @@ export class Store {
   /** The castings, the most recently changed first: a reading written or a question asked moves one up. */
   listCastings(limit = 60): CastingSummary[] {
     const rows = this.db.prepare(
-      `SELECT id, kind, period, title, reading_state, reading_error, created_at, updated_at, memory, memories_used, memory_excluded, stats, started_at, finished_at, style, note, starred, subject,
+      `SELECT id, kind, period, title, reading_state, reading_error, created_at, updated_at, memory, memories_used, memory_excluded, stats, started_at, finished_at, style, note, shape, starred, subject,
         (SELECT COUNT(*) FROM follow_ups f WHERE f.casting_id = castings.id) AS questions
       FROM castings ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC, rowid DESC LIMIT ?`,
     ).all(limit) as unknown as (Omit<CastingRow, 'result' | 'reading' | 'trail' | 'transit_readings' | 'brief'> & { questions: number })[]
@@ -315,7 +323,7 @@ export class Store {
       id: r.id, kind: r.kind as Kind, period: r.period, title: r.title,
       readingState: r.reading_state as ReadingState, readingError: r.reading_error, createdAt: r.created_at, updatedAt: r.updated_at ?? r.created_at,
       memory: r.memory == null ? null : r.memory === 1, memoriesUsed: parseIds(r.memories_used), memoryExcluded: parseIds(r.memory_excluded),
-      written: parseWritten({ ...r, trail: null }), questions: Number(r.questions), style: r.style, note: r.note ?? '', starred: r.starred === 1,
+      written: parseWritten({ ...r, trail: null }), questions: Number(r.questions), style: r.style, note: r.note ?? '', shape: parseShape(r.shape), starred: r.starred === 1,
       subject: parseSubject(r.subject),
     }))
   }
@@ -326,15 +334,15 @@ export class Store {
   }
 
   /** A casting, with the choices made before it was cast: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
-  addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'> & Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred' | 'subject'>>): Casting {
+  addCasting(input: Pick<Casting, 'kind' | 'period' | 'title' | 'result'> & Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'shape' | 'starred' | 'subject'>>): Casting {
     const now = Date.now()
     const casting: Casting = {
-      memory: null, memoryExcluded: [], style: null, note: '', starred: false, subject: null, ...input,
+      memory: null, memoryExcluded: [], style: null, note: '', shape: null, starred: false, subject: null, ...input,
       id: newId(), reading: '', readingState: 'none', readingError: null, createdAt: now, updatedAt: now, memoriesUsed: [],
       written: { ...NOT_WRITTEN }, transitReadings: null, brief: null,
     }
-    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded, style, note, starred, subject) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded), casting.style, casting.note, casting.starred ? 1 : 0, casting.subject ? JSON.stringify(casting.subject) : null)
+    this.db.prepare('INSERT INTO castings (id, kind, period, title, result, reading, reading_state, reading_error, created_at, updated_at, memory, memory_excluded, style, note, shape, starred, subject) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(casting.id, casting.kind, casting.period, casting.title, casting.result, '', 'none', null, now, now, casting.memory == null ? null : casting.memory ? 1 : 0, JSON.stringify(casting.memoryExcluded), casting.style, casting.note, casting.shape ? JSON.stringify(casting.shape) : null, casting.starred ? 1 : 0, casting.subject ? JSON.stringify(casting.subject) : null)
     return casting
   }
 
@@ -345,10 +353,11 @@ export class Store {
   }
 
   /** The kind of reading and what it is for, changed before a Write again. */
-  setFrame(id: string, frame: Partial<Pick<Casting, 'style' | 'note'>>): Casting | undefined {
+  setFrame(id: string, frame: Partial<Pick<Casting, 'style' | 'note' | 'shape'>>): Casting | undefined {
     const cur = this.getCasting(id)
     if (!cur) return undefined
-    this.db.prepare('UPDATE castings SET style = ?, note = ? WHERE id = ?').run(frame.style === undefined ? cur.style : frame.style, frame.note === undefined ? cur.note : frame.note, id)
+    const shape = frame.shape === undefined ? cur.shape : frame.shape
+    this.db.prepare('UPDATE castings SET style = ?, note = ?, shape = ? WHERE id = ?').run(frame.style === undefined ? cur.style : frame.style, frame.note === undefined ? cur.note : frame.note, shape ? JSON.stringify(shape) : null, id)
     return this.getCasting(id)
   }
 

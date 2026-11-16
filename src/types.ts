@@ -1,4 +1,5 @@
 import type { DrawnCard } from './lib/tarotSpread.ts'
+import type { ReadingShape } from './lib/shape.ts'
 
 /** What a shortcut button casts: a chart or forecast from the ephemeris, or a tarot draw. */
 export type Kind = 'today' | 'week' | 'month' | 'year' | 'natal' | 'moon' | 'card' | 'spread'
@@ -147,6 +148,8 @@ export interface Casting {
   style: string | null
   /** What the person wanted from the reading, in their words; '' when they said nothing. */
   note: string
+  /** How the reading is shaped: length, organisation, focus, parts, writing and thinking (see lib/shape.ts); null is the default. */
+  shape: ReadingShape | null
   /** The brief the reading was last written with, kept for anyone who wants to see it; null until a reading starts. */
   brief: Brief | null
   /** Starred by the person: kept at the top of its kind in the lists. */

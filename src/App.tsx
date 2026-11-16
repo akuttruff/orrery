@@ -12,6 +12,7 @@ import { api } from './lib/api.ts'
 import type { CastOptions } from './lib/api.ts'
 import { noReply } from './lib/reach.ts'
 import { DEFAULT_STYLE, isStyleId, type StyleId } from './lib/styles.ts'
+import { shapeOf, type ReadingShape } from './lib/shape.ts'
 import { DEFAULT_SPREAD, isSpreadId, type SpreadId } from './lib/spreads.ts'
 import type { Who } from './components/WhoseChart'
 import { KIND_LABEL } from './lib/kinds.ts'
@@ -86,6 +87,14 @@ export default function App() {
     setStyleState(s)
     try { localStorage.setItem('orrery.style', s) } catch { /* a preference, not a record */ }
   }
+  // The shape of the next reading: length, organisation, parts, focus, writing and thinking (kept on this device).
+  const [shape, setShapeState] = useState<ReadingShape>(() => { try { return shapeOf(JSON.parse(localStorage.getItem('orrery.shape') ?? 'null')) } catch { return shapeOf(null) } })
+  const setShape = (s: ReadingShape): void => {
+    setShapeState(s)
+    try { localStorage.setItem('orrery.shape', JSON.stringify(s)) } catch { /* a preference, not a record */ }
+  }
+  // The thinking levels the chosen model takes, for the shape's Thinking row; null until known or when LM Studio can't say.
+  const [thinking, setThinking] = useState<string[] | null>(null)
   // Which spread a card spread is dealt (kept on this device).
   const [spread, setSpreadState] = useState<SpreadId>(() => { try { const v = localStorage.getItem('orrery.spread'); return isSpreadId(v) ? v : DEFAULT_SPREAD } catch { return DEFAULT_SPREAD } })
   const setSpread = (id: SpreadId): void => {
@@ -103,8 +112,8 @@ export default function App() {
     return person
   }
   const choice: CastOptions = who === 'me'
-    ? { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, note: note.trim(), spread }
-    : { memory: false, memoryExcluded: [], style, note: note.trim(), spread, personId: who }
+    ? { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, shape, note: note.trim(), spread }
+    : { memory: false, memoryExcluded: [], style, shape, note: note.trim(), spread, personId: who }
   // The day's card, once drawn, is opened rather than drawn again.
   const todaysCard = recent.find((c) => c.kind === 'card' && c.period === todayKey())
   // A tile opens the popup for these choices; the cast waits for its button.
@@ -164,6 +173,13 @@ export default function App() {
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [load, openAddressed, refreshRecent])
+
+  // Which thinking levels the chosen model takes, asked again when the model changes.
+  const model = config?.model
+  useEffect(() => {
+    if (!model) return
+    api.reasoning().then((r) => setThinking(r.options)).catch(() => setThinking(null))
+  }, [model])
 
   // Readings go on being written on the server after a Back; the home screen keeps their state fresh while any are.
   const writing = recent.filter((c) => c.readingState === 'writing')
@@ -288,13 +304,14 @@ export default function App() {
           <CastingView
             casting={current}
             memoryDefault={config?.memoryDefault === 'on'}
+            thinking={thinking}
             onMemory={(m) => void updateCasting({ memory: m })}
             onExclude={(ids) => void updateCasting({ memoryExcluded: ids })}
             onFrame={(frame) => void updateCasting(frame)}
             onMemories={() => setMemoriesOpen(true)}
             onWrite={(again) => void write(again)}
             onStop={() => void stop()}
-            onRecast={(style) => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: style ?? current.style, note: current.note, spread, ...(current.subject ? { personId: current.subject.id } : {}) })}
+            onRecast={(style) => void cast(current.kind, { memory: current.memory, memoryExcluded: current.memoryExcluded, style: style ?? current.style, shape: current.shape, note: current.note, spread, ...(current.subject ? { personId: current.subject.id } : {}) })}
             onDelete={() => void remove()}
             onSettled={settled}
           />
@@ -338,6 +355,8 @@ export default function App() {
           kind={pending}
           note={note}
           style={style}
+          shape={shape}
+          thinking={thinking}
           spread={spread}
           me={profile?.name ?? ''}
           people={people}
@@ -349,6 +368,7 @@ export default function App() {
           busy={busy !== null}
           onNote={setNote}
           onStyle={setStyle}
+          onShape={setShape}
           onSpread={setSpread}
           onMemory={(on) => void setMemoryOn(on)}
           onExclude={exclude}

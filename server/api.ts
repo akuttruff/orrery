@@ -9,13 +9,14 @@ import { Astro, AstroToolError, readTarotSpec, tarotDeckDir } from './astro.ts'
 import type { ToolCaller } from './astro.ts'
 import { castResult, isSpreadId, periodFor, titleFor } from './cast.ts'
 import type { SpreadId } from './cast.ts'
-import { listModels, writeWithModel } from './model.ts'
+import { listModels, reasoningOptions, writeWithModel } from './model.ts'
 import { Memories, MemoryInputError, memoryPath } from './memory.ts'
 import { REMEMBER_TIMEOUT_MS, parseFacts, rememberRequest } from './remember.ts'
 import { followUpRequest, readingRequest } from './prompt.ts'
 import type { Subject } from './prompt.ts'
 import { Readings, answerOf } from './readings.ts'
 import { NOTE_MAX, isStyleId } from '../src/lib/styles.ts'
+import { isDefaultShape, isShape } from '../src/lib/shape.ts'
 import { Store } from './store.ts'
 import { HealthCheck, UNKNOWN } from './health.ts'
 import type { ServerConfig } from './store.ts'
@@ -220,13 +221,13 @@ export function createMiddleware(state: ApiState): Handler {
    * A new casting of a kind, cast now with the memory choice made before the
    * tap; the earlier ones stay. Two taps while the tools run share the one cast.
    */
-  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>, spread: SpreadId = 'three', subject: Person | null = null): Promise<unknown> => {
+  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'shape' | 'starred'>, spread: SpreadId = 'three', subject: Person | null = null): Promise<unknown> => {
     // Whose chart: yours, or the friend chosen.
     const me = store.getProfile()
     const profile: Profile = subject ? { name: subject.name, dateTime: subject.dateTime, city: subject.city, state: subject.state, country: subject.country } : me
     const period = periodFor(kind, new Date())
-    // Only the same tap twice is shared: a different question deals different cards, and a different style, memory choice or person is a different reading.
-    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.memory, frame.memoryExcluded, subject?.id ?? null])
+    // Only the same tap twice is shared: a different question deals different cards, and a different style, shape, memory choice or person is a different reading.
+    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.shape, frame.memory, frame.memoryExcluded, subject?.id ?? null])
     let pending = state.casting.get(key)
     if (!pending) {
       pending = (async () => {
@@ -248,8 +249,8 @@ export function createMiddleware(state: ApiState): Handler {
   }
 
   /** The choices in a request body, checked: memory and the memories left out, the kind of reading, and what it is for. What is not given is left as it was. */
-  const framePatch = (body: Record<string, unknown>): Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>> => {
-    const out: Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'starred'>> = {}
+  const framePatch = (body: Record<string, unknown>): Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'shape' | 'starred'>> => {
+    const out: Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'shape' | 'starred'>> = {}
     if ('starred' in body) {
       if (typeof body.starred !== 'boolean') throw new UserError('starred must be true or false')
       out.starred = body.starred
@@ -257,6 +258,11 @@ export function createMiddleware(state: ApiState): Handler {
     if ('style' in body) {
       if (body.style !== null && !isStyleId(body.style)) throw new UserError('style must be one of the reading styles, or null')
       out.style = body.style as string | null
+    }
+    if ('shape' in body) {
+      if (body.shape !== null && !isShape(body.shape)) throw new UserError('shape must be a whole reading shape, or null')
+      // The default shape is kept as none, so an ordinary reading looks as it always did.
+      out.shape = body.shape === null || isDefaultShape(body.shape) ? null : body.shape
     }
     if ('note' in body) {
       if (typeof body.note !== 'string') throw new UserError('note must be text')
@@ -339,6 +345,11 @@ export function createMiddleware(state: ApiState): Handler {
       }).catch(fail)
       return undefined
     }
+    // The thinking levels the chosen model takes, for a reading's shape: null when LM Studio can't say.
+    if (url === '/api/reasoning' && method === 'GET') {
+      void reasoningOptions(store.getConfig()).then((options) => json(res, 200, { options }), () => json(res, 200, { options: null }))
+      return undefined
+    }
     if (url === '/api/models' && method === 'GET') {
       void listModels(store.getConfig()).then((r) => json(res, 200, r))
       return undefined
@@ -391,7 +402,7 @@ export function createMiddleware(state: ApiState): Handler {
     if (url === '/api/castings' && method === 'POST') {
       void readBody(req).then(async (body) => {
         if (!isKind(body.kind)) throw new UserError(`Unknown kind: ${String(body.kind)}`)
-        const { memory = null, memoryExcluded = [], style = null, note = '', starred = false } = framePatch(body)
+        const { memory = null, memoryExcluded = [], style = null, note = '', shape = null, starred = false } = framePatch(body)
         if (body.spread !== undefined && !isSpreadId(body.spread)) throw new UserError('spread must be single, three, situation or celtic-cross')
         // Whose chart: absent or 'me' for yours, else a saved person's id.
         let subject: Person | null = null
@@ -399,7 +410,7 @@ export function createMiddleware(state: ApiState): Handler {
           subject = typeof body.personId === 'string' ? store.getPerson(body.personId) ?? null : null
           if (!subject) throw new UserError('That person is no longer saved; add them again to cast for them')
         }
-        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, starred }, isSpreadId(body.spread) ? body.spread : undefined, subject))
+        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, shape, starred }, isSpreadId(body.spread) ? body.spread : undefined, subject))
       }).catch(fail)
       return undefined
     }
@@ -417,7 +428,7 @@ export function createMiddleware(state: ApiState): Handler {
           if (Object.keys(patch).length === 0) throw new UserError('Nothing to change')
           if (patch.memory !== undefined) store.setCastingMemory(id, patch.memory)
           if (patch.memoryExcluded !== undefined) store.setMemoryExcluded(id, patch.memoryExcluded)
-          if (patch.style !== undefined || patch.note !== undefined) store.setFrame(id, patch)
+          if (patch.style !== undefined || patch.note !== undefined || patch.shape !== undefined) store.setFrame(id, patch)
           if (patch.starred !== undefined) store.setStarred(id, patch.starred)
           json(res, 200, store.getCasting(id))
         }).catch(fail)
