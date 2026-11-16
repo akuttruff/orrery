@@ -309,13 +309,13 @@ export function scaleFor(width: number, height: number, best = 2, maxPixels = 16
 
 /** App.css's tokens, the dark theme. */
 const C = {
-  bg: '#1B1D1A',
-  raised: '#23261F',
-  paper: '#EDE8DC',
-  dim: '#B9B4A6',
-  line: '#34372E',
-  moss: '#8FA382',
-  gold: '#D9B86A',
+  bg: '#2B2B2B',
+  raised: '#3A3A3A',
+  paper: '#FFFFFF',
+  dim: '#D4D4D4',
+  line: '#575757',
+  moss: '#B0CADB',
+  gold: '#6CB2E2',
 }
 const FAMILY = '-apple-system, "SF Pro Text", system-ui, sans-serif'
 const WIDTH = 1080
