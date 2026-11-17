@@ -46,6 +46,7 @@ export const api = {
   startReading: (id: string, again = false) => request<Casting>(`/api/castings/${encodeURIComponent(id)}/reading${again ? '?again=1' : ''}`, { method: 'POST' }),
   stopReading: (id: string) => request<{ stopped: boolean }>(`/api/castings/${encodeURIComponent(id)}/reading`, { method: 'DELETE' }),
   remove: (id: string) => request<{ ok: boolean }>(`/api/castings/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  removeMany: (ids: string[]) => request<{ removed: number }>('/api/castings/remove', jsonInit('POST', { ids })),
   eventsUrl: (id: string) => `/api/castings/${encodeURIComponent(id)}/events`,
 
   // Questions asked under a reading, answered on the server the same way.

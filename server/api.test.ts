@@ -136,6 +136,16 @@ describe('castings', () => {
     expect(list[0]!.questions).toBe(0)
   })
 
+  it('removes many castings at once, and only those', async () => {
+    const [a, b, c] = await Promise.all([1, 2, 3].map(async () => (await (await post(`${ctx.base}/api/castings`, { kind: 'natal', note: String(Math.random()) })).json()) as Casting))
+    const res = await post(`${ctx.base}/api/castings/remove`, { ids: [a!.id, b!.id, 'gone', a!.id] })
+    expect(await res.json()).toEqual({ removed: 2 })
+    const list = await (await fetch(`${ctx.base}/api/castings`)).json() as CastingSummary[]
+    expect(list.map((x) => x.id)).toEqual([c!.id])
+    expect((await post(`${ctx.base}/api/castings/remove`, { ids: [] })).status).toBe(400)
+    expect((await post(`${ctx.base}/api/castings/remove`, { ids: [1] })).status).toBe(400)
+  })
+
   it('shares one cast between two taps alike, but not between two questions asked of the cards at once', async () => {
     const deal = ctx.tarot.getMockImplementation()!
     ctx.tarot.mockImplementation(async (name, args) => { await tick(); return deal(name, args) })

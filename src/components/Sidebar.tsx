@@ -1,5 +1,5 @@
 import { useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { PanelLeftClose, Plus, Settings as SettingsIcon, Star, Trash2 } from 'lucide-react'
+import { ListChecks, PanelLeftClose, Plus, Settings as SettingsIcon, Star, Trash2 } from 'lucide-react'
 import { KIND_LABEL, KIND_ORDER, byPlace } from '../lib/kinds.ts'
 import { formatWhen } from '../lib/when.ts'
 import type { CastingSummary, Kind } from '../types.ts'
@@ -60,6 +60,8 @@ interface SidebarProps {
   onStar: (id: string, starred: boolean) => void
   /** Delete a casting, with its reading and questions. */
   onRemove: (id: string) => void
+  /** Open the list for deleting many castings at once. */
+  onCleanup: () => void
   onSettings: () => void
   onCollapse: () => void
   /** Above the sections: the memory choice the + buttons cast with. */
@@ -72,13 +74,16 @@ interface SidebarProps {
  * its head to cast another of it; within a section the most recently
  * changed casting is first. Settings waits at the foot.
  */
-export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onStar, onRemove, onSettings, onCollapse, children }: SidebarProps) {
+export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onStar, onRemove, onCleanup, onSettings, onCollapse, children }: SidebarProps) {
   const { width, onPointerDown, onKeyDown, reset } = useSidebarWidth()
   return (
     <nav className="sidebar" aria-label="Castings" style={{ flexBasis: width, width }}>
       <div className="side-head">
         <h2 className="side-title">Castings</h2>
-        <button type="button" className="icon-btn small" aria-label="Hide the castings" onClick={onCollapse}><PanelLeftClose size={17} aria-hidden="true" /></button>
+        <span className="side-head-actions">
+          <button type="button" className="icon-btn small" aria-label="Clear out castings" title="Select castings to delete" disabled={castings.length === 0} onClick={onCleanup}><ListChecks size={17} aria-hidden="true" /></button>
+          <button type="button" className="icon-btn small" aria-label="Hide the castings" onClick={onCollapse}><PanelLeftClose size={17} aria-hidden="true" /></button>
+        </span>
       </div>
       {children}
       <div className="side-list">

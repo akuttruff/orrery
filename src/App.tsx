@@ -5,6 +5,7 @@ import Recent from './components/Recent'
 import Settings from './components/Settings'
 import Sidebar from './components/Sidebar'
 import MemoriesSheet from './components/MemoriesSheet'
+import CleanupSheet from './components/CleanupSheet'
 import CastSheet from './components/CastSheet'
 import Unreachable from './components/Unreachable.tsx'
 import useMediaQuery, { WIDE } from './hooks/useMediaQuery.ts'
@@ -60,6 +61,7 @@ export default function App() {
   const [current, setCurrent] = useState<Casting | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [memoriesOpen, setMemoriesOpen] = useState(false)
+  const [cleanupOpen, setCleanupOpen] = useState(false)
   const [busy, setBusy] = useState<Kind | null>(null)
   const [error, setError] = useState<string | null>(null)
   // A wide window lists the castings beside the one open; the list can be tucked away, and stays so across visits.
@@ -238,6 +240,11 @@ export default function App() {
     if (current?.id === id) home(); else refreshRecent()
   }
 
+  /** From the clear-out list: many go at once, and the view with them when the open one was among them. */
+  const removedMany = (ids: string[]): void => {
+    if (current && ids.includes(current.id)) home(); else refreshRecent()
+  }
+
   const star = async (id: string, starred: boolean): Promise<void> => {
     try {
       const c = await api.updateCasting(id, { starred })
@@ -276,6 +283,7 @@ export default function App() {
           onCast={setPending}
           onStar={(id, starred) => void star(id, starred)}
           onRemove={(id) => void removeOne(id)}
+          onCleanup={() => setCleanupOpen(true)}
           onSettings={() => setSettingsOpen(true)}
           onCollapse={() => setSidebar(false)}
         />
@@ -344,7 +352,7 @@ export default function App() {
                 )
               })}
             </div>
-            {!sidebar && <Recent castings={recent.filter((c) => c.readingState !== 'writing')} onOpen={(id) => void open(id)} />}
+            {!sidebar && <Recent castings={recent.filter((c) => c.readingState !== 'writing')} onOpen={(id) => void open(id)} onCleanup={() => setCleanupOpen(true)} />}
           </>
         )}
       </main>
@@ -389,6 +397,7 @@ export default function App() {
         />
       )}
       {memoriesOpen && <MemoriesSheet onClose={() => setMemoriesOpen(false)} />}
+      {cleanupOpen && <CleanupSheet castings={recent} onRemoved={removedMany} onClose={() => setCleanupOpen(false)} />}
     </div>
   )
 }

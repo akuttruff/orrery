@@ -416,6 +416,21 @@ export class Store {
     return this.db.prepare('DELETE FROM castings WHERE id = ?').run(id).changes > 0
   }
 
+  /** Many castings at once, with their questions, all or none; how many there were. */
+  removeCastings(ids: string[]): number {
+    const del = this.db.prepare('DELETE FROM castings WHERE id = ?')
+    this.db.exec('BEGIN')
+    try {
+      let n = 0
+      for (const id of new Set(ids)) n += Number(del.run(id).changes)
+      this.db.exec('COMMIT')
+      return n
+    } catch (e) {
+      this.db.exec('ROLLBACK')
+      throw e
+    }
+  }
+
   // --- follow-up questions under a reading ------------------------------
 
   listFollowUps(castingId: string): FollowUp[] {

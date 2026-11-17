@@ -10,6 +10,8 @@ export const SHOWN_PER_KIND = 4
 interface RecentProps {
   castings: CastingSummary[]
   onOpen: (id: string) => void
+  /** Open the list for deleting many castings at once. */
+  onCleanup?: () => void
 }
 
 /**
@@ -17,7 +19,7 @@ interface RecentProps {
  * changed first within each group. A casting's time is its last change: the
  * reading written, a question asked or answered. Long groups fold to a few.
  */
-export default function Recent({ castings, onOpen }: RecentProps) {
+export default function Recent({ castings, onOpen, onCleanup }: RecentProps) {
   const [expanded, setExpanded] = useState<Set<Kind>>(() => new Set())
   const groups = KIND_ORDER
     .map((kind) => ({ kind, items: castings.filter((c) => c.kind === kind).sort(byPlace) }))
@@ -30,7 +32,10 @@ export default function Recent({ castings, onOpen }: RecentProps) {
   })
   return (
     <section className="recent" aria-label="Recent castings">
-      <h3 className="section-title">Recent</h3>
+      <div className="recent-head">
+        <h3 className="section-title">Recent</h3>
+        {onCleanup && <button type="button" className="link" onClick={onCleanup}>Clear out</button>}
+      </div>
       {groups.map(({ kind, items }) => {
         const open = expanded.has(kind)
         const shown = open ? items : items.slice(0, SHOWN_PER_KIND)

@@ -414,6 +414,19 @@ export function createMiddleware(state: ApiState): Handler {
       }).catch(fail)
       return undefined
     }
+    // Many at once, from the clear-out list. Before the one-casting routes, which would take 'remove' for an id.
+    if (url === '/api/castings/remove' && method === 'POST') {
+      void readBody(req).then((body) => {
+        const ids = body.ids
+        if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id) => typeof id === 'string')) throw new UserError('ids must be a list of casting ids')
+        for (const id of ids as string[]) {
+          readings.stop(id)
+          for (const f of store.listFollowUps(id)) readings.stop(f.id)
+        }
+        json(res, 200, { removed: store.removeCastings(ids as string[]) })
+      }).catch(fail)
+      return undefined
+    }
     const m = /^\/api\/castings\/([^/]+)(?:\/(reading|events|followups|card))?$/.exec(url)
     if (m) {
       const id = decodeURIComponent(m[1]!)
