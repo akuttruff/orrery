@@ -1,8 +1,10 @@
 import { useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { ListChecks, PanelLeftClose, Plus, Settings as SettingsIcon, Star, Trash2 } from 'lucide-react'
+import { PanelLeftClose, Plus, Settings as SettingsIcon, Star, Trash2 } from 'lucide-react'
 import { KIND_LABEL, KIND_ORDER, byPlace } from '../lib/kinds.ts'
 import { formatWhen } from '../lib/when.ts'
 import type { CastingSummary, Kind } from '../types.ts'
+import { GroupBox, SelectBar, SelectRow, SelectToggle } from './SelectMode.tsx'
+import useSelection from '../hooks/useSelection.ts'
 
 /** How wide the sidebar may be dragged, and where it starts. */
 export const SIDEBAR_MIN = 220
@@ -60,8 +62,8 @@ interface SidebarProps {
   onStar: (id: string, starred: boolean) => void
   /** Delete a casting, with its reading and questions. */
   onRemove: (id: string) => void
-  /** Open the list for deleting many castings at once. */
-  onCleanup: () => void
+  /** Select mode: delete the chosen castings in one go (with an Undo, the caller's). */
+  onDeleteMany: (ids: string[]) => Promise<void>
   onSettings: () => void
   onCollapse: () => void
   /** Above the sections: the memory choice the + buttons cast with. */
@@ -74,30 +76,32 @@ interface SidebarProps {
  * its head to cast another of it; within a section the most recently
  * changed casting is first. Settings waits at the foot.
  */
-export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onStar, onRemove, onCleanup, onSettings, onCollapse, children }: SidebarProps) {
+export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onStar, onRemove, onDeleteMany, onSettings, onCollapse, children }: SidebarProps) {
   const { width, onPointerDown, onKeyDown, reset } = useSidebarWidth()
+  const selection = useSelection(castings)
   return (
     <nav className="sidebar" aria-label="Castings" style={{ flexBasis: width, width }}>
       <div className="side-head">
         <h2 className="side-title">Castings</h2>
         <span className="side-head-actions">
-          <button type="button" className="icon-btn small" aria-label="Clear out castings" title="Select castings to delete" disabled={castings.length === 0} onClick={onCleanup}><ListChecks size={17} aria-hidden="true" /></button>
+          {(castings.length > 0 || selection.selecting) && <SelectToggle selection={selection} />}
           <button type="button" className="icon-btn small" aria-label="Hide the castings" onClick={onCollapse}><PanelLeftClose size={17} aria-hidden="true" /></button>
         </span>
       </div>
-      {children}
+      {selection.selecting && <SelectBar selection={selection} onDelete={onDeleteMany} />}
+      {!selection.selecting && children}
       <div className="side-list">
         {KIND_ORDER.map((kind) => {
           const items = castings.filter((c) => c.kind === kind).sort(byPlace)
           return (
             <section key={kind} className="side-section" aria-label={KIND_LABEL[kind]}>
               <div className="side-section-head">
-                <span>{KIND_LABEL[kind]}</span>
-                <button type="button" className="side-add" aria-label={`Cast ${KIND_LABEL[kind].toLowerCase()}`} title={items.length ? 'Cast another' : 'Cast'} disabled={busy !== null} onClick={() => onCast(kind)}>
+                {selection.selecting ? (items.length > 0 ? <GroupBox selection={selection} label={KIND_LABEL[kind]} items={items} /> : <span>{KIND_LABEL[kind]}</span>) : <span>{KIND_LABEL[kind]}</span>}
+                {!selection.selecting && <button type="button" className="side-add" aria-label={`Cast ${KIND_LABEL[kind].toLowerCase()}`} title={items.length ? 'Cast another' : 'Cast'} disabled={busy !== null} onClick={() => onCast(kind)}>
                   <Plus size={15} aria-hidden="true" />
-                </button>
+                </button>}
               </div>
-              {items.map((c) => (
+              {items.map((c) => selection.selecting ? <SelectRow key={c.id} casting={c} selection={selection} /> : (
                 <SideRow
                   key={c.id}
                   casting={c}
@@ -111,7 +115,9 @@ export default function Sidebar({ castings, activeId, busy, onOpen, onCast, onSt
           )
         })}
       </div>
-      <button type="button" className="side-settings" onClick={onSettings}><SettingsIcon size={16} aria-hidden="true" /> Settings</button>
+      {selection.selecting
+        ? <p className="select-hint">Tap castings to select them, or a kind&apos;s box for all of it.</p>
+        : <button type="button" className="side-settings" onClick={onSettings}><SettingsIcon size={16} aria-hidden="true" /> Settings</button>}
       <div
         className="side-resize"
         role="separator"

@@ -1,7 +1,11 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
+
+type Row = Record<string, SQLInputValue>
+/** A deleted casting's rows, with its questions', kept for an Undo. */
+export interface KeptCasting { casting: Row; followUps: Row[] }
 import type { Brief, Casting, CastingSummary, Config, FollowUp, Kind, Profile, ReadingState, Remembered, ReplyStats, Step, TarotCard, ToolUse, Written, Person } from '../src/types.ts'
 import { NOT_WRITTEN } from '../src/types.ts'
 import { shapeOf, type ReadingShape } from '../src/lib/shape.ts'
@@ -416,15 +420,52 @@ export class Store {
     return this.db.prepare('DELETE FROM castings WHERE id = ?').run(id).changes > 0
   }
 
-  /** Many castings at once, with their questions, all or none; how many there were. */
-  removeCastings(ids: string[]): number {
+  /**
+   * Many castings at once, with their questions, all or none: deleted, and
+   * handed back as their rows so an Undo can put them back as they were.
+   * Ids that are not there are skipped.
+   */
+  takeCastings(ids: string[]): KeptCasting[] {
+    const getC = this.db.prepare('SELECT * FROM castings WHERE id = ?')
+    const getF = this.db.prepare('SELECT * FROM follow_ups WHERE casting_id = ?')
     const del = this.db.prepare('DELETE FROM castings WHERE id = ?')
+    return this.inTransaction(() => {
+      const kept: KeptCasting[] = []
+      for (const id of new Set(ids)) {
+        const casting = getC.get(id) as Row | undefined
+        if (!casting) continue
+        kept.push({ casting, followUps: getF.all(id) as Row[] })
+        del.run(id)
+      }
+      return kept
+    })
+  }
+
+  /** Castings taken by takeCastings, back as they were; one whose id is in use again is skipped. How many went back. */
+  putBackCastings(kept: KeptCasting[]): number {
+    const insert = (table: string, row: Row): void => {
+      const cols = Object.keys(row)
+      this.db.prepare(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`).run(...cols.map((c) => row[c]!))
+    }
+    const exists = this.db.prepare('SELECT 1 FROM castings WHERE id = ?')
+    return this.inTransaction(() => {
+      let n = 0
+      for (const k of kept) {
+        if (exists.get(k.casting.id as string)) continue
+        insert('castings', k.casting)
+        for (const f of k.followUps) insert('follow_ups', f)
+        n++
+      }
+      return n
+    })
+  }
+
+  private inTransaction<T>(work: () => T): T {
     this.db.exec('BEGIN')
     try {
-      let n = 0
-      for (const id of new Set(ids)) n += Number(del.run(id).changes)
+      const out = work()
       this.db.exec('COMMIT')
-      return n
+      return out
     } catch (e) {
       this.db.exec('ROLLBACK')
       throw e

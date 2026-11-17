@@ -42,10 +42,10 @@ function serve(write: (req: WriteRequest, onDelta: (t: string) => void, opts?: W
   // The memory pool lives in the scratch dir too, never in ~/.lm-memory.
   const state: ApiState = createApiState({ store, call, tarot, readings, dir, memoryDb: path.join(dir, 'memory.sqlite'), write: model, deckDir: path.join(dir, 'deck') })
   const server = http.createServer((req, res) => createMiddleware(state)(req, res, () => { res.writeHead(404); res.end() }))
-  return new Promise<{ base: string; call: typeof call; tarot: typeof tarot; close: () => void }>((resolve) => {
+  return new Promise<{ base: string; call: typeof call; tarot: typeof tarot; store: Store; close: () => void }>((resolve) => {
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address() as { port: number }
-      resolve({ base: `http://127.0.0.1:${port}`, call, tarot, close: () => { server.close(); store.close(); fs.rmSync(dir, { recursive: true, force: true }) } })
+      resolve({ base: `http://127.0.0.1:${port}`, call, tarot, store, close: () => { server.close(); store.close(); fs.rmSync(dir, { recursive: true, force: true }) } })
     })
   })
 }
@@ -136,12 +136,20 @@ describe('castings', () => {
     expect(list[0]!.questions).toBe(0)
   })
 
-  it('removes many castings at once, and only those', async () => {
-    const [a, b, c] = await Promise.all([1, 2, 3].map(async () => (await (await post(`${ctx.base}/api/castings`, { kind: 'natal', note: String(Math.random()) })).json()) as Casting))
+  it('removes many castings at once, and puts them back on Undo with their questions', async () => {
+    const [a, b, c] = await Promise.all([1, 2, 3].map(async (i) => (await (await post(`${ctx.base}/api/castings`, { kind: 'natal', note: `n${i}` })).json()) as Casting))
+    ctx.store.addFollowUp(a!.id, 'Why?')
     const res = await post(`${ctx.base}/api/castings/remove`, { ids: [a!.id, b!.id, 'gone', a!.id] })
-    expect(await res.json()).toEqual({ removed: 2 })
-    const list = await (await fetch(`${ctx.base}/api/castings`)).json() as CastingSummary[]
-    expect(list.map((x) => x.id)).toEqual([c!.id])
+    expect(await res.json()).toEqual({ removed: [a!.id, b!.id] })
+    const ids = async (): Promise<string[]> => ((await (await fetch(`${ctx.base}/api/castings`)).json()) as CastingSummary[]).map((x) => x.id).sort()
+    expect(await ids()).toEqual([c!.id])
+
+    expect(await (await post(`${ctx.base}/api/castings/restore`, { ids: [a!.id, b!.id] })).json()).toEqual({ restored: 2 })
+    expect(await ids()).toEqual([a!.id, b!.id, c!.id].sort())
+    expect(await (await fetch(`${ctx.base}/api/castings/${a!.id}`)).json()).toMatchObject({ id: a!.id, note: 'n1' })
+    expect(ctx.store.listFollowUps(a!.id).map((f) => f.question)).toEqual(['Why?'])
+    // Put back once only.
+    expect((await post(`${ctx.base}/api/castings/restore`, { ids: [a!.id] })).status).toBe(409)
     expect((await post(`${ctx.base}/api/castings/remove`, { ids: [] })).status).toBe(400)
     expect((await post(`${ctx.base}/api/castings/remove`, { ids: [1] })).status).toBe(400)
   })

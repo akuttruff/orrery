@@ -19,7 +19,7 @@ import { NOTE_MAX, isStyleId } from '../src/lib/styles.ts'
 import { isDefaultShape, isShape } from '../src/lib/shape.ts'
 import { Store } from './store.ts'
 import { HealthCheck, UNKNOWN } from './health.ts'
-import type { ServerConfig } from './store.ts'
+import type { KeptCasting, ServerConfig } from './store.ts'
 import { TransitReadings } from './transits.ts'
 import { birthRequest, parseBirth } from './people.ts'
 
@@ -55,8 +55,21 @@ export interface ApiState {
   casting: Map<string, Promise<unknown>>
   /** Castings a card is being dealt for: the deal is awaited before its follow-up exists, so a second tap must see the first. */
   pulling: Set<string>
+  /** Castings deleted from select mode, by id, kept a while for Undo. */
+  deleted: Map<string, { kept: KeptCasting; at: number }>
   /** What `GET /api/health` reports: the process, its data file, the model server and astro-mcp. */
   health: HealthCheck
+}
+
+/** How long, and how many, deleted castings are kept for Undo. */
+const UNDO_MS = 30 * 60_000
+const UNDO_MAX = 300
+
+/** A body's `ids`: a non-empty list of strings. */
+function idsOf(body: Record<string, unknown>): string[] {
+  const ids = body.ids
+  if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id) => typeof id === 'string')) throw new UserError('ids must be a list of casting ids')
+  return ids as string[]
 }
 
 type Handler = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
@@ -167,7 +180,7 @@ export function createApiState(options: ApiOptions = {}): ApiState {
       tarot: async () => (tarotServer && !tarotServer.running ? UNKNOWN : tarot('list_spreads', {})),
     },
   })
-  return { store, call, tarot, deckDir, readings, memories, write, transits, casting, pulling: new Set(), health }
+  return { store, call, tarot, deckDir, readings, memories, write, transits, casting, pulling: new Set(), deleted: new Map(), health }
 }
 
 export function createMiddleware(state: ApiState): Handler {
@@ -414,16 +427,33 @@ export function createMiddleware(state: ApiState): Handler {
       }).catch(fail)
       return undefined
     }
-    // Many at once, from the clear-out list. Before the one-casting routes, which would take 'remove' for an id.
+    // Many at once, from the list's select mode, each kept a while for Undo. Before the one-casting routes, which would take 'remove' for an id.
     if (url === '/api/castings/remove' && method === 'POST') {
       void readBody(req).then((body) => {
-        const ids = body.ids
-        if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id) => typeof id === 'string')) throw new UserError('ids must be a list of casting ids')
-        for (const id of ids as string[]) {
+        const ids = idsOf(body)
+        if (ids.length > UNDO_MAX) throw new UserError(`At most ${UNDO_MAX} castings at once`)
+        for (const id of ids) {
           readings.stop(id)
           for (const f of store.listFollowUps(id)) readings.stop(f.id)
         }
-        json(res, 200, { removed: store.removeCastings(ids as string[]) })
+        const kept = store.takeCastings(ids)
+        const now = Date.now()
+        for (const k of kept) state.deleted.set(k.casting.id as string, { kept: k, at: now })
+        for (const [id, d] of state.deleted) if (now - d.at > UNDO_MS) state.deleted.delete(id)
+        for (const id of [...state.deleted.keys()].slice(0, Math.max(0, state.deleted.size - UNDO_MAX))) state.deleted.delete(id)
+        json(res, 200, { removed: kept.map((k) => k.casting.id) })
+      }).catch(fail)
+      return undefined
+    }
+    if (url === '/api/castings/restore' && method === 'POST') {
+      void readBody(req).then((body) => {
+        const kept = idsOf(body).flatMap((id) => {
+          const d = state.deleted.get(id)
+          state.deleted.delete(id)
+          return d && Date.now() - d.at <= UNDO_MS ? [d.kept] : []
+        })
+        if (kept.length === 0) throw new UserError('Those castings can no longer be put back', 409)
+        json(res, 200, { restored: store.putBackCastings(kept) })
       }).catch(fail)
       return undefined
     }
