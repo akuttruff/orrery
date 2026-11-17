@@ -416,7 +416,7 @@ describe('questions under a reading', () => {
     const askReq = seen[1]!
     expect(askReq.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
     expect(askReq.system).toContain('THE READING YOU WROTE:\nBecause Saturn.')
-    expect(askReq.system).toContain('THE CASTING: October 2026.\nDATA:\n{"tool":"forecast_month"')
+    expect(askReq.system).toContain(`THE CASTING: ${c.title}.\nDATA:\n{"tool":"forecast_month"`)
     expect(askReq.input).toBe('Sam asks: Which day is best for the move?')
 
     // The next question sees the first exchange.
