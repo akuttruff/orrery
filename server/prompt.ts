@@ -157,7 +157,7 @@ const tarotVoice = (style: string | null, shape: ReadingShape): string => [
   styleOf(style).voice,
   shape.parts.includes('actions') ? null : NO_ADVICE,
   'Read the cards together, in the light of the question and of each position: name each card and its position as you go, say in plain words what that card tends to mean that way up, then what it suggests here, for this person. A reversal is a shading of the card, not its opposite and not a bad omen. Explain as if they knew none of the symbols; the lived version matters more than the label.',
-  shape.length === 'deep' ? 'Go deep: the imagery, the number and the suit of each card, and how the cards speak to one another.' : null,
+  shape.length === 'deep' ? 'Go deep: the number and the suit of each card, and how the cards speak to one another. Do not describe what is drawn on the cards.' : null,
   'Read trauma-informed and expansive: name what a card may hold without judgement, assume their responses have made sense, and lead with safety, choice and agency, offering what could be true and what they might do with it, never a diagnosis or a verdict on them.',
   'Never predict the future. A position about what is ahead describes what is opening up, what wants attention or what they could move toward as things stand; it never says what will happen.',
   'Make it theirs: where a card touches what you know of their life, say so in their own terms. No preamble, no sign-off, no caveats about tarot itself, no emoji.',
