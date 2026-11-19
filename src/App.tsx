@@ -5,6 +5,7 @@ import Recent from './components/Recent'
 import Settings from './components/Settings'
 import Sidebar from './components/Sidebar'
 import MemoriesSheet from './components/MemoriesSheet'
+import UndoToast, { type Undo } from './components/UndoToast'
 import CastSheet from './components/CastSheet'
 import Unreachable from './components/Unreachable.tsx'
 import useMediaQuery, { WIDE } from './hooks/useMediaQuery.ts'
@@ -60,6 +61,7 @@ export default function App() {
   const [current, setCurrent] = useState<Casting | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [memoriesOpen, setMemoriesOpen] = useState(false)
+  const [undo, setUndo] = useState<Undo | null>(null)
   const [busy, setBusy] = useState<Kind | null>(null)
   const [error, setError] = useState<string | null>(null)
   // A wide window lists the castings beside the one open; the list can be tucked away, and stays so across visits.
@@ -238,6 +240,22 @@ export default function App() {
     if (current?.id === id) home(); else refreshRecent()
   }
 
+  const closeUndo = useCallback(() => setUndo(null), [])
+
+  /** From select mode: many go at once, and the view with them when the open one was among them; an Undo puts them back. */
+  const removeMany = async (ids: string[]): Promise<void> => {
+    try {
+      const { removed } = await api.removeMany(ids)
+      if (current && removed.includes(current.id)) home(); else refreshRecent()
+      const n = removed.length
+      setUndo({
+        id: Date.now(),
+        text: `${n} ${n === 1 ? 'casting' : 'castings'} deleted`,
+        undo: () => api.restoreMany(removed).then(refreshRecent, (e: Error) => setError(e.message)),
+      })
+    } catch (e) { setError((e as Error).message); throw e }
+  }
+
   const star = async (id: string, starred: boolean): Promise<void> => {
     try {
       const c = await api.updateCasting(id, { starred })
@@ -276,6 +294,7 @@ export default function App() {
           onCast={setPending}
           onStar={(id, starred) => void star(id, starred)}
           onRemove={(id) => void removeOne(id)}
+          onDeleteMany={removeMany}
           onSettings={() => setSettingsOpen(true)}
           onCollapse={() => setSidebar(false)}
         />
@@ -344,7 +363,7 @@ export default function App() {
                 )
               })}
             </div>
-            {!sidebar && <Recent castings={recent.filter((c) => c.readingState !== 'writing')} onOpen={(id) => void open(id)} />}
+            {!sidebar && <Recent castings={recent.filter((c) => c.readingState !== 'writing')} onOpen={(id) => void open(id)} onDeleteMany={removeMany} />}
           </>
         )}
       </main>
@@ -389,6 +408,7 @@ export default function App() {
         />
       )}
       {memoriesOpen && <MemoriesSheet onClose={() => setMemoriesOpen(false)} />}
+      {undo && <UndoToast key={undo.id} undo={undo} onDone={closeUndo} />}
     </div>
   )
 }
