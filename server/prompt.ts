@@ -100,6 +100,13 @@ function unitSentence(shape: ReadingShape, o: { unit: 'contact' | 'placement'; n
     : `Give every ${o.unit} its own ### section, named with ${o.named}, with these labelled parts: ${o.parts.join('; ')}. ${EXPLAIN}`
 }
 
+/**
+ * How every astrology reading and answer is to be given, as the tarot ones
+ * are: trauma-informed, expansive, and never a prediction.
+ */
+const ASTRO_CARE = 'Read trauma-informed and expansive: name what a contact or placement may stir without judgement, assume their responses have made sense, and lead with safety, choice and agency, offering what could be true and what they might do with it, never a diagnosis or a verdict on them. ' +
+  'Never predict events or outcomes. A transit describes what may come up, what wants attention or what could help, as things stand; it never says what will happen, and its timing is when something may be felt most, not a deadline or a warning.'
+
 export const voice = (style: string | null, kind: Casting['kind'] = 'today', shape: ReadingShape = DEFAULT_SHAPE): string => {
   if (isTarotKind(kind)) return tarotVoice(style, shape)
   if (kind === 'natal') return natalVoice(style, shape)
@@ -121,6 +128,7 @@ export const voice = (style: string | null, kind: Casting['kind'] = 'today', sha
     }),
     shape.length === 'deep' ? DEEP_CHART : null,
     shape.length === 'glance' ? null : HOUSES,
+    ASTRO_CARE,
     'Make it theirs: where a contact touches what you know of their life, say so in their own terms. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
     'Use only the transits, positions and dates in the data. Never add a transit the data does not list, and never work out positions yourself.',
     'Write a retrograde planet as "Saturn ℞" the first time it is named, only when the data says it is retrograde.',
@@ -145,6 +153,7 @@ const natalVoice = (style: string | null, shape: ReadingShape): string => [
   }),
   shape.length === 'deep' ? DEEP_CHART : null,
   shape.length === 'glance' ? null : HOUSES,
+  ASTRO_CARE,
   'Make it theirs: where a placement touches what you know of their life, say so in their own terms. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
   'Use only the positions, houses, aspects and patterns in the data, and never work out positions yourself.',
   'Write a retrograde planet as "Saturn ℞" the first time it is named, only when the data says it is retrograde.',
@@ -459,6 +468,7 @@ const answerVoice = (shape: ReadingShape): string => [
   'You are the same astrologer, now answering a question the person asks about a reading you wrote for them.',
   'Answer the question itself, warm, concrete and plain, addressed as "you", in Markdown, as long as the question needs. No preamble, no sign-off, no caveats about astrology itself, no emoji.',
   answerShape(shape),
+  ASTRO_CARE,
   'Draw on the chart data and the reading below. For what they do not cover, use the astrology tools: another day or a date range (create_transit_chart, list_upcoming_transits, forecast_week, forecast_month, forecast_year), when an aspect is exact (verify_claim), a solar return, a progressed chart, Moon void periods, lunations and eclipses, planetary hours, or a horary question. The person\'s birth date, time and place are given below; pass them as a tool asks.',
   'Never state a transit or position that neither the data nor a tool returned, and never work out positions yourself. When you looked something up, say so in a few words.',
   'The tarot tools are there too: if they ask for a card, deal one with draw_cards and read it against this reading.',

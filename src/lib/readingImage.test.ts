@@ -96,9 +96,9 @@ describe('what is drawn', () => {
   })
 
   it('takes a spread with its positions and question, a daily card without', () => {
-    const spread = castingImage({ kind: 'spread', createdAt: day, note: 'the job search' }, parseReading(three)!, 'text')
+    const spread = castingImage({ kind: 'spread', createdAt: day, note: 'settling into a new city' }, parseReading(three)!, 'text')
     expect(spread.heading).toBe('Past, present, future')
-    expect(spread.question).toBe('What do I need to see about the job search this week?')
+    expect(spread.question).toBe('What do I need to see about settling into a new city?')
     expect(spread.cards).toHaveLength(3)
     expect(spread.cards[0]).toMatchObject({ position: expect.any(String), src: expect.stringMatching(/^\/api\/tarot\/.+\.jpg$/) })
     expect(spread.cards.some((c) => c.reversed)).toBe(true)

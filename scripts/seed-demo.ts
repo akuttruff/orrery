@@ -64,25 +64,25 @@ write(month.id, 'Write the forecast for October 2026.', `### The backdrop
 
 ### Lunations
 
-The **new Moon on the 10th** falls in your first house: a fresh start you can feel in the body. The **full Moon on the 26th** lights the seventh: something between you and a partner comes to a head and clears.`, 7.8, 1240)
+The **new Moon on the 10th** falls in your first house: a fresh start you can feel in the body. The **full Moon on the 26th** lights the seventh: something between you and a partner asks for attention; a good time to say what you need.`, 7.8, 1240)
 
-const week = store.addCasting({ kind: 'week', period: '2026-10-18', title: 'Week of Oct 18', result: withScan('week', fixture('forecast-week-oct18'), fixture('scan-week')), style: 'coach', note: 'the job search' })
+const week = store.addCasting({ kind: 'week', period: '2026-10-18', title: 'Week of Oct 18', result: withScan('week', fixture('forecast-week-oct18'), fixture('scan-week')), style: 'coach', note: 'finishing the album' })
 write(week.id, 'Write the forecast for the week of Oct 18, Sunday to Saturday.', `### Sunday
 
-**Mercury trine your Moon** in the small hours and **Mercury opposite your Venus** by breakfast: say the kind thing you have been sitting on, and expect someone to disagree pleasantly. Good for a cover letter in your own voice.
+**Mercury trine your Moon** in the small hours and **Mercury opposite your Venus** by breakfast: say the kind thing you have been sitting on, and leave room for someone to see it differently. Good for writing liner notes in your own voice.
 
 ### Monday to Wednesday
 
-The **Sun trine your Sun** is still warm on Monday: send the application you have been polishing. By Wednesday the Moon is in Aquarius and the inbox is quieter than it feels.
+The **Sun trine your Sun** is still warm on Monday: a good day to play the rough mixes for someone you trust. By Wednesday the Moon is in Aquarius, and a quieter day in the studio may suit you.
 
 ### Thursday
 
-**Mars sextile your Ascendant**, exact at 07:48. This is the day to ask for the conversation, the referral, the second interview. People find you easy to help.
+**Mars sextile your Ascendant**, exact at 07:48. If you want help with the last two songs, this is an easy day to ask for it; you come across as warm and clear.
 
 ### The backdrop
 
-**Saturn on your Mars** separates slowly all week, and **Uranus on your Mercury** keeps the plans fluid. Mercury stations retrograde on Saturday: anything signed after Friday will be revisited.`, 5.4, 1090)
-store.addFollowUp(week.id, 'Which day is best to follow up with the recruiter?')
+**Saturn on your Mars** separates slowly all week, and **Uranus on your Mercury** keeps the plans fluid. Mercury stations retrograde on Saturday: give anything you sign after Friday a second read.`, 5.4, 1090)
+store.addFollowUp(week.id, 'Where could I make room for rest this week?')
 
 // A busier day, fourteen contacts on the wheel, listed under the Oct 13 one.
 const busy = store.addCasting({ kind: 'today', period: '2026-11-07', title: 'Today · Nov 7', result: fixture('transit-chart-nov7') })
@@ -144,12 +144,12 @@ store.setTransitReadings(today.id, {
   'Mercury|Trine|Chiron': 'Talking about the old wound makes it a skill.',
   'Mercury|Sextile|Neptune': 'Daydreams with a thread of plan in them.',
 })
-const q = store.addFollowUp(today.id, 'Is Thursday any good for the hard conversation?')
+const q = store.addFollowUp(today.id, 'How can I look after myself through a day like this?')
 store.beginAnswer(q.id)
-store.finishAnswer(q.id, `Thursday is better than today. By then Mercury has moved off your Pluto and is trining your Midheaven, so the conversation lands as clear rather than loaded, and **Mars sextile your Ascendant** on the 22nd makes you easy to hear. Avoid the afternoon of the 25th, when Mars squares your Pluto.
+store.finishAnswer(q.id, `Go gently with the heavy parts. **Mercury on your Pluto** can make every message feel loaded, so it is fine to draft and not send, or to save the deep conversation for a day that feels steadier. **Saturn on your Mars** is asking you to ration energy: pick one thing that matters and let the rest be small.
 
-If it can wait until the morning of the 22nd, do that.`, 'done', null, {
-  trail: [thought('The question is about timing a difficult conversation. Mercury conjunct Pluto today is the loaded one; the next few days ease it. I should check the 22nd with a transit chart.', 3.6), { kind: 'tool', name: 'create_transit_chart', ok: true, plugin: 'mcp/astrology-v2', args: { date_time: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA', transit_date_time: '2026-10-22 12:00' }, output: '{"chart_type":"transit","date_time":"2026-10-22 12:00","aspects":[{"from_object":"Mars","to_object":"Asc","type":"Sextile","orb":0.11}]}' }],
+The Moon in your second house points toward comfort you can touch: a proper meal, a walk, an early night. And if you want an easier day for reaching out, **Mars sextile your Ascendant** on the 22nd is a warm one.`, 'done', null, {
+  trail: [thought('The question is about self-care on a heavy day. Mercury conjunct Pluto and Saturn on Mars are the weight; the Moon in the second house points to comfort. An easier day for reaching out would help; I should check the 22nd with a transit chart.', 3.6), { kind: 'tool', name: 'create_transit_chart', ok: true, plugin: 'mcp/astrology-v2', args: { date_time: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA', transit_date_time: '2026-10-22 12:00' }, output: '{"chart_type":"transit","date_time":"2026-10-22 12:00","aspects":[{"from_object":"Mars","to_object":"Asc","type":"Sextile","orb":0.11}]}' }],
   stats: stats(310),
 })
 
@@ -166,36 +166,36 @@ const moon = store.addCasting({ kind: 'moon', period: '2026-10-15', title: 'Moon
   lunations: { events: [{ event: 'full moon', exact: '2026-10-26 00:12', position: "2°46' Taurus", natal_house: 8, contacts: ['opposition natal Pluto (2.6°)'] }] },
 }) })
 void moon
-// A three-card spread on the job search, and a card for the day, dealt by tarot-mcp (the fixtures are seeded draws).
-const spread = store.addCasting({ kind: 'spread', period: '2026-10-14', title: 'Past, present, future · Oct 14', result: fixture('tarot-three'), note: 'the job search' })
+// A three-card spread on settling into a new city, and a card for the day, dealt by tarot-mcp (the fixtures are seeded draws).
+const spread = store.addCasting({ kind: 'spread', period: '2026-10-14', title: 'Past, present, future · Oct 14', result: fixture('tarot-three'), note: 'settling into a new city' })
 write(spread.id, 'Write the reading for this spread.', `### Past · Six of Wands
 
-You arrive at this search **having already won something**: the Six of Wands is recognition, the ride through the crowd. The last role ended with your name known for the right reasons, and that is the ground you stand on now, even on the days it feels like starting from nothing.
+You come to this move **having already built something**: the Six of Wands is recognition, the ride through the crowd. In the place you left, people knew you and valued you, and that is still yours, even on the days the new city feels like starting from nothing.
 
 ### Present · Queen of Swords, reversed
 
-The present is the Queen of Swords turned on her head: **clarity gone cold**. Upright she sees through everything and says so; reversed, the sharpness has turned inward, and the honesty that serves you in an interview is being spent on yourself at two in the morning. The card does not say you are wrong about the market. It says the judge has been sitting too long.
+The present is the Queen of Swords reversed: **clarity hardened into armour**. Upright she sees clearly and speaks plainly; reversed, that sharpness may be keeping new people at a distance, often for good reasons, after a lot of change at once. You get to choose when, and with whom, to soften.
 
 ### Future · The Chariot, reversed
 
-The Chariot reversed is drive without steering: two horses pulling two ways. Read with the first two cards, it is a warning about the next few weeks, not a verdict: applications sent in every direction will stall. **Pick the direction first, then press.** The momentum is yours once it has somewhere to go.
+The Chariot reversed is energy pulling two ways: the old life and the new one, both asking for you. In this position it describes what is opening up, not what will happen: a chance to pause and **decide what you actually want this city to be for you**. Momentum tends to come once it has somewhere to go.
 
-**One line to carry:** you have already been seen; decide where to point the horses before you push.`, 5.8, 640)
+**One line to carry:** you have been known before; you can let yourself be known again, at your own pace.`, 5.8, 640)
 
 const dayCard = store.addCasting({ kind: 'card', period: '2026-10-14', title: 'Card · Oct 14', result: fixture('tarot-card') })
 write(dayCard.id, 'Write the card for the day.', `### Five of Pentacles, reversed
 
-The day's card is the Five of Pentacles turned upright again: **coming in from the cold**. Upright, two figures pass a lit window in the snow without going in; reversed, the door opens. Whatever has felt short this week, money, company, sleep, the card says the hard stretch is ending and that the help on offer is real.
+The day's card is the Five of Pentacles reversed: **coming in from the cold**. Whatever has felt short this week, money, company, sleep, the card suggests the hardest stretch may be easing, and that asking for what you need is allowed.
 
-What it asks of you today is small: say yes to one thing you would normally wave off. The window has been lit the whole time.
+What it invites today is small: if help is offered, you could let yourself say yes to one thing you would normally wave off.
 
-**One line to carry:** the help is nearer than the cold makes it look.`, 3.1, 260)
+**One line to carry:** you are allowed to come in where it is warm.`, 3.1, 260)
 
 const year = store.addCasting({ kind: 'year', period: '2026-10-14', title: 'Year from Oct 14', result: fixture('forecast-year') })
 void year
 
 const memories = new Memories(memoryPath(dir))
 memories.remember('Works nights, so mornings are slow and evenings are for calls.')
-memories.remember('Job hunting this autumn; a second interview is pending.')
-memories.remember('Thinking about moving to Lisbon next spring.')
+memories.remember('Finishing a first album this autumn; mixing on weekends.')
+memories.remember('Moved to Lisbon this summer.')
 console.log(`seeded ${dir}`)

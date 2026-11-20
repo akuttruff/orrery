@@ -4,7 +4,8 @@
     "name": "Past, present, future",
     "description": "Three cards in a row: where this came from, where it stands, where it is heading."
   },
-  "question": "What do I need to see about the job search this week?",
+  "guidance": "Read these cards trauma-informed and expansive. Name what a card may hold without judgement, assume the person's responses have made sense, and lead with safety, choice and agency: offer what could be true and what they might do with it, never a diagnosis or a verdict on them. Do not predict the future. A position about what is ahead describes what is opening up, what wants attention or what the person could move toward as things stand; it never says what will happen. A reversal is a shading of the card, not its opposite and not a bad omen. Stay with the question asked and the person's own words.",
+  "question": "What do I need to see about settling into a new city?",
   "drawnAt": "2026-10-22T05:59:23.818Z",
   "seed": 4242,
   "cards": [
@@ -28,7 +29,7 @@
         "confidence",
         "good news"
       ],
-      "meaning": "A win, and others see it. Accept the recognition; it was earned.",
+      "meaning": "A win, and others see it. Let yourself receive the recognition.",
       "image": "tarot://card/wands-06"
     },
     {
@@ -46,19 +47,19 @@
       },
       "reversed": true,
       "keywords": [
-        "coldness",
+        "guardedness",
         "bitterness",
-        "cruelty",
-        "isolation"
+        "coldness",
+        "old hurt"
       ],
-      "meaning": "Clarity gone cold, or a hurt turned into armour. Let something in.",
+      "meaning": "Clarity hardened into armour, often for good reasons. You can choose when, and with whom, to soften.",
       "image": "tarot://card/swords-13"
     },
     {
       "position": {
         "index": 3,
         "name": "Future",
-        "meaning": "Where this is heading if nothing changes."
+        "meaning": "What is opening up, as things stand: what wants attention next, not what will happen."
       },
       "card": {
         "id": "major-07",
@@ -69,12 +70,12 @@
       },
       "reversed": true,
       "keywords": [
-        "lack of direction",
-        "aggression",
-        "being pulled apart",
-        "a stalled effort"
+        "pulled two ways",
+        "stalled momentum",
+        "regrouping",
+        "finding direction"
       ],
-      "meaning": "Drive without steering, or the two horses going their own ways. Decide where you are actually going before pressing harder.",
+      "meaning": "Your energy may be pulling in different directions, or momentum has stalled. Pausing to decide where you actually want to go is a strength, not a setback.",
       "image": "tarot://card/major-07"
     }
   ],
