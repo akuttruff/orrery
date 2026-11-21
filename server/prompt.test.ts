@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { followUpRequest, memoryBlock, readingRequest, trimmedData } from './prompt.ts'
+import { OPEN_RULES, followUpRequest, memoryBlock, readingRequest, trimmedData } from './prompt.ts'
 import transit from '../src/test/fixtures/transit-chart.json?raw'
 import week from '../src/test/fixtures/forecast-week.json?raw'
 import { withScan } from './cast.ts'
@@ -322,5 +322,25 @@ describe('the shape of a reading', () => {
     expect(shaped({ thinking: 'high' }).reasoning).toBe('high')
     const c = casting({ reading: 'R', readingState: 'done', shape: { ...DEFAULT_SHAPE, thinking: 'off' } })
     expect(followUpRequest(c, [], 'why?', sam, day).reasoning).toBe('off')
+  })
+})
+
+describe('an open session', () => {
+  const open = casting({ kind: 'open', period: '2026-10-13', title: 'Saturn?', result: JSON.stringify({ birth: sam }), note: 'What is Saturn doing?', shape: { ...DEFAULT_SHAPE, thinking: 'low' } })
+
+  it('is the birth details, the date and the one rule, then the message as written, with both tool servers', () => {
+    const req = readingRequest(open, sam, new Date(2026, 9, 13))
+    expect(req.system).toBe(`The person: Sam, born 1990-06-15 14:30 in New York, NY, USA. Today is Tue Oct 13 2026.\n\n${OPEN_RULES}`)
+    expect(req.input).toBe('What is Saturn doing?')
+    expect(req.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
+    expect(req.reasoning).toBe('low')
+  })
+
+  it('replays the session for a follow-up with the same brief and nothing added', () => {
+    const done = { ...open, reading: 'Saturn squares your Sun.', readingState: 'done' as const }
+    const earlier: FollowUp[] = [{ id: 'f1', castingId: 'c1', question: 'Since when?', answer: 'Since March.', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], written: NOT_WRITTEN, card: null }]
+    const req = followUpRequest(done, earlier, 'Until when?', sam, new Date(2026, 9, 13))
+    expect(req.system).toBe(readingRequest(open, sam, new Date(2026, 9, 13)).system)
+    expect(req.input).toBe('THE CONVERSATION SO FAR:\n\nSam said: What is Saturn doing?\n\nYou answered: Saturn squares your Sun.\n\nSam said: Since when?\n\nYou answered: Since March.\n\nSam says: Until when?')
   })
 })

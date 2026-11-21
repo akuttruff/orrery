@@ -116,8 +116,8 @@ export default function FollowUps({ castingId, castingTitle, kind = 'today', rea
   }
 
   return (
-    <section className="followups" aria-label="Questions about the reading">
-      {items.length > 0 && <h3 className="section-title">Questions</h3>}
+    <section className="followups" aria-label={kind === 'open' ? 'The conversation' : 'Questions about the reading'}>
+      {items.length > 0 && <h3 className="section-title">{kind === 'open' ? 'Conversation' : 'Questions'}</h3>}
       <ol className="followup-list">
         {items.map((f) => (
           <FollowUpItem key={f.id} followUp={f} castingTitle={castingTitle} onSettled={settled} onAgain={() => void again(f)} onStop={() => void stop(f)} onRemove={() => void remove(f)} onForget={(id) => void forget(f, id)} />
@@ -127,7 +127,7 @@ export default function FollowUps({ castingId, castingTitle, kind = 'today', rea
         className="ask"
         onSubmit={(e) => { e.preventDefault(); void ask() }}
       >
-        <label className="ask-label" htmlFor={`ask-${castingId}`}>{items.length ? 'Ask another' : 'Ask about this reading'}</label>
+        <label className="ask-label" htmlFor={`ask-${castingId}`}>{kind === 'open' ? 'Continue' : items.length ? 'Ask another' : 'Ask about this reading'}</label>
         <div className="ask-row">
           <textarea
             id={`ask-${castingId}`}
@@ -135,7 +135,7 @@ export default function FollowUps({ castingId, castingTitle, kind = 'today', rea
             className="ask-box"
             rows={2}
             value={question}
-            placeholder={ready ? 'What does this mean for…' : readingState === 'writing' ? 'Questions open once the reading is written' : 'Write the reading first, then ask'}
+            placeholder={ready ? (kind === 'open' ? 'Say more, ask something else, or ask for a card…' : 'What does this mean for…') : readingState === 'writing' ? (kind === 'open' ? 'You can reply once the model has finished' : 'Questions open once the reading is written') : 'Write the reading first, then ask'}
             disabled={!ready || answering || sending}
             enterKeyHint="send"
             onChange={(e) => setQuestion(e.target.value)}
@@ -146,7 +146,8 @@ export default function FollowUps({ castingId, castingTitle, kind = 'today', rea
             <SendHorizontal size={18} aria-hidden="true" />
           </button>
         </div>
-        {!isTarotKind(kind) && (
+        {/* An open session's model already has draw_cards; the button's templated card prompt is not for it. */}
+        {!isTarotKind(kind) && kind !== 'open' && (
           <div className="pull-row">
             <button type="button" className="chip" disabled={!ready || answering || sending} onClick={() => void pull()}><Sparkles size={13} aria-hidden="true" /> Pull a card</button>
             <span className="memory-note">One tarot card, dealt now and read against this reading.</span>

@@ -10,6 +10,7 @@ import FollowUps from './FollowUps'
 import TarotSpread from './TarotSpread'
 import StyleChips from './StyleChips'
 import ShapeOptions from './ShapeOptions'
+import ThinkingChips from './ThinkingChips'
 import { useReading } from '../hooks/useReading.ts'
 import { parseWheel } from '../lib/chartWheel.ts'
 import { parseForecast } from '../lib/forecastTable.ts'
@@ -18,7 +19,8 @@ import { tarotImage } from '../lib/tarotImage.ts'
 import { castingImage } from '../lib/readingImage.ts'
 import { formatWhen } from '../lib/when.ts'
 import { styleOf, NOTE_MAX, type StyleId } from '../lib/styles.ts'
-import { shapeSummary, type ReadingShape } from '../lib/shape.ts'
+import { DEFAULT_SHAPE, shapeOf, shapeSummary, type ReadingShape } from '../lib/shape.ts'
+import { birthLine, birthOf } from '../lib/open.ts'
 import { isTarotKind } from '../types.ts'
 import type { Casting } from '../types.ts'
 
@@ -64,6 +66,7 @@ export default function CastingView({ casting, memoryDefault, thinking = null, o
   const cards = useMemo(() => (isTarotKind(casting.kind) ? parseReading(casting.result) : null), [casting])
   /** What the reading is written from, when memory is off. */
   const source = isTarotKind(casting.kind) ? 'the cards' : 'the chart'
+  if (casting.kind === 'open') return <OpenView casting={casting} reading={reading} thinking={thinking} onFrame={onFrame} onWrite={onWrite} onStop={onStop} onDelete={onDelete} />
 
   return (
     <article className="casting">
@@ -129,6 +132,39 @@ export default function CastingView({ casting, memoryDefault, thinking = null, o
       )}
       <div className="casting-actions">
         <button type="button" className="chip" onClick={() => onRecast()}><RotateCw size={13} aria-hidden="true" /> Recast</button>
+        <button type="button" className="chip danger" onClick={onDelete}><Trash2 size={13} aria-hidden="true" /> Delete</button>
+      </div>
+    </article>
+  )
+}
+
+interface OpenViewProps extends Pick<CastingViewProps, 'casting' | 'onFrame' | 'onWrite' | 'onStop' | 'onDelete'> {
+  reading: ReturnType<typeof useReading>
+  thinking: string[] | null
+}
+
+/**
+ * An open session: whose birth details it was given, the first message,
+ * the model's reply with the tools it called, then the conversation. No
+ * chart is drawn up front, no tone or shape, no memory: only how hard the
+ * model thinks, for a Write again.
+ */
+function OpenView({ casting, reading, thinking, onFrame, onWrite, onStop, onDelete }: OpenViewProps) {
+  const birth = birthOf(casting.result)
+  const whose = casting.subject ? `${casting.subject.name}, born` : 'Born'
+  return (
+    <article className="casting">
+      <header className="casting-head">
+        <h2>{casting.title}</h2>
+        <p className="casting-sub">Started {formatWhen(casting.createdAt)}{birth ? ` · ${whose} ${birthLine(birth)}` : ''}</p>
+      </header>
+      <blockquote className="open-message">{casting.note}</blockquote>
+      {reading.state !== 'writing' && (
+        <ThinkingChips value={shapeOf(casting.shape).thinking} thinking={thinking} onPick={(id) => onFrame({ shape: { ...DEFAULT_SHAPE, parts: [...DEFAULT_SHAPE.parts], thinking: id } })} />
+      )}
+      <Reading reading={reading} brief={casting.brief} title="Reply" briefNote={null} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
+      <FollowUps key={casting.id} castingId={casting.id} castingTitle={casting.title} kind="open" readingState={reading.state} readingText={reading.text} />
+      <div className="casting-actions">
         <button type="button" className="chip danger" onClick={onDelete}><Trash2 size={13} aria-hidden="true" /> Delete</button>
       </div>
     </article>

@@ -2,6 +2,7 @@ import type { Kind, Profile } from '../src/types.ts'
 import type { ToolCaller } from './astro.ts'
 import { SPREAD_LABEL } from '../src/lib/spreads.ts'
 import type { SpreadId } from '../src/lib/spreads.ts'
+import { openBirth } from '../src/lib/open.ts'
 
 export { SPREADS, SPREAD_LABEL, isSpreadId } from '../src/lib/spreads.ts'
 export type { SpreadId } from '../src/lib/spreads.ts'
@@ -54,11 +55,15 @@ export function periodFor(kind: Kind, now: Date): string {
     case 'natal': return 'natal'
     case 'card': return localDate(now)
     case 'spread': return localDate(now)
+    case 'open': return localDate(now)
   }
 }
 
 
-export function titleFor(kind: Kind, period: string, profile: Profile, spread: SpreadId = 'three'): string {
+/** How much of an open session's first message its title keeps. */
+export const OPEN_TITLE_MAX = 48
+
+export function titleFor(kind: Kind, period: string, profile: Profile, spread: SpreadId = 'three', note = ''): string {
   switch (kind) {
     case 'today': return `Today · ${shortDate(period)}`
     case 'week': return `Week of ${shortDate(period)}`
@@ -71,6 +76,15 @@ export function titleFor(kind: Kind, period: string, profile: Profile, spread: S
     case 'natal': return `${profile.name}'s birth chart`
     case 'card': return `Card · ${shortDate(period)}`
     case 'spread': return `${SPREAD_LABEL[spread]} · ${shortDate(period)}`
+    case 'open': {
+      // The opening message names the session; cut at a word, the way a chat list does.
+      const text = note.trim().replace(/\s+/g, ' ')
+      if (!text) return `Open · ${shortDate(period)}`
+      if (text.length <= OPEN_TITLE_MAX) return text
+      const cut = text.slice(0, OPEN_TITLE_MAX)
+      const space = cut.lastIndexOf(' ')
+      return `${(space > OPEN_TITLE_MAX / 2 ? cut.slice(0, space) : cut).replace(/[\s,.;:!?-]+$/, '')}…`
+    }
   }
 }
 
@@ -112,6 +126,9 @@ const scanOf = (horizon: Scanned, profile: Profile, call: ToolCaller, start: str
 /** Run the tools behind a kind and return the result text to keep. A tarot kind needs the tarot server beside the astrology one. */
 export async function castResult(kind: Kind, period: string, profile: Profile, call: ToolCaller, now = new Date(), tarot: TarotAsk | null = null): Promise<string> {
   switch (kind) {
+    case 'open':
+      // Nothing is run up front: the model calls the tools itself. What is kept is whose details it was given.
+      return JSON.stringify({ birth: openBirth(profile) })
     case 'card':
     case 'spread': {
       if (!tarot) throw new Error('The tarot server is not set up')

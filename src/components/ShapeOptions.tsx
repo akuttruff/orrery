@@ -1,9 +1,10 @@
 import {
   AREAS, DEFAULT_SHAPE, FOCUS, LENGTHS, ORGANISE, PARTS, WRITING,
-  isDefaultShape, optionsFor, shapeFor, shapeOf, thinkingFor,
+  isDefaultShape, optionsFor, shapeFor, shapeOf,
   type Option, type ReadingShape,
 } from '../lib/shape.ts'
 import type { Kind } from '../types.ts'
+import ThinkingChips from './ThinkingChips'
 
 interface ShapeOptionsProps {
   kind: Kind
@@ -46,7 +47,6 @@ export default function ShapeOptions({ kind, value, onChange, thinking, disabled
     </div>
   )
 
-  const levels = thinkingFor(thinking)
   return (
     <div className="shape" role="group" aria-label="Shape of the reading">
       {radios('Length', LENGTHS, shape.length, (length) => set({ length }))}
@@ -55,7 +55,7 @@ export default function ShapeOptions({ kind, value, onChange, thinking, disabled
       {offered.focus.length > 0 && toggles('Lead with', FOCUS.filter((f) => offered.focus.includes(f.id)), shape.focus, (id) => set({ focus: toggle(whole.focus, id) }))}
       {offered.areas && toggles('Life areas', AREAS, shape.areas, (id) => set({ areas: toggle(whole.areas, id) }))}
       {radios('Writing', WRITING, shape.writing, (writing) => set({ writing }))}
-      {levels.length > 1 && radios('Thinking', levels, levels.some((l) => l.id === shape.thinking) ? shape.thinking : '', (id) => set({ thinking: id }))}
+      <ThinkingChips value={shape.thinking} thinking={thinking} disabled={disabled} onPick={(id) => set({ thinking: id })} />
       {!isDefaultShape(shape) && (
         <button type="button" className="link shape-reset" disabled={disabled} onClick={() => onChange({ ...DEFAULT_SHAPE, parts: [...DEFAULT_SHAPE.parts] })}>Back to the usual shape</button>
       )}

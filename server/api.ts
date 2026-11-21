@@ -8,6 +8,7 @@ import { pipeline } from 'node:stream'
 import { Astro, AstroToolError, readTarotSpec, tarotDeckDir } from './astro.ts'
 import type { ToolCaller } from './astro.ts'
 import { castResult, isSpreadId, periodFor, titleFor } from './cast.ts'
+import { birthOf } from '../src/lib/open.ts'
 import type { SpreadId } from './cast.ts'
 import { listModels, reasoningOptions, writeWithModel } from './model.ts'
 import { Memories, MemoryInputError, memoryPath } from './memory.ts'
@@ -16,7 +17,7 @@ import { followUpRequest, readingRequest } from './prompt.ts'
 import type { Subject } from './prompt.ts'
 import { Readings, answerOf } from './readings.ts'
 import { NOTE_MAX, isStyleId } from '../src/lib/styles.ts'
-import { isDefaultShape, isShape } from '../src/lib/shape.ts'
+import { DEFAULT_SHAPE, isDefaultShape, isShape } from '../src/lib/shape.ts'
 import { Store } from './store.ts'
 import { HealthCheck, UNKNOWN } from './health.ts'
 import type { KeptCasting, ServerConfig } from './store.ts'
@@ -136,6 +137,14 @@ export function personInput(body: Record<string, unknown>): Omit<Person, 'id'> {
   return { name, dateTime, city, state: text('state'), country: text('country') }
 }
 
+/** Birth details for one open session, checked as a person's are; the name stays the chosen person's. */
+export type Birth = Pick<Profile, 'dateTime' | 'city' | 'state' | 'country'>
+export function birthInput(v: unknown): Birth {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new UserError('birth must be the date and time, city, state and country')
+  const { name: _name, ...birth } = personInput({ ...(v as Record<string, unknown>), name: 'x' })
+  return birth
+}
+
 export function profilePatch(body: Record<string, unknown>): Partial<Profile> {
   const out: Partial<Profile> = {}
   const dateTime = str(body.dateTime)
@@ -192,7 +201,8 @@ export function createMiddleware(state: ApiState): Handler {
   /** The memory lines for a casting's reading or answer, and the ids they came from; none when memory is off. */
   const memoryFor = (casting: Casting): { lines: string[]; ids: string[] } => {
     // What Orrery has learned is about you: a friend's reading never draws on it.
-    if (casting.subject || !memoryOn(casting)) return { lines: [], ids: [] }
+    // An open session is the model and the tools alone, so it is never given them either.
+    if (casting.subject || casting.kind === 'open' || !memoryOn(casting)) return { lines: [], ids: [] }
     const { lines, used } = memories.context(undefined, casting.memoryExcluded)
     return { lines, ids: used.map((m) => m.id) }
   }
@@ -224,9 +234,11 @@ export function createMiddleware(state: ApiState): Handler {
   /** The person as a casting's prompts should see them: you, or the friend it was cast for, with you as the one asking. */
   const profileFor = (casting: Casting): Subject => {
     const me = store.getProfile()
-    if (!casting.subject) return me
+    // An open session keeps the details it was started with, which may have been changed for it alone.
+    const birth = casting.kind === 'open' ? birthOf(casting.result) : null
+    if (!casting.subject) return birth ? { ...me, ...birth, name: me.name } : me
     const { id: _id, ...them } = casting.subject
-    return { ...them, askedBy: me.name }
+    return { ...them, ...(birth ? { ...birth, name: them.name } : {}), askedBy: me.name }
   }
 
 
@@ -234,19 +246,20 @@ export function createMiddleware(state: ApiState): Handler {
    * A new casting of a kind, cast now with the memory choice made before the
    * tap; the earlier ones stay. Two taps while the tools run share the one cast.
    */
-  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'shape' | 'starred'>, spread: SpreadId = 'three', subject: Person | null = null): Promise<unknown> => {
-    // Whose chart: yours, or the friend chosen.
+  const cast = async (kind: Kind, frame: Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'shape' | 'starred'>, spread: SpreadId = 'three', subject: Person | null = null, birth: Birth | null = null): Promise<unknown> => {
+    // Whose chart: yours, or the friend chosen; an open session may change the details for itself alone.
     const me = store.getProfile()
-    const profile: Profile = subject ? { name: subject.name, dateTime: subject.dateTime, city: subject.city, state: subject.state, country: subject.country } : me
+    const chosen: Profile = subject ? { name: subject.name, dateTime: subject.dateTime, city: subject.city, state: subject.state, country: subject.country } : me
+    const profile: Profile = kind === 'open' && birth ? { ...chosen, ...birth } : chosen
     const period = periodFor(kind, new Date())
     // Only the same tap twice is shared: a different question deals different cards, and a different style, shape, memory choice or person is a different reading.
-    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.shape, frame.memory, frame.memoryExcluded, subject?.id ?? null])
+    const key = JSON.stringify([kind, period, spread, frame.note, frame.style, frame.shape, frame.memory, frame.memoryExcluded, subject?.id ?? null, birth])
     let pending = state.casting.get(key)
     if (!pending) {
       pending = (async () => {
         const result = await castResult(kind, period, profile, call, new Date(), { call: state.tarot, spread, question: frame.note })
         // A friend's reading says whose it is; the birth chart's title already names them.
-        const title = titleFor(kind, period, profile, spread)
+        const title = titleFor(kind, period, profile, spread, frame.note)
         const casting = store.addCasting({
           kind, period, result, ...frame, subject,
           title: subject && kind !== 'natal' ? `${subject.name} · ${title}` : title,
@@ -415,7 +428,18 @@ export function createMiddleware(state: ApiState): Handler {
     if (url === '/api/castings' && method === 'POST') {
       void readBody(req).then(async (body) => {
         if (!isKind(body.kind)) throw new UserError(`Unknown kind: ${String(body.kind)}`)
-        const { memory = null, memoryExcluded = [], style = null, note = '', shape = null, starred = false } = framePatch(body)
+        const frame = framePatch(body)
+        const { memoryExcluded = [], note = '', starred = false } = frame
+        let { memory = null, style = null, shape = null } = frame
+        let birth: Birth | null = null
+        if (body.kind === 'open') {
+          // The model and the tools, nothing else: no memories, no tone, and of the shape only how hard it thinks.
+          if (!note) throw new UserError('Say what you want to ask')
+          if (body.birth !== undefined && body.birth !== null) birth = birthInput(body.birth)
+          memory = false
+          style = null
+          shape = shape?.thinking ? { ...DEFAULT_SHAPE, parts: [...DEFAULT_SHAPE.parts], thinking: shape.thinking } : null
+        } else if (body.birth !== undefined && body.birth !== null) throw new UserError('Only an open session takes its own birth details')
         if (body.spread !== undefined && !isSpreadId(body.spread)) throw new UserError('spread must be single, three, situation or celtic-cross')
         // Whose chart: absent or 'me' for yours, else a saved person's id.
         let subject: Person | null = null
@@ -423,7 +447,7 @@ export function createMiddleware(state: ApiState): Handler {
           subject = typeof body.personId === 'string' ? store.getPerson(body.personId) ?? null : null
           if (!subject) throw new UserError('That person is no longer saved; add them again to cast for them')
         }
-        json(res, 201, await cast(body.kind, { memory, memoryExcluded, style, note, shape, starred }, isSpreadId(body.spread) ? body.spread : undefined, subject))
+        json(res, 201, await cast(body.kind, { memory, memoryExcluded: body.kind === 'open' ? [] : memoryExcluded, style, note, shape, starred }, isSpreadId(body.spread) ? body.spread : undefined, subject, birth))
       }).catch(fail)
       return undefined
     }

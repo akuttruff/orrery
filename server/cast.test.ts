@@ -155,3 +155,21 @@ describe('a tarot cast', () => {
     expect(call).not.toHaveBeenCalled()
   })
 })
+
+describe('open sessions', () => {
+  it('are dated today and titled by their first message, cut at a word', () => {
+    expect(periodFor('open', oct15)).toBe('2026-10-15')
+    expect(titleFor('open', '2026-10-15', sam, 'three', '  what is   Saturn doing? ')).toBe('what is Saturn doing?')
+    expect(titleFor('open', '2026-10-15', sam, 'three', 'I would like to know what my transits are doing to my tenth house this month')).toBe('I would like to know what my transits are doing…')
+    expect(titleFor('open', '2026-10-15', sam)).toBe(`Open · ${shortDate('2026-10-15')}`)
+  })
+
+  it('run no tool up front and keep only the birth details they were given', async () => {
+    const call = vi.fn(async () => '{}')
+    const tarot = vi.fn(async () => '{}')
+    const result = await castResult('open', '2026-10-15', { ...sam, dateTime: '1990-06-15 09:00' }, call, oct15, { call: tarot })
+    expect(call).not.toHaveBeenCalled()
+    expect(tarot).not.toHaveBeenCalled()
+    expect(JSON.parse(result)).toEqual({ birth: { ...sam, dateTime: '1990-06-15 09:00' } })
+  })
+})

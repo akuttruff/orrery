@@ -640,3 +640,39 @@ input, select { font: inherit; }
 .undo-toast .link { font-weight: 600; }
 .recent-head { display: flex; align-items: baseline; justify-content: space-between; }
 .recent-head { margin-bottom: 0; }
+
+/* --- open sessions ------------------------------------------------------ */
+/* Two columns leave the ninth tile alone, so on a phone Open runs the width as the short path; three columns take it in turn. */
+.shortcut-open { grid-column: 1 / -1; min-height: 0; display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-items: center; }
+.shortcut-open .shortcut-label { margin-top: 0; }
+.shortcut-open .shortcut-hint { grid-column: 2; }
+.shortcut-open > svg { grid-row: span 2; }
+@media (min-width: 560px) {
+  .shortcut-open { grid-column: auto; min-height: 112px; display: flex; align-items: flex-start; }
+  .shortcut-open .shortcut-label { margin-top: auto; }
+}
+.with-sidebar .shortcut-open { grid-column: auto; min-height: 112px; display: flex; align-items: flex-start; }
+.with-sidebar .shortcut-open .shortcut-label { margin-top: auto; }
+
+.birth-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 12px; font-size: 13px; color: var(--paper-dim); }
+.birth-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.birth-field { display: flex; flex-direction: column; min-width: 0; }
+.birth-field .shape-label { flex: none; margin: 0 0 4px; }
+/* .ask-box grows along a row; in this column it would grow downwards instead. */
+.birth-field .ask-box { flex: none; min-width: 0; width: 100%; padding: 8px 12px; border-radius: 10px; }
+.open-tools { margin-top: 12px; }
+.birth-when, .birth-fields > .birth-field:nth-child(2) { grid-column: 1 / -1; }
+.birth-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.birth-save { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
+.birth-save .ask-box { flex: 1 1 auto; min-width: 0; }
+.birth-save .primary { width: auto; flex: 0 0 auto; }
+
+.open-message { margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--moss); border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--moss) 8%, transparent); white-space: pre-wrap; }
+
+/* The guided popup's shape, folded under its summary. */
+.shape-toggle { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 14px; padding: 8px 0; border: 0; border-top: 1px solid var(--line); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.shape-toggle .shape-label { flex: 0 0 auto; display: inline; margin: 0; }
+.shape-toggle-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.shape-toggle .chev { flex: 0 0 auto; color: var(--moss); transition: transform 0.15s; }
+.shape-toggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .shape-toggle .chev { transition: none; } }

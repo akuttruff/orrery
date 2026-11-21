@@ -681,6 +681,79 @@ describe('memories', () => {
   })
 })
 
+describe('open sessions', () => {
+  const readAll = async (url: string) => (await (await fetch(url)).text()).split('\n\n').filter(Boolean)
+  const send = (method: 'PUT' | 'PATCH', url: string, body: unknown) => fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+  it('needs a message, runs no tool up front, and is never given memories, a tone or a shape', async () => {
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'open' })).status).toBe(400)
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'open', note: '   ' })).status).toBe(400)
+    await post(`${ctx.base}/api/memories`, { text: 'The user works nights.' })
+    await send('PUT', `${ctx.base}/api/config`, { memoryDefault: 'on' })
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'open', note: 'What is Saturn doing to me this month?', memory: true, style: 'coach', shape: { ...DEFAULT_SHAPE, length: 'deep', thinking: 'high' } })).json() as Casting
+    expect(ctx.call).not.toHaveBeenCalled()
+    expect(ctx.tarot).not.toHaveBeenCalled()
+    expect(c).toMatchObject({ kind: 'open', memory: false, style: null, title: 'What is Saturn doing to me this month?' })
+    // Of the shape, only the thinking level is kept.
+    expect(c.shape).toMatchObject({ length: 'standard', thinking: 'high' })
+    expect(JSON.parse(c.result)).toEqual({ birth: { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' } })
+  })
+
+  it('sends the message as written, with the birth details, the one rule and both tool servers', async () => {
+    const seen: WriteRequest[] = []
+    writer = async (req, onDelta) => { seen.push(req); onDelta('Saturn is…'); return 'Saturn is…' }
+    await post(`${ctx.base}/api/memories`, { text: 'The user works nights.' })
+    await send('PUT', `${ctx.base}/api/config`, { memoryDefault: 'on' })
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'open', note: 'pull three cards for the move' })).json() as Casting
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await readAll(`${ctx.base}/api/castings/${c.id}/events`)
+    const req = seen[0]!
+    expect(req.input).toBe('pull three cards for the move')
+    expect(req.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
+    expect(req.system).toContain('The person: Sam, born 1990-06-15 14:30 in New York, NY, USA.')
+    expect(req.system).toContain('never calculate, estimate or recall one yourself')
+    expect(req.system).not.toContain('WHAT YOU KNOW')
+    expect(req.system).not.toContain('trauma-informed')
+
+    // A follow-up replays the session from its first message, and teaches nothing.
+    const f = await (await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'And the third card?' })).json() as FollowUp
+    await readAll(`${ctx.base}/api/followups/${f.id}/events`)
+    const next = seen.find((r) => r.input.includes('And the third card?'))!
+    expect(next.input).toContain('Sam said: pull three cards for the move\n\nYou answered: Saturn is…')
+    expect(next.input).toMatch(/Sam says: And the third card\?$/)
+    expect(next.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
+    expect(next.system).toBe(req.system)
+    // The reading and the answer, and no third call working out what to remember.
+    await new Promise((r) => setTimeout(r, 50))
+    expect(seen).toHaveLength(2)
+  })
+
+  it('takes birth details changed for the session alone, checked as a person is, and keeps the saved ones as they were', async () => {
+    const seen: WriteRequest[] = []
+    writer = async (req, onDelta) => { seen.push(req); onDelta('ok'); return 'ok' }
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'open', note: 'hi', birth: { dateTime: 'noon', city: 'Austin' } })).status).toBe(400)
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'open', note: 'hi', birth: { dateTime: '1990-06-15 09:00', city: ' ' } })).status).toBe(400)
+    // Only an open session takes them.
+    expect((await post(`${ctx.base}/api/castings`, { kind: 'today', birth: { dateTime: '1990-06-15 09:00', city: 'Austin' } })).status).toBe(400)
+    const c = await (await post(`${ctx.base}/api/castings`, { kind: 'open', note: 'what if I was born at nine?', birth: { dateTime: '1990-06-15 09:00', city: 'Austin', state: 'TX', country: 'USA' } })).json() as Casting
+    expect(JSON.parse(c.result).birth).toEqual({ name: 'Sam', dateTime: '1990-06-15 09:00', city: 'Austin', state: 'TX', country: 'USA' })
+    await post(`${ctx.base}/api/castings/${c.id}/reading`)
+    await readAll(`${ctx.base}/api/castings/${c.id}/events`)
+    expect(seen[0]!.system).toContain('born 1990-06-15 09:00 in Austin, TX, USA')
+    expect(await (await fetch(`${ctx.base}/api/profile`)).json()).toMatchObject({ dateTime: '1990-06-15 14:30', city: 'New York' })
+
+    // A friend's details can be changed the same way; they are still the friend's, asked about by you.
+    const jo = await (await post(`${ctx.base}/api/people`, { name: 'Jo', dateTime: '1960-06-08 09:45', city: 'Pleasanton', state: 'CA', country: 'USA' })).json() as { id: string }
+    const theirs = await (await post(`${ctx.base}/api/castings`, { kind: 'open', note: 'Jo at ten?', personId: jo.id, birth: { dateTime: '1960-06-08 10:00', city: 'Pleasanton', state: 'CA', country: 'USA' } })).json() as Casting
+    expect(theirs.subject?.name).toBe('Jo')
+    await post(`${ctx.base}/api/castings/${theirs.id}/reading`)
+    await readAll(`${ctx.base}/api/castings/${theirs.id}/events`)
+    const sys = seen.at(-1)!.system
+    expect(sys).toContain('born 1960-06-08 10:00 in Pleasanton')
+    expect(sys).toContain('The messages below come from Sam, not Jo')
+  })
+})
+
 describe('health', () => {
   it('reports the process, its data file, what is busy, and whether astro-mcp and the model answer', async () => {
     const h = await (await fetch(`${ctx.base}/api/health`)).json() as Record<string, unknown>

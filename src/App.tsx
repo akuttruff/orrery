@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, CalendarDays, CalendarRange, ChevronRight, Layers, Moon, Orbit, PanelLeftOpen, Settings as SettingsIcon, Sparkles, Sun, Sunrise } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CalendarRange, ChevronRight, Layers, MessagesSquare, Moon, Orbit, PanelLeftOpen, Settings as SettingsIcon, Sparkles, Sun, Sunrise } from 'lucide-react'
 import CastingView from './components/CastingView'
 import Recent from './components/Recent'
 import Settings from './components/Settings'
@@ -13,7 +13,8 @@ import { api } from './lib/api.ts'
 import type { CastOptions } from './lib/api.ts'
 import { noReply } from './lib/reach.ts'
 import { DEFAULT_STYLE, isStyleId, type StyleId } from './lib/styles.ts'
-import { shapeOf, type ReadingShape } from './lib/shape.ts'
+import { DEFAULT_SHAPE, shapeOf, type ReadingShape, type ThinkingId } from './lib/shape.ts'
+import type { Birth } from './components/BirthFields'
 import { DEFAULT_SPREAD, isSpreadId, type SpreadId } from './lib/spreads.ts'
 import type { Who } from './components/WhoseChart'
 import { KIND_LABEL } from './lib/kinds.ts'
@@ -32,6 +33,7 @@ const SHORTCUTS: { kind: Kind; label: string; hint: string; Icon: typeof Sun }[]
   { kind: 'natal', label: 'Birth chart', hint: 'The chart itself, read', Icon: Sunrise },
   { kind: 'card', label: 'Daily card', hint: 'One tarot card for the day', Icon: Sparkles },
   { kind: 'spread', label: 'Card spread', hint: 'Three cards, or the Celtic Cross, for a question', Icon: Layers },
+  { kind: 'open', label: 'Open', hint: 'You, the model, and the chart and tarot tools; no brief', Icon: MessagesSquare },
 ]
 
 const pad = (n: number): string => String(n).padStart(2, '0')
@@ -113,6 +115,19 @@ export default function App() {
     setPeople((list) => [...list, person])
     return person
   }
+  // An open session's own choices: birth details changed for it alone (null keeps the saved ones), and how hard the model thinks, apart from the guided shape.
+  const [birth, setBirth] = useState<Birth | null>(null)
+  const [openThinking, setOpenThinking] = useState<ThinkingId>('')
+  const openShape: ReadingShape = { ...DEFAULT_SHAPE, parts: [...DEFAULT_SHAPE.parts], thinking: openThinking }
+  const pickWho = (next: Who): void => { setWho(next); setBirth(null) }
+  const chosenPerson = people.find((p) => p.id === who)
+  const birthBase: Birth | undefined = chosenPerson ?? profile ?? undefined
+  const saveBirth = async (name: string, details: Birth): Promise<void> => {
+    const person = await api.addPersonFields({ name, ...details })
+    setPeople((list) => [...list, person])
+    pickWho(person.id)
+  }
+  const openChoice = (): CastOptions => ({ note: note.trim(), shape: openShape, ...(who === 'me' ? {} : { personId: who }), ...(birth ? { birth } : {}) })
   const choice: CastOptions = who === 'me'
     ? { memory: memoryOn, memoryExcluded: memoryOn ? excluded : [], style, shape, note: note.trim(), spread }
     : { memory: false, memoryExcluded: [], style, shape, note: note.trim(), spread, personId: who }
@@ -355,7 +370,7 @@ export default function App() {
               {SHORTCUTS.map(({ kind, label, hint, Icon }) => {
                 const drawn = kind === 'card' ? todaysCard : undefined
                 return (
-                  <button key={kind} type="button" role="listitem" className={`shortcut${busy === kind ? ' busy' : ''}${drawn ? ' drawn' : ''}`} disabled={busy !== null} onClick={() => (drawn ? void open(drawn.id) : setPending(kind))}>
+                  <button key={kind} type="button" role="listitem" className={`shortcut${kind === 'open' ? ' shortcut-open' : ''}${busy === kind ? ' busy' : ''}${drawn ? ' drawn' : ''}`} disabled={busy !== null} onClick={() => (drawn ? void open(drawn.id) : setPending(kind))}>
                     <Icon size={22} aria-hidden="true" />
                     <span className="shortcut-label">{busy === kind ? 'Casting…' : label}</span>
                     <span className="shortcut-hint">{drawn ? 'Drawn today · tap to open' : hint}</span>
@@ -374,25 +389,34 @@ export default function App() {
           kind={pending}
           note={note}
           style={style}
-          shape={shape}
+          shape={pending === 'open' ? openShape : shape}
           thinking={thinking}
           spread={spread}
           me={profile?.name ?? ''}
           people={people}
           who={who}
-          onWho={setWho}
+          onWho={pickWho}
           onAddPerson={addPerson}
           memoryOn={memoryOn}
           excluded={excluded}
           busy={busy !== null}
           onNote={setNote}
           onStyle={setStyle}
-          onShape={setShape}
+          onShape={pending === 'open' ? (s) => setOpenThinking(s.thinking) : setShape}
           onSpread={setSpread}
           onMemory={(on) => void setMemoryOn(on)}
           onExclude={exclude}
           onManage={() => setMemoriesOpen(true)}
-          onCast={() => { const kind = pending; setPending(null); void cast(kind, choice) }}
+          birthBase={birthBase}
+          birth={birth}
+          onBirth={setBirth}
+          onSaveBirth={saveBirth}
+          onCast={() => {
+            const kind = pending
+            setPending(null)
+            // An open session's message is sent, so it is not left in the box for the next one.
+            if (kind === 'open') { void cast(kind, openChoice()); setNote(''); setBirth(null) } else void cast(kind, choice)
+          }}
           onClose={closeSheet}
         />
       )}

@@ -70,7 +70,7 @@ function layout(shape: ReadingShape): string {
  * The shape's length scales it.
  */
 const LENGTH: Record<Casting['kind'], number> = {
-  today: 1000, week: 1400, month: 1600, year: 1800, natal: 2500, moon: 600, card: 400, spread: 1000,
+  today: 1000, week: 1400, month: 1600, year: 1800, natal: 2500, moon: 600, card: 400, spread: 1000, open: 1000,
 }
 const lengthOf = (kind: Casting['kind'], shape: ReadingShape = DEFAULT_SHAPE): string => {
   const factor = LENGTHS.find((l) => l.id === shape.length)?.factor ?? 1
@@ -308,6 +308,8 @@ function ask(casting: Casting, shape: ReadingShape = DEFAULT_SHAPE): { task: str
   const out = (sections: Section[]): string => outline(casting.kind, sections, shape)
   const CARRY: Section = { id: 'carry', text: '**To Carry**, one line', core: true }
   switch (casting.kind) {
+    // An open session has no task beyond the person's own words, and no data but what the tools return (openRequest).
+    case 'open': return { task: casting.note, data: '' }
     case 'today': {
       const wheel = parseWheel(casting.result)
       const transits = wheel ? readingsInput(wheel) : null
@@ -445,7 +447,27 @@ export function memoryBlock(profile: Profile, lines: string[]): string | null {
 /** The thinking a casting's shape asks for, as a request field: nothing when it leaves it to Settings. */
 const thinkingOf = (shape: ReadingShape): Pick<WriteRequest, 'reasoning'> => (shape.thinking ? { reasoning: shape.thinking } : {})
 
+/**
+ * The one rule an open session is given beside the birth details: the
+ * chart comes from the tools, never from the model's own arithmetic or
+ * recall. Nothing about voice, length or format.
+ */
+export const OPEN_RULES = 'Every planetary position, sign, house, aspect, transit, timing or other chart fact must come from an astrology tool call in this conversation; never calculate, estimate or recall one yourself. If a tool fails or cannot answer, say so instead of filling the gap. Every tarot card must come from draw_cards; never invent one. Pass the birth details above as a tool asks.'
+
+/** An open session's brief: who, today's date, and OPEN_RULES. A friend's adds who is asking. */
+const openSystem = (profile: Subject, now: Date): string => [
+  person(profile, now),
+  profile.askedBy ? `The messages below come from ${profile.askedBy}, not ${profile.name}: answer ${profile.askedBy} as "you", and speak of ${profile.name} by name.` : null,
+  OPEN_RULES,
+].filter(Boolean).join('\n\n')
+
+/** An open session's first turn: the person's words as they wrote them, with both tool servers. */
+export function openRequest(casting: Casting, profile: Subject, now = new Date()): WriteRequest {
+  return { system: openSystem(profile, now), input: casting.note, maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN], ...thinkingOf(shapeFor(casting.shape, casting.kind)) }
+}
+
 export function readingRequest(casting: Casting, profile: Subject, now = new Date(), memory: string[] = []): WriteRequest {
+  if (casting.kind === 'open') return openRequest(casting, profile, now)
   const shape = shapeFor(casting.shape, casting.kind)
   const { task, data } = ask(casting, shape)
   const system = [voice(casting.style, casting.kind, shape), person(profile, now), memoryBlock(profile, memory), focusBlock(shape, casting.kind), noteBlock({ ...profile, name: askerOf(profile) }, casting.note)].filter(Boolean).join('\n\n')
@@ -494,6 +516,16 @@ export function cardBlock(card: TarotCard): string {
 
 export function followUpRequest(casting: Casting, earlier: FollowUp[], question: string, profile: Subject, now = new Date(), memory: string[] = [], card: TarotCard | null = null): WriteRequest {
   const shape = shapeFor(casting.shape, casting.kind)
+  if (casting.kind === 'open') {
+    // The session so far, from its first message, replayed as a chat: LM Studio's endpoint takes one turn.
+    const asker = askerOf(profile)
+    const turns = [
+      ...(casting.reading ? [`${asker} said: ${casting.note}\n\nYou answered: ${clip(casting.reading, REPLAY_CHARS)}`] : []),
+      ...earlier.filter((f) => f.state === 'done' && f.answer).map((f) => `${asker} said: ${f.question}\n\nYou answered: ${clip(f.answer, REPLAY_CHARS)}`),
+    ]
+    const input = [...(turns.length ? ['THE CONVERSATION SO FAR:', ...turns] : []), `${asker} says: ${question}`].join('\n\n')
+    return { system: openSystem(profile, now), input, maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN], ...thinkingOf(shape) }
+  }
   const { data } = ask(casting, shape)
   const system = [
     isTarotKind(casting.kind) ? tarotAnswerVoice(shape) : answerVoice(shape),

@@ -3,7 +3,7 @@ import type { Casting, CastingSummary, Config, FollowUp, Kind, Memory, Profile, 
 import type { SpreadId } from './spreads.ts'
 
 /** The choices a casting is made with: memory (null follows Settings) and the memories left out, the kind of reading, and what it is for. */
-export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'shape' | 'starred'>> & { spread?: SpreadId; /** Whose chart: a saved person's id; absent for yours. */ personId?: string }
+export type CastOptions = Partial<Pick<Casting, 'memory' | 'memoryExcluded' | 'style' | 'note' | 'shape' | 'starred'>> & { spread?: SpreadId; /** Whose chart: a saved person's id; absent for yours. */ personId?: string; /** An open session's birth details, changed for it alone. */ birth?: Pick<Profile, 'dateTime' | 'city' | 'state' | 'country'> }
 
 /** The server, from the page. Every call throws with the server's message on failure, or a plain one when it gave no reply (see lib/reach.ts). */
 
@@ -31,6 +31,8 @@ export const api = {
   people: () => request<Person[]>('/api/people'),
   /** A new person from their details typed as a sentence; the server has the model read it. */
   addPerson: (text: string) => request<Person>('/api/people', jsonInit('POST', { text })),
+  /** A new person from their details as fields, as an open session's changed details are saved. */
+  addPersonFields: (person: Omit<Person, 'id'>) => request<Person>('/api/people', jsonInit('POST', person)),
   removePerson: (id: string) => request<{ ok: boolean }>(`/api/people/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   config: () => request<Config>('/api/config'),
   saveConfig: (patch: Record<string, string>) => request<Config>('/api/config', jsonInit('PUT', patch)),

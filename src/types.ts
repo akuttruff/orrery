@@ -2,9 +2,9 @@ import type { DrawnCard } from './lib/tarotSpread.ts'
 import type { ReadingShape } from './lib/shape.ts'
 
 /** What a shortcut button casts: a chart or forecast from the ephemeris, or a tarot draw. */
-export type Kind = 'today' | 'week' | 'month' | 'year' | 'natal' | 'moon' | 'card' | 'spread'
+export type Kind = 'today' | 'week' | 'month' | 'year' | 'natal' | 'moon' | 'card' | 'spread' | 'open'
 
-export const KINDS: Kind[] = ['today', 'week', 'month', 'year', 'natal', 'moon', 'card', 'spread']
+export const KINDS: Kind[] = ['today', 'week', 'month', 'year', 'natal', 'moon', 'card', 'spread', 'open']
 
 /** The kinds that are a tarot draw rather than a chart. */
 export const TAROT_KINDS: Kind[] = ['card', 'spread']
