@@ -1,4 +1,3 @@
-// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {

@@ -1,4 +1,3 @@
-// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * How much a transit weighs: the forecasts' own ranking (astro-mcp's
  * forecast.py), worked out here for the aspects of a transit chart, which

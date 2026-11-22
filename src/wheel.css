@@ -1,4 +1,3 @@
-/* Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery. */
 /* A chart wheel drawn from an astrology tool's result, square, as wide as the card allows. */
 .wheel { margin: 10px 0 0; display: flex; flex-direction: column; gap: 6px; }
 .wheel-svg { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto; border-radius: 8px; }

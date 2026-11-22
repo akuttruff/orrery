@@ -1,4 +1,3 @@
-// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { type Wheel, displayName, ordinal } from '../lib/chartWheel.ts'

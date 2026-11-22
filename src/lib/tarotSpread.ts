@@ -1,4 +1,3 @@
-// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * A tarot reading in a tool result (the tarot-mcp server's draw_cards),
  * laid out the way the spread is read: a row for a line of cards, the

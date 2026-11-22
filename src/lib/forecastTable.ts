@@ -1,4 +1,3 @@
-// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * A forecast's key transits as table rows.
  *

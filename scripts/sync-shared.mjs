@@ -1,5 +1,5 @@
-// Copies the code Orrery shares with lm-chat (the chart wheel, the transit
-// tables, the tarot spread, the app shell) from an lm-chat checkout, and
+// Copies the code Orrery shares with lm-chat (the app shell, reachability
+// and tool-output formatting) from an lm-chat checkout, and
 // writes src/shared.json: each shared file and the SHA-256 of its content.
 // lm-chat holds the one real copy; change a shared file there, then:
 //

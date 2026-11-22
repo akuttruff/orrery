@@ -1,4 +1,3 @@
-// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 import { imageFor, layoutFor, turnOf } from '../lib/tarotSpread.ts'
 import type { Reading } from '../lib/tarotSpread.ts'
 
