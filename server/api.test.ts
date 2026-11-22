@@ -22,7 +22,7 @@ const plain = (text: string): Reply => ({ text, trail: [], stats: null })
 /** A test's writer may return the text alone; the real one returns the text with its trail and numbers. */
 function serve(write: (req: WriteRequest, onDelta: (t: string) => void, opts?: WriteOptions) => Promise<Reply | string>, timeoutMs?: number) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orrery-'))
-  const store = new Store(dir, '/nonexistent/lm-chat.sqlite')
+  const store = new Store(dir)
   const call = vi.fn(async (name: string, args: Record<string, unknown>) => JSON.stringify({ tool: name, args }))
   // The tarot server: deals the spread asked for, the Fool first and the Tower reversed second.
   const tarot = vi.fn(async (name: string, args: Record<string, unknown>) => {

@@ -1,5 +1,4 @@
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 
@@ -22,9 +21,6 @@ const DEFAULT_CONFIG: ServerConfig = { lmStudioUrl: 'http://127.0.0.1:1234', api
 
 /** The first chart the app opens with, until Settings says otherwise. */
 const DEFAULT_PROFILE: Profile = { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' }
-
-/** The chat app's database, whose LM Studio settings seed ours on first run so there is nothing to type twice. */
-const LM_CHAT_DB = path.join(os.homedir(), 'Code', 'mobile-ai-chat', 'lm-chat', '.data', 'lm-chat.sqlite')
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS config (
@@ -200,14 +196,14 @@ export const newId = (): string => `${Date.now().toString(36)}-${Math.random().t
 export class Store {
   private db: DatabaseSync
 
-  constructor(dataDir = path.resolve('.data'), seedFrom = LM_CHAT_DB) {
+  constructor(dataDir = path.resolve('.data')) {
     fs.mkdirSync(dataDir, { recursive: true })
     this.db = new DatabaseSync(path.join(dataDir, 'orrery.sqlite'))
     this.db.exec('PRAGMA journal_mode = WAL')
     this.db.exec('PRAGMA foreign_keys = ON')
     this.db.exec(SCHEMA)
     this.migrate()
-    this.seed(seedFrom)
+    this.seed()
   }
 
   /** Columns added since the first release, for a database made before them. */
@@ -246,14 +242,15 @@ export class Store {
     ) WHERE updated_at IS NULL`)
   }
 
-  private seed(seedFrom: string): void {
+  private seed(): void {
     if (!this.db.prepare('SELECT 1 FROM profile WHERE id = 1').get()) {
       const p = DEFAULT_PROFILE
       this.db.prepare('INSERT INTO profile (id, name, date_time, city, state, country) VALUES (1, ?, ?, ?, ?, ?)')
         .run(p.name, p.dateTime, p.city, p.state, p.country)
     }
     if (this.db.prepare('SELECT 1 FROM config WHERE id = 1').get()) return
-    const c = { ...DEFAULT_CONFIG, ...seedConfig(seedFrom) }
+    // LM Studio on this computer, no token or model yet: Settings fills those in.
+    const c = DEFAULT_CONFIG
     this.db.prepare('INSERT INTO config (id, lm_studio_url, api_token, model, preferred_model, fast_model, reasoning, memory_default) VALUES (1, ?, ?, ?, ?, ?, ?, ?)')
       .run(c.lmStudioUrl, c.apiToken, c.model, c.preferredModel, c.fastModel, c.reasoning, c.memoryDefault)
   }
@@ -539,19 +536,3 @@ export class Store {
   close(): void { this.db.close() }
 }
 
-/** The chat app's LM Studio address, token and model, when its database is here to read. */
-export function seedConfig(file: string): Partial<ServerConfig> {
-  if (!fs.existsSync(file)) return {}
-  try {
-    const db = new DatabaseSync(file, { readOnly: true })
-    try {
-      const r = db.prepare('SELECT lm_studio_url, api_token, model FROM config WHERE id = 1').get() as Record<string, string> | undefined
-      if (!r) return {}
-      const out: Partial<ServerConfig> = {}
-      if (r.lm_studio_url) out.lmStudioUrl = r.lm_studio_url
-      if (r.api_token) out.apiToken = r.api_token
-      if (r.model) out.model = r.model
-      return out
-    } finally { db.close() }
-  } catch { return {} }
-}

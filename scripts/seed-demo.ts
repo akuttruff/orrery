@@ -10,13 +10,13 @@ import type { ReplyStats, Step } from '../src/types.ts'
  * with demo castings for the fictional demo person the test fixtures
  * belong to, with readings and a question already written, so the app can
  * be screenshotted. Run with `npm run seed:demo`; it starts from an empty
- * database every time and copies nothing from lm-chat.
+ * database every time.
  */
 
 const dir = path.resolve(process.cwd(), '.data-dev')
 fs.rmSync(dir, { recursive: true, force: true })
 fs.mkdirSync(dir, { recursive: true })
-const store = new Store(dir, path.join(dir, 'no-such-seed.sqlite'))
+const store = new Store(dir)
 const fixture = (name: string): string => fs.readFileSync(path.resolve('src/test/fixtures', `${name}.json`), 'utf8')
 
 store.setProfile({ name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' })

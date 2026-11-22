@@ -3,8 +3,6 @@
 // the castings are fixed so the tests' expectations stay put.
 //
 //   node --experimental-transform-types --no-warnings scripts/fixtures.ts
-//
-// lm-chat's src/test/fixtures/ holds copies of five of these.
 import fs from 'node:fs'
 import path from 'node:path'
 import { Astro } from '../server/astro.ts'

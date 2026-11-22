@@ -108,10 +108,6 @@ OpenAI chat API does not, yet. Nothing leaves your network.
 5. Settings offers the server's reasoning levels. `low` is the default and
    the sweet spot; `off` is faster and flatter.
 
-If [LM Chat](https://github.com/akuttruff/lm-chat) is set up on the same
-computer, the first run copies its model server address, token and model,
-so there is nothing to type twice.
-
 ## Casting
 
 A shortcut (Today, This week, This month, Year ahead, Moon, Birth chart)
@@ -230,13 +226,7 @@ server/   api.ts (routes), store.ts (SQLite), astro.ts (astro-mcp over stdio),
           readings.ts (writing on the server), memory.ts, remember.ts
 src/      App.tsx, components/, lib/ (chartWheel, forecastTable, weight, route)
 public/   sw.js, the app shell cache
-scripts/  deploy.sh, fixtures.ts, seed-demo.ts, screenshots.mjs, sync-shared.mjs
+scripts/  deploy.sh, fixtures.ts, seed-demo.ts, screenshots.mjs
 docs/     screenshots/ for this README
 ```
 
-The chart wheel, the transit tables, the tarot spread and the app shell
-are shared with LM Chat, which holds the one real copy: the files listed in
-`src/shared.json`, each starting with a comment that says so. Change them in
-LM Chat, then run `npm run sync:shared` here (it looks for the checkout at
-`../mobile-ai-chat/lm-chat`, or `LM_CHAT_DIR`). `src/shared.test.ts` fails
-on a copy edited here, or on a change in LM Chat not yet synced.

@@ -15,8 +15,7 @@
     "check": "tsc --noEmit && oxlint && vitest run",
     "deploy": "sh scripts/deploy.sh",
     "seed:demo": "node --experimental-transform-types --no-warnings scripts/seed-demo.ts",
-    "screenshots": "node scripts/screenshots.mjs",
-    "sync:shared": "node scripts/sync-shared.mjs"
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.0",
