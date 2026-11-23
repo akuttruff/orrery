@@ -457,6 +457,7 @@ const thinkingOf = (shape: ReadingShape): Pick<WriteRequest, 'reasoning'> => (sh
 export const OPEN_RULES = [
   'This is an ongoing conversation, not a set reading. Talk with them as a thoughtful astrologer and tarot reader would: answer what they actually said, warm and plain, addressed as "you", in Markdown. Fit the length to the message: a short or reflective message gets a short, human reply, and not every message needs a chart, headings or a list of placements. You may ask them something back, or simply respond to how they feel. No emoji, and no offer at the end to look something else up unless it is the natural next step.',
   'Every planetary position, sign, house, aspect, transit, timing or other chart fact must come from an astrology tool result in this conversation, including the results from earlier turns given below; never calculate, estimate or recall one yourself. Call a tool only for what those results do not already hold (another date or range, a forecast, when something is exact, a card). If a tool fails or cannot answer, say so instead of filling the gap. Every tarot card must come from draw_cards; never invent one. Pass the birth details above as a tool asks.',
+  'Each new message ends with a [Sent …] line: when they sent it, and so the time now. Each earlier turn below is marked with when it was said. Speak of earlier turns by those times (a few minutes ago, earlier today, last week), never guessing.',
   ASTRO_CARE,
   'When they speak of distress, respond to them as a person first and through the chart second; the chart can describe what is stirring, never what they should decide.',
 ].join('\n\n')
@@ -489,17 +490,25 @@ const toolLine = (step: ToolStep): HistoryLine => {
  * charts again every turn. A call repeated with the same arguments is kept
  * once, at its latest.
  */
+/** When a message was said, as the model is shown it: "Sun, Nov 22, 10:48 PM", in this Mac's time zone. */
+export const sentAt = (at: number | Date): string =>
+  new Date(at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+
+/** The message as sent to the model: their words, then when they sent them. */
+const stamped = (text: string, now: Date): string => `${text}\n\n[Sent ${sentAt(now)}]`
+
 export function openHistory(casting: Casting, earlier: FollowUp[], asker: string, budget = OPEN_HISTORY_CHARS): string {
-  const turns: { said: string; trail: Step[]; reply: string }[] = [
-    ...(casting.reading ? [{ said: casting.note, trail: casting.written.trail, reply: casting.reading }] : []),
-    ...earlier.filter((f) => f.state === 'done' && f.answer).map((f) => ({ said: f.question, trail: f.written.trail, reply: f.answer })),
+  // A message is when it was sent; a reply, when it finished (or began, if it never did).
+  const turns: { said: string; saidAt: number; trail: Step[]; reply: string; repliedAt: number | null }[] = [
+    ...(casting.reading ? [{ said: casting.note, saidAt: casting.createdAt, trail: casting.written.trail, reply: casting.reading, repliedAt: casting.written.finishedAt ?? casting.written.startedAt }] : []),
+    ...earlier.filter((f) => f.state === 'done' && f.answer).map((f) => ({ said: f.question, saidAt: f.createdAt, trail: f.written.trail, reply: f.answer, repliedAt: f.written.finishedAt ?? f.written.startedAt })),
   ]
   if (!turns.length) return ''
   const lines: HistoryLine[] = []
   for (const t of turns) {
-    lines.push({ text: `${asker}: ${t.said.trim()}` })
+    lines.push({ text: `${asker} (${sentAt(t.saidAt)}): ${t.said.trim()}` })
     for (const step of t.trail) if (step.kind === 'tool' && step.output?.trim()) lines.push(toolLine(step))
-    lines.push({ text: `You: ${t.reply.trim()}` })
+    lines.push({ text: `You${t.repliedAt ? ` (${sentAt(t.repliedAt)})` : ''}: ${t.reply.trim()}` })
   }
   // The same call made again: the earlier result says nothing the later one doesn't.
   const seen = new Set<string>()
@@ -519,7 +528,7 @@ export function openHistory(casting: Casting, earlier: FollowUp[], asker: string
 
 /** An open session's first turn: the person's words as they wrote them, with both tool servers. */
 export function openRequest(casting: Casting, profile: Subject, now = new Date()): WriteRequest {
-  return { system: openSystem(profile, now), input: casting.note, maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN], ...thinkingOf(shapeFor(casting.shape, casting.kind)) }
+  return { system: openSystem(profile, now), input: stamped(casting.note, now), maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN], ...thinkingOf(shapeFor(casting.shape, casting.kind)) }
 }
 
 export function readingRequest(casting: Casting, profile: Subject, now = new Date(), memory: string[] = []): WriteRequest {
@@ -574,7 +583,7 @@ export function followUpRequest(casting: Casting, earlier: FollowUp[], question:
   const shape = shapeFor(casting.shape, casting.kind)
   if (casting.kind === 'open') {
     // The session so far, tool results and all, in the system prompt: the same prefix each turn, so LM Studio can reuse its cache.
-    return { system: openSystem(profile, now, openHistory(casting, earlier, askerOf(profile))), input: question, maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN], ...thinkingOf(shape) }
+    return { system: openSystem(profile, now, openHistory(casting, earlier, askerOf(profile))), input: stamped(question, now), maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN], ...thinkingOf(shape) }
   }
   const { data } = ask(casting, shape)
   const system = [

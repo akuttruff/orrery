@@ -708,7 +708,7 @@ describe('open sessions', () => {
     await post(`${ctx.base}/api/castings/${c.id}/reading`)
     await readAll(`${ctx.base}/api/castings/${c.id}/events`)
     const req = seen[0]!
-    expect(req.input).toBe('pull three cards for the move')
+    expect(req.input).toMatch(/^pull three cards for the move\n\n\[Sent \w{3}, \w{3} \d+, \d+:\d\d [AP]M\]$/)
     expect(req.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
     expect(req.system).toContain('The person: Sam, born 1990-06-15 14:30 in New York, NY, USA.')
     expect(req.system).toContain('never calculate, estimate or recall one yourself')
@@ -718,8 +718,8 @@ describe('open sessions', () => {
     // A follow-up replays the session from its first message in the brief, sends the new message as written, and teaches nothing.
     const f = await (await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'And the third card?' })).json() as FollowUp
     await readAll(`${ctx.base}/api/followups/${f.id}/events`)
-    const next = seen.find((r) => r.input === 'And the third card?')!
-    expect(next.system).toContain('Sam: pull three cards for the move\n\nYou: Saturn is…')
+    const next = seen.find((r) => r.input.startsWith('And the third card?\n\n[Sent '))!
+    expect(next.system).toMatch(/Sam \([^)]+\): pull three cards for the move\n\nYou \([^)]+\): Saturn is…/)
     expect(next.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
     expect(next.system.startsWith(req.system)).toBe(true)
     // The reading and the answer, and no third call working out what to remember.

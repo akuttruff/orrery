@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { OPEN_RULES, followUpRequest, openHistory, memoryBlock, readingRequest, trimmedData } from './prompt.ts'
+import { OPEN_RULES, followUpRequest, openHistory, sentAt, memoryBlock, readingRequest, trimmedData } from './prompt.ts'
 import transit from '../src/test/fixtures/transit-chart.json?raw'
 import week from '../src/test/fixtures/forecast-week.json?raw'
 import { withScan } from './cast.ts'
@@ -328,10 +328,10 @@ describe('the shape of a reading', () => {
 describe('an open session', () => {
   const open = casting({ kind: 'open', period: '2026-10-13', title: 'Saturn?', result: JSON.stringify({ birth: sam }), note: 'What is Saturn doing?', shape: { ...DEFAULT_SHAPE, thinking: 'low' } })
 
-  it('is the birth details, the date and the one rule, then the message as written, with both tool servers', () => {
+  it('is the birth details, the date and the conversation brief, then the message as written with when it was sent, with both tool servers', () => {
     const req = readingRequest(open, sam, new Date(2026, 9, 13))
     expect(req.system).toBe(`The person: Sam, born 1990-06-15 14:30 in New York, NY, USA. Today is Tue Oct 13 2026.\n\n${OPEN_RULES}`)
-    expect(req.input).toBe('What is Saturn doing?')
+    expect(req.input).toBe('What is Saturn doing?\n\n[Sent Tue, Oct 13, 12:00 AM]')
     expect(req.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
     expect(req.reasoning).toBe('low')
   })
@@ -340,11 +340,13 @@ describe('an open session', () => {
     expect(OPEN_RULES).toContain('ongoing conversation, not a set reading')
     expect(OPEN_RULES).toContain('including the results from earlier turns')
     expect(OPEN_RULES).toContain('Call a tool only for what those results do not already hold')
+    expect(OPEN_RULES).toContain('[Sent …] line')
   })
 
   const step = (name: string, args: Record<string, unknown>, output: string) => ({ kind: 'tool' as const, name, ok: true, args, output })
-  const done = { ...open, reading: 'Saturn squares your Sun.', readingState: 'done' as const, written: { ...NOT_WRITTEN, trail: [step('create_natal_chart', { date_time: '1990-06-15 14:30' }, '{"natal":1}')] } }
-  const earlier: FollowUp[] = [{ id: 'f1', castingId: 'c1', question: 'Since when?', answer: 'Since March.', state: 'done', error: null, createdAt: 1, remembered: null, memoriesUsed: [], written: { ...NOT_WRITTEN, trail: [step('create_natal_chart', { date_time: '1990-06-15 14:30' }, '{"natal":2}'), step('create_transit_chart', { transit_date_time: '2026-10-13 12:00' }, '{"transit":1}')] }, card: null }]
+  const at = (h: number, m: number): number => new Date(2026, 9, 13, h, m).getTime()
+  const done = { ...open, createdAt: at(22, 48), reading: 'Saturn squares your Sun.', readingState: 'done' as const, written: { ...NOT_WRITTEN, startedAt: at(22, 48), finishedAt: at(22, 50), trail: [step('create_natal_chart', { date_time: '1990-06-15 14:30' }, '{"natal":1}')] } }
+  const earlier: FollowUp[] = [{ id: 'f1', castingId: 'c1', question: 'Since when?', answer: 'Since March.', state: 'done', error: null, createdAt: at(22, 54), remembered: null, memoriesUsed: [], written: { ...NOT_WRITTEN, startedAt: at(22, 54), finishedAt: at(22, 55), trail: [step('create_natal_chart', { date_time: '1990-06-15 14:30' }, '{"natal":2}'), step('create_transit_chart', { transit_date_time: '2026-10-13 12:00' }, '{"transit":1}')] }, card: null }]
 
   it('replays the session for a follow-up in the brief, tool results and full replies included, and sends the new message as it was written', () => {
     const req = followUpRequest(done, earlier, 'Until when?', sam, new Date(2026, 9, 13))
@@ -353,30 +355,30 @@ describe('an open session', () => {
     expect(req.system.slice(base.length)).toBe([
       '',
       'THE CONVERSATION SO FAR (tool results included, for you to draw on):',
-      'Sam: What is Saturn doing?',
-      'You: Saturn squares your Sun.',
-      'Sam: Since when?',
+      'Sam (Tue, Oct 13, 10:48 PM): What is Saturn doing?',
+      'You (Tue, Oct 13, 10:50 PM): Saturn squares your Sun.',
+      'Sam (Tue, Oct 13, 10:54 PM): Since when?',
       '[Tool create_natal_chart {"date_time":"1990-06-15 14:30"} returned]\n{"natal":2}',
       '[Tool create_transit_chart {"transit_date_time":"2026-10-13 12:00"} returned]\n{"transit":1}',
-      'You: Since March.',
+      'You (Tue, Oct 13, 10:55 PM): Since March.',
     ].join('\n\n'))
-    expect(req.input).toBe('Until when?')
+    expect(req.input).toBe('Until when?\n\n[Sent Tue, Oct 13, 12:00 AM]')
     expect(req.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
   })
 
   it('keeps a long reply whole', () => {
     const long = 'x'.repeat(6000)
-    expect(openHistory({ ...done, reading: long }, [], 'Sam')).toContain(`You: ${long}`)
+    expect(openHistory({ ...done, reading: long }, [], 'Sam')).toContain(`You (${sentAt(at(22, 50))}): ${long}`)
   })
 
   it('over its budget, leaves out the oldest tool results first, then the oldest turns', () => {
     const tools = openHistory(done, earlier, 'Sam', 200)
     expect(tools).toContain('(earlier parts left out)')
     expect(tools).not.toContain('{"natal":2}')
-    expect(tools).toContain('Sam: What is Saturn doing?')
+    expect(tools).toContain('What is Saturn doing?')
     const turns = openHistory(done, earlier, 'Sam', 60)
     expect(turns).not.toContain('What is Saturn doing?')
-    expect(turns).toContain('You: Since March.')
+    expect(turns).toContain('): Since March.')
   })
 
 })
