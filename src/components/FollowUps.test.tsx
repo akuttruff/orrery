@@ -111,11 +111,11 @@ describe('a card beside the reading', () => {
     expect(screen.queryByRole('button', { name: 'Pull a card' })).not.toBeInTheDocument()
   })
 
-  it('in an open session offers no card button, whose model deals its own, and asks to continue', async () => {
+  it('in an open session offers no card button, whose model deals its own, and is a reply box', async () => {
     serve([])
     render(<FollowUps castingId="c1" kind="open" readingState="done" readingText="A reply." />)
-    await screen.findByRole('button', { name: 'Ask' })
+    await screen.findByRole('button', { name: 'Send' })
     expect(screen.queryByRole('button', { name: 'Pull a card' })).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Continue')).toBeInTheDocument()
+    expect(screen.getByLabelText('Reply')).toHaveAttribute('placeholder', 'Reply…')
   })
 })

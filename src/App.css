@@ -667,7 +667,31 @@ input, select { font: inherit; }
 .birth-save .ask-box { flex: 1 1 auto; min-width: 0; }
 .birth-save .primary { width: auto; flex: 0 0 auto; }
 
-.open-message { margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--moss); border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--moss) 8%, transparent); white-space: pre-wrap; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* ====== An open session, as a conversation ====== */
+/* The first message, a bubble like every message after it. */
+.open-message { padding-right: 14px; }
+.reading.reply { margin-top: 0; }
+.reading.reply .followup-actions { margin-top: 2px; }
+.reading.reply + .followups.chat { margin-top: 18px; }
+.followups.chat .followup { margin-bottom: 18px; }
+/* The tool calls behind a reply, folded to one line that opens to their cards. */
+.trail-fold { margin: 6px 0 10px; }
+.trail-fold > summary {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 6px 10px;
+  border: 1px dashed var(--paper-dim); border-radius: 10px;
+  color: var(--paper); font-size: 12px; cursor: pointer; list-style: none;
+}
+.trail-fold > summary::-webkit-details-marker { display: none; }
+.trail-fold > summary svg { flex: 0 0 auto; color: var(--moss); }
+.trail-fold > summary > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trail-fold > summary .chev { display: grid; transition: transform 0.15s; }
+.trail-fold[open] > summary .chev { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .trail-fold > summary .chev { transition: none; } }
+/* The box stays in reach at the foot of the screen as the conversation grows. */
+/* main.scroll's own 32px foot would leave a strip of text showing under it, so it sits that much lower. */
+.followups.chat .ask { position: sticky; bottom: -32px; z-index: 2; margin-top: 4px; padding: 8px 0 calc(40px + env(safe-area-inset-bottom)); background: var(--bg); }
+.followups.chat .ask .shape-group { margin-top: 8px; }
 
 /* The guided popup's shape, folded under its summary. */
 .shape-toggle { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 14px; padding: 8px 0; border: 0; border-top: 1px solid var(--line); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Brain, RefreshCw, SendHorizontal, Sparkles, Square, X } from 'lucide-react'
 import Body from './Body'
 import Trail from './Trail'
@@ -26,6 +26,10 @@ interface FollowUpsProps {
   /** The reading's state: questions wait until it is written. */
   readingState: ReadingState
   readingText: string
+  /** How many turns follow the first reply, as they change: an open session offers Write again only on the last reply. */
+  onCount?: (n: number) => void
+  /** Under the box: an open session's Thinking chips. */
+  footer?: ReactNode
 }
 
 /**
@@ -33,7 +37,8 @@ interface FollowUpsProps {
  * model wrote, then a box to ask the next. The answers are written on the
  * server like the reading, so one streams in and is kept.
  */
-export default function FollowUps({ castingId, castingTitle, kind = 'today', readingState, readingText }: FollowUpsProps) {
+export default function FollowUps({ castingId, castingTitle, kind = 'today', readingState, readingText, onCount, footer }: FollowUpsProps) {
+  const open = kind === 'open'
   const [items, setItems] = useState<FollowUp[]>([])
   const [question, setQuestion] = useState('')
   const [sending, setSending] = useState(false)
@@ -46,6 +51,8 @@ export default function FollowUps({ castingId, castingTitle, kind = 'today', rea
     api.followUps(castingId).then((f) => { if (live) setItems(f) }).catch(() => { /* shown once they ask */ })
     return () => { live = false }
   }, [castingId])
+
+  useEffect(() => { onCount?.(items.length) }, [items.length, onCount])
 
   const replace = useCallback((f: FollowUp) => setItems((cur) => cur.map((x) => (x.id === f.id ? f : x))), [])
   // Answered (or failed) on the server: fetch the kept copy, so a reopen shows it without the stream.
@@ -116,18 +123,18 @@ export default function FollowUps({ castingId, castingTitle, kind = 'today', rea
   }
 
   return (
-    <section className="followups" aria-label={kind === 'open' ? 'The conversation' : 'Questions about the reading'}>
-      {items.length > 0 && <h3 className="section-title">{kind === 'open' ? 'Conversation' : 'Questions'}</h3>}
+    <section className={`followups${open ? ' chat' : ''}`} aria-label={open ? 'The conversation' : 'Questions about the reading'}>
+      {items.length > 0 && !open && <h3 className="section-title">Questions</h3>}
       <ol className="followup-list">
-        {items.map((f) => (
-          <FollowUpItem key={f.id} followUp={f} castingTitle={castingTitle} onSettled={settled} onAgain={() => void again(f)} onStop={() => void stop(f)} onRemove={() => void remove(f)} onForget={(id) => void forget(f, id)} />
+        {items.map((f, i) => (
+          <FollowUpItem key={f.id} followUp={f} castingTitle={castingTitle} chat={open} last={i === items.length - 1} onSettled={settled} onAgain={() => void again(f)} onStop={() => void stop(f)} onRemove={() => void remove(f)} onForget={(id) => void forget(f, id)} />
         ))}
       </ol>
       <form
         className="ask"
         onSubmit={(e) => { e.preventDefault(); void ask() }}
       >
-        <label className="ask-label" htmlFor={`ask-${castingId}`}>{kind === 'open' ? 'Continue' : items.length ? 'Ask another' : 'Ask about this reading'}</label>
+        <label className={open ? 'visually-hidden' : 'ask-label'} htmlFor={`ask-${castingId}`}>{open ? 'Reply' : items.length ? 'Ask another' : 'Ask about this reading'}</label>
         <div className="ask-row">
           <textarea
             id={`ask-${castingId}`}
@@ -135,14 +142,14 @@ export default function FollowUps({ castingId, castingTitle, kind = 'today', rea
             className="ask-box"
             rows={2}
             value={question}
-            placeholder={ready ? (kind === 'open' ? 'Say more, ask something else, or ask for a card…' : 'What does this mean for…') : readingState === 'writing' ? (kind === 'open' ? 'You can reply once the model has finished' : 'Questions open once the reading is written') : 'Write the reading first, then ask'}
+            placeholder={ready ? (open ? 'Reply…' : 'What does this mean for…') : readingState === 'writing' ? (kind === 'open' ? 'You can reply once the model has finished' : 'Questions open once the reading is written') : 'Write the reading first, then ask'}
             disabled={!ready || answering || sending}
             enterKeyHint="send"
             onChange={(e) => setQuestion(e.target.value)}
             // Enter asks, as in LM Chat; Shift+Enter makes a new line.
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void ask() } }}
           />
-          <button type="submit" className="ask-send" aria-label="Ask" disabled={!canAsk}>
+          <button type="submit" className="ask-send" aria-label={open ? 'Send' : 'Ask'} disabled={!canAsk}>
             <SendHorizontal size={18} aria-hidden="true" />
           </button>
         </div>
@@ -154,6 +161,7 @@ export default function FollowUps({ castingId, castingTitle, kind = 'today', rea
           </div>
         )}
         {error && <p className="reading-status error" role="alert">{error}</p>}
+        {footer}
       </form>
     </section>
   )
@@ -162,6 +170,9 @@ export default function FollowUps({ castingId, castingTitle, kind = 'today', rea
 interface FollowUpItemProps {
   followUp: FollowUp
   castingTitle?: string
+  /** A turn in an open session's conversation: tool calls folded, no memory line, Write again on the last. */
+  chat: boolean
+  last: boolean
   onSettled: (id: string) => void
   onAgain: () => void
   onStop: () => void
@@ -169,7 +180,7 @@ interface FollowUpItemProps {
   onForget: (memoryId: string) => void
 }
 
-function FollowUpItem({ followUp, castingTitle, onSettled, onAgain, onStop, onRemove, onForget }: FollowUpItemProps) {
+function FollowUpItem({ followUp, castingTitle, chat, last, onSettled, onAgain, onStop, onRemove, onForget }: FollowUpItemProps) {
   const answer = useAnswer(followUp, onSettled)
   const { text, state, error, written } = answer
   return (
@@ -186,21 +197,22 @@ function FollowUpItem({ followUp, castingTitle, onSettled, onAgain, onStop, onRe
         ) : <p>{followUp.question}</p>}
         <span className="followup-when">{formatWhen(followUp.createdAt)}</span>
         {state !== 'writing' && (
-          <button type="button" className="icon-btn small" aria-label="Remove question" onClick={onRemove}><X size={15} aria-hidden="true" /></button>
+          <button type="button" className="icon-btn small" aria-label={chat ? 'Remove this message and its reply' : 'Remove question'} onClick={onRemove}><X size={15} aria-hidden="true" /></button>
         )}
       </div>
       <div className="followup-a" aria-live="polite">
         {state === 'writing' && <LiveStatus reading={answer} />}
-        <Trail trail={written.trail} />
+        <Trail trail={written.trail} folded={chat} />
         {text && <Body text={text} writing={state === 'writing'} />}
-        {state === 'failed' && <p className="reading-status error">{error ?? 'The answer failed.'}</p>}
+        {state === 'failed' && <p className="reading-status error">{error ?? (chat ? 'The reply failed.' : 'The answer failed.')}</p>}
         <div className="followup-actions">
           {state === 'writing' && <button type="button" className="chip" onClick={onStop}><Square size={13} aria-hidden="true" /> Stop</button>}
           {state === 'failed' && <button type="button" className="chip" onClick={onAgain}><RefreshCw size={13} aria-hidden="true" /> Try again</button>}
+          {state === 'done' && chat && last && <button type="button" className="chip" onClick={onAgain}><RefreshCw size={13} aria-hidden="true" /> Write again</button>}
           {state === 'done' && followUp.card && text && <DownloadButton image={() => pulledImage(followUp, text, castingTitle)!} />}
         </div>
-        <WrittenMeta written={written} state={state} label="Answered" />
-        {(state === 'done' || state === 'failed') && (
+        <WrittenMeta written={written} state={state} label={chat ? 'Written' : 'Answered'} />
+        {(state === 'done' || state === 'failed') && !chat && (
           <p className="followup-memory">
             {followUp.memoriesUsed.length
               ? `Answered with ${followUp.memoriesUsed.length} ${followUp.memoriesUsed.length === 1 ? 'memory' : 'memories'}`

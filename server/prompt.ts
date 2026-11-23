@@ -1,4 +1,4 @@
-import type { Casting, FollowUp, Profile, TarotCard } from '../src/types.ts'
+import type { Casting, FollowUp, Profile, Step, TarotCard, ToolStep } from '../src/types.ts'
 import { isTarotKind } from '../src/types.ts'
 import { parseWheel } from '../src/lib/chartWheel.ts'
 import { readingsInput } from '../src/lib/readings.ts'
@@ -448,18 +448,74 @@ export function memoryBlock(profile: Profile, lines: string[]): string | null {
 const thinkingOf = (shape: ReadingShape): Pick<WriteRequest, 'reasoning'> => (shape.thinking ? { reasoning: shape.thinking } : {})
 
 /**
- * The one rule an open session is given beside the birth details: the
- * chart comes from the tools, never from the model's own arithmetic or
- * recall. Nothing about voice, length or format.
+ * How an open session is held: as a conversation, not a reading. The
+ * chart still comes only from the tools, but a result already in the
+ * conversation counts, so the model looks something up only when it needs
+ * something new, and a short or reflective message gets a short, human
+ * reply rather than another full chart.
  */
-export const OPEN_RULES = 'Every planetary position, sign, house, aspect, transit, timing or other chart fact must come from an astrology tool call in this conversation; never calculate, estimate or recall one yourself. If a tool fails or cannot answer, say so instead of filling the gap. Every tarot card must come from draw_cards; never invent one. Pass the birth details above as a tool asks.'
+export const OPEN_RULES = [
+  'This is an ongoing conversation, not a set reading. Talk with them as a thoughtful astrologer and tarot reader would: answer what they actually said, warm and plain, addressed as "you", in Markdown. Fit the length to the message: a short or reflective message gets a short, human reply, and not every message needs a chart, headings or a list of placements. You may ask them something back, or simply respond to how they feel. No emoji, and no offer at the end to look something else up unless it is the natural next step.',
+  'Every planetary position, sign, house, aspect, transit, timing or other chart fact must come from an astrology tool result in this conversation, including the results from earlier turns given below; never calculate, estimate or recall one yourself. Call a tool only for what those results do not already hold (another date or range, a forecast, when something is exact, a card). If a tool fails or cannot answer, say so instead of filling the gap. Every tarot card must come from draw_cards; never invent one. Pass the birth details above as a tool asks.',
+  ASTRO_CARE,
+  'When they speak of distress, respond to them as a person first and through the chart second; the chart can describe what is stirring, never what they should decide.',
+].join('\n\n')
 
-/** An open session's brief: who, today's date, and OPEN_RULES. A friend's adds who is asking. */
-const openSystem = (profile: Subject, now: Date): string => [
+/** An open session's brief: who, today's date and OPEN_RULES, then the conversation so far. A friend's adds who is asking. */
+const openSystem = (profile: Subject, now: Date, history = ''): string => [
   person(profile, now),
   profile.askedBy ? `The messages below come from ${profile.askedBy}, not ${profile.name}: answer ${profile.askedBy} as "you", and speak of ${profile.name} by name.` : null,
   OPEN_RULES,
+  history || null,
 ].filter(Boolean).join('\n\n')
+
+/** What an open session replays, at most: about 17k tokens. Over it, the oldest tool results go first, then the oldest turns. */
+export const OPEN_HISTORY_CHARS = 60_000
+
+/** A line of the replay; a tool result's key is its call, name and arguments. */
+interface HistoryLine { text: string; tool?: string }
+
+/** A tool call as replayed: its name, what it was asked, and what came back (or why it failed). */
+const toolLine = (step: ToolStep): HistoryLine => {
+  const args = step.args && Object.keys(step.args).length ? ` ${JSON.stringify(step.args)}` : ''
+  return { text: `[Tool ${step.name}${args} ${step.ok === false ? 'failed' : 'returned'}]\n${(step.output ?? '').trim()}`, tool: `${step.name}${args}` }
+}
+
+/**
+ * An open session so far, as the model is shown it: each message, the
+ * tools called for the reply and what they returned, and the reply in
+ * full. LM Studio's endpoint takes one turn, so this is the model's only
+ * memory of the session; without the tool results it would cast the same
+ * charts again every turn. A call repeated with the same arguments is kept
+ * once, at its latest.
+ */
+export function openHistory(casting: Casting, earlier: FollowUp[], asker: string, budget = OPEN_HISTORY_CHARS): string {
+  const turns: { said: string; trail: Step[]; reply: string }[] = [
+    ...(casting.reading ? [{ said: casting.note, trail: casting.written.trail, reply: casting.reading }] : []),
+    ...earlier.filter((f) => f.state === 'done' && f.answer).map((f) => ({ said: f.question, trail: f.written.trail, reply: f.answer })),
+  ]
+  if (!turns.length) return ''
+  const lines: HistoryLine[] = []
+  for (const t of turns) {
+    lines.push({ text: `${asker}: ${t.said.trim()}` })
+    for (const step of t.trail) if (step.kind === 'tool' && step.output?.trim()) lines.push(toolLine(step))
+    lines.push({ text: `You: ${t.reply.trim()}` })
+  }
+  // The same call made again: the earlier result says nothing the later one doesn't.
+  const seen = new Set<string>()
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const key = lines[i]!.tool
+    if (!key) continue
+    if (seen.has(key)) lines.splice(i, 1)
+    else seen.add(key)
+  }
+  let size = lines.reduce((n, l) => n + l.text.length + 2, 0)
+  let trimmed = false
+  const drop = (i: number): void => { size -= lines[i]!.text.length + 2; lines.splice(i, 1); trimmed = true }
+  for (let i = lines.findIndex((l) => l.tool); size > budget && i >= 0; i = lines.findIndex((l) => l.tool)) drop(i)
+  while (size > budget && lines.length > 2) drop(0)
+  return ['THE CONVERSATION SO FAR (tool results included, for you to draw on):', ...(trimmed ? ['(earlier parts left out)'] : []), ...lines.map((l) => l.text)].join('\n\n')
+}
 
 /** An open session's first turn: the person's words as they wrote them, with both tool servers. */
 export function openRequest(casting: Casting, profile: Subject, now = new Date()): WriteRequest {
@@ -517,14 +573,8 @@ export function cardBlock(card: TarotCard): string {
 export function followUpRequest(casting: Casting, earlier: FollowUp[], question: string, profile: Subject, now = new Date(), memory: string[] = [], card: TarotCard | null = null): WriteRequest {
   const shape = shapeFor(casting.shape, casting.kind)
   if (casting.kind === 'open') {
-    // The session so far, from its first message, replayed as a chat: LM Studio's endpoint takes one turn.
-    const asker = askerOf(profile)
-    const turns = [
-      ...(casting.reading ? [`${asker} said: ${casting.note}\n\nYou answered: ${clip(casting.reading, REPLAY_CHARS)}`] : []),
-      ...earlier.filter((f) => f.state === 'done' && f.answer).map((f) => `${asker} said: ${f.question}\n\nYou answered: ${clip(f.answer, REPLAY_CHARS)}`),
-    ]
-    const input = [...(turns.length ? ['THE CONVERSATION SO FAR:', ...turns] : []), `${asker} says: ${question}`].join('\n\n')
-    return { system: openSystem(profile, now), input, maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN], ...thinkingOf(shape) }
+    // The session so far, tool results and all, in the system prompt: the same prefix each turn, so LM Studio can reuse its cache.
+    return { system: openSystem(profile, now, openHistory(casting, earlier, askerOf(profile))), input: question, maxTokens: ANSWER_MAX_TOKENS, tools: [ASTRO_PLUGIN, TAROT_PLUGIN], ...thinkingOf(shape) }
   }
   const { data } = ask(casting, shape)
   const system = [

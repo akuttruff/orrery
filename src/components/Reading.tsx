@@ -20,11 +20,44 @@ interface ReadingProps {
   title?: string
   /** What follows the brief's task, said under it; null says nothing. */
   briefNote?: string | null
+  /**
+   * A reply in an open session's conversation: no heading, the tool calls
+   * folded to a line, and Stop or Write again under it rather than above.
+   * Write again is offered only while it is the last reply (canRewrite).
+   */
+  reply?: boolean
+  canRewrite?: boolean
 }
 
 /** The model's reading under the chart: its thinking first, then the text streamed in and kept, then what it cost. */
-export default function Reading({ reading, brief, onWrite, onStop, image, title = 'Reading', briefNote = "The chart's data follows the task; it is what the tables above are drawn from." }: ReadingProps) {
+export default function Reading({ reading, brief, onWrite, onStop, image, title = 'Reading', briefNote = "The chart's data follows the task; it is what the tables above are drawn from.", reply = false, canRewrite = true }: ReadingProps) {
   const { text, state, error, written } = reading
+  if (reply) {
+    return (
+      <section className="reading reply" aria-live="polite" aria-label="Reply">
+        {state === 'writing' && <LiveStatus reading={reading} note="This carries on if you go back and cast another." />}
+        <Trail trail={written.trail} folded />
+        {text && <Body text={text} writing={state === 'writing'} />}
+        {state === 'failed' && <p className="reading-status error">{error ?? 'The reply failed.'}</p>}
+        {state === 'none' && <p className="reading-status">No reply yet.</p>}
+        <div className="followup-actions">
+          {state === 'writing' && <button type="button" className="chip" onClick={onStop}><Square size={13} aria-hidden="true" /> Stop</button>}
+          {state !== 'writing' && (canRewrite || state !== 'done') && (
+            <button type="button" className="chip" onClick={onWrite}>
+              <RefreshCw size={13} aria-hidden="true" /> {state === 'done' ? 'Write again' : state === 'failed' ? 'Try again' : 'Write'}
+            </button>
+          )}
+        </div>
+        <WrittenMeta written={written} state={state} label="Written" />
+        {brief && state !== 'none' && (
+          <details className="brief">
+            <summary>Brief</summary>
+            <pre className="brief-text">{brief.system}{'\n\n'}{brief.task}</pre>
+          </details>
+        )}
+      </section>
+    )
+  }
   return (
     <section className="reading" aria-live="polite">
       <div className="reading-head">

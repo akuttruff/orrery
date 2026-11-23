@@ -144,26 +144,33 @@ interface OpenViewProps extends Pick<CastingViewProps, 'casting' | 'onFrame' | '
 }
 
 /**
- * An open session: whose birth details it was given, the first message,
- * the model's reply with the tools it called, then the conversation. No
- * chart is drawn up front, no tone or shape, no memory: only how hard the
- * model thinks, for a Write again.
+ * An open session, as a conversation: whose birth details it was given,
+ * the first message and the model's reply, then each turn after, with the
+ * tool calls folded to a line under each reply. Only how hard the model
+ * thinks is set, under the box.
  */
 function OpenView({ casting, reading, thinking, onFrame, onWrite, onStop, onDelete }: OpenViewProps) {
   const birth = birthOf(casting.result)
   const whose = casting.subject ? `${casting.subject.name}, born` : 'Born'
+  const [later, setLater] = useState(0)
   return (
-    <article className="casting">
+    <article className="casting open-session">
       <header className="casting-head">
         <h2>{casting.title}</h2>
         <p className="casting-sub">Started {formatWhen(casting.createdAt)}{birth ? ` · ${whose} ${birthLine(birth)}` : ''}</p>
       </header>
-      <blockquote className="open-message">{casting.note}</blockquote>
-      {reading.state !== 'writing' && (
-        <ThinkingChips value={shapeOf(casting.shape).thinking} thinking={thinking} onPick={(id) => onFrame({ shape: { ...DEFAULT_SHAPE, parts: [...DEFAULT_SHAPE.parts], thinking: id } })} />
-      )}
-      <Reading reading={reading} brief={casting.brief} title="Reply" briefNote={null} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
-      <FollowUps key={casting.id} castingId={casting.id} castingTitle={casting.title} kind="open" readingState={reading.state} readingText={reading.text} />
+      <div className="followup-q open-message"><p>{casting.note}</p></div>
+      <Reading reading={reading} brief={casting.brief} reply canRewrite={later === 0} onWrite={() => onWrite(reading.state === 'done' || reading.state === 'failed')} onStop={onStop} />
+      <FollowUps
+        key={casting.id}
+        castingId={casting.id}
+        castingTitle={casting.title}
+        kind="open"
+        readingState={reading.state}
+        readingText={reading.text}
+        onCount={setLater}
+        footer={<ThinkingChips value={shapeOf(casting.shape).thinking} thinking={thinking} disabled={reading.state === 'writing'} onPick={(id) => onFrame({ shape: { ...DEFAULT_SHAPE, parts: [...DEFAULT_SHAPE.parts], thinking: id } })} />}
+      />
       <div className="casting-actions">
         <button type="button" className="chip danger" onClick={onDelete}><Trash2 size={13} aria-hidden="true" /> Delete</button>
       </div>

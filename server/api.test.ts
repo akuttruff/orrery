@@ -699,7 +699,7 @@ describe('open sessions', () => {
     expect(JSON.parse(c.result)).toEqual({ birth: { name: 'Sam', dateTime: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' } })
   })
 
-  it('sends the message as written, with the birth details, the one rule and both tool servers', async () => {
+  it('sends the message as written, with the birth details, the conversation brief and both tool servers', async () => {
     const seen: WriteRequest[] = []
     writer = async (req, onDelta) => { seen.push(req); onDelta('Saturn is…'); return 'Saturn is…' }
     await post(`${ctx.base}/api/memories`, { text: 'The user works nights.' })
@@ -713,16 +713,15 @@ describe('open sessions', () => {
     expect(req.system).toContain('The person: Sam, born 1990-06-15 14:30 in New York, NY, USA.')
     expect(req.system).toContain('never calculate, estimate or recall one yourself')
     expect(req.system).not.toContain('WHAT YOU KNOW')
-    expect(req.system).not.toContain('trauma-informed')
+    expect(req.system).toContain('ongoing conversation, not a set reading')
 
-    // A follow-up replays the session from its first message, and teaches nothing.
+    // A follow-up replays the session from its first message in the brief, sends the new message as written, and teaches nothing.
     const f = await (await post(`${ctx.base}/api/castings/${c.id}/followups`, { question: 'And the third card?' })).json() as FollowUp
     await readAll(`${ctx.base}/api/followups/${f.id}/events`)
-    const next = seen.find((r) => r.input.includes('And the third card?'))!
-    expect(next.input).toContain('Sam said: pull three cards for the move\n\nYou answered: Saturn is…')
-    expect(next.input).toMatch(/Sam says: And the third card\?$/)
+    const next = seen.find((r) => r.input === 'And the third card?')!
+    expect(next.system).toContain('Sam: pull three cards for the move\n\nYou: Saturn is…')
     expect(next.tools).toEqual(['mcp/astrology-v2', 'mcp/tarot'])
-    expect(next.system).toBe(req.system)
+    expect(next.system.startsWith(req.system)).toBe(true)
     // The reading and the answer, and no third call working out what to remember.
     await new Promise((r) => setTimeout(r, 50))
     expect(seen).toHaveLength(2)
