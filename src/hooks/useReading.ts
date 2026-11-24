@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
+import { openLive } from '../lib/live.ts'
 import { appendThinking } from '../lib/trail.ts'
 import { NOT_WRITTEN } from '../types.ts'
 import type { Casting, FollowUp, ReadingEvent, ReadingState, Written } from '../types.ts'
@@ -24,14 +25,15 @@ const FLUSH_MS = 120
  * to a question under one. The server owns the writing; this follows it
  * over the event stream whenever it is in progress, and shows the stored
  * text otherwise. A reconnect gets the whole text so far, so nothing is
- * missed while the phone was asleep.
+ * missed while the phone was asleep. The stream is kept open by
+ * lib/live.ts: one that drops or goes quiet is opened again, and a drop is
+ * never taken to mean the writing failed, since it goes on on the server.
  */
 export function useLiveText(id: string | null, stored: LiveReading, eventsUrl: (id: string) => string, onSettled?: (id: string) => void): LiveReading {
   const [live, setLive] = useState<{ id: string; reading: LiveReading } | null>(null)
 
   useEffect(() => {
     if (!id || stored.state !== 'writing') return undefined
-    const source = new EventSource(eventsUrl(id))
     let text = ''
     let written: Written = stored.written
     let state: ReadingState = 'writing'
@@ -42,6 +44,8 @@ export function useLiveText(id: string | null, stored: LiveReading, eventsUrl: (
     let pending: ReadingEvent[] = []
     let timer: number | null = null
     let thought = ''
+    /** The stream has been out for more than a moment (lib/live.ts waits before saying). */
+    let away = false
     const think = (): void => {
       if (!thought) return
       written = { ...written, trail: appendThinking(written.trail, thought) }
@@ -91,34 +95,31 @@ export function useLiveText(id: string | null, stored: LiveReading, eventsUrl: (
         }
       }
       think()
-      setLive({ id, reading: { text, state, error, written, status } })
+      setLive({ id, reading: { text, state, error, written, status: away && !over ? 'Reconnecting — it carries on writing meanwhile' : status } })
       // Written or failed: the stream is over, and whoever holds the record can fetch the kept copy.
-      if (over) { source.close(); onSettled?.(id) }
+      if (over) { stream.close(); onSettled?.(id) }
     }
-    source.onmessage = (e: MessageEvent<string>) => {
-      const event = JSON.parse(e.data) as ReadingEvent
-      pending.push(event)
-      if (event.type === 'delta' || event.type === 'thinking') {
-        if (timer === null) timer = window.setTimeout(flush, FLUSH_MS)
-      } else {
-        flush()
-      }
-    }
-    // EventSource reconnects by itself after a dropped connection; the snapshot on reconnect resets `text`.
-    // It gives up only when the server refuses the stream (the casting or question was deleted, say):
-    // then nothing more will come, so the page stops showing it as being written and the record is fetched.
-    source.onerror = () => {
-      if (over || source.readyState !== EventSource.CLOSED) return
-      flush()
-      if (over) return
-      state = 'failed'
-      error = 'Lost the stream of this text. Reload to see where it got to.'
-      over = true
-      setLive({ id, reading: { text, state, error, written } })
-      source.close()
-      onSettled?.(id)
-    }
-    return () => { if (timer !== null) window.clearTimeout(timer); source.close() }
+    const stream = openLive({
+      url: eventsUrl(id),
+      onMessage: (data) => {
+        const event = JSON.parse(data) as ReadingEvent
+        pending.push(event)
+        if (event.type === 'delta' || event.type === 'thinking') {
+          if (timer === null) timer = window.setTimeout(flush, FLUSH_MS)
+        } else {
+          flush()
+        }
+      },
+      onState: (link) => {
+        away = link === 'down'
+        if (!over) flush()
+      },
+      // A stream being replaced: look at the record too. If the text was finished, or the
+      // casting or question deleted, meanwhile, the stored copy says so and this stream is
+      // closed (the effect runs again); while it is still being written, nothing changes.
+      onRetry: () => { if (!over) onSettled?.(id) },
+    })
+    return () => { if (timer !== null) window.clearTimeout(timer); stream.close() }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onSettled and eventsUrl are stable
   }, [id, stored.state])
 

@@ -57,7 +57,7 @@ function serve(castings: Casting[]) {
     return reply(404, { error: `unexpected ${url}` })
   }))
   // jsdom has no EventSource; the reading in view would follow the stream with one.
-  vi.stubGlobal('EventSource', class { onmessage: unknown = null; close() {} })
+  vi.stubGlobal('EventSource', class { static readonly CLOSED = 2; static readonly OPEN = 1; readyState = 0; onmessage: unknown = null; addEventListener() {} close() {} })
 }
 
 afterEach(() => { window.history.replaceState(null, '', '/') })

@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
+import { LIVE } from '../lib/live.ts'
 import { REACH } from '../lib/reach.ts'
 
 // The waits around a server that gives no reply, cut to a few ticks: a test
@@ -9,6 +10,9 @@ REACH.readTimeoutMs = 200
 REACH.retryWaitsMs = [10, 20, 30]
 REACH.unreachableAfterMs = 40
 REACH.probeMs = 40
+// The live stream's grace before "reconnecting" shows, and its retries: short, so tests needn't wait.
+LIVE.downAfterMs = 10
+LIVE.retryMs = [10, 20, 30]
 
 // Server tests run in node (`@vitest-environment node`), where there is no
 // window to patch and fetch must reach the test's own socket.

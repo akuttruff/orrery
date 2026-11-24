@@ -1,3 +1,4 @@
+import { LIVE, PING_FRAME } from '../src/lib/live.ts'
 import type { ServerResponse } from 'node:http'
 import type { Brief, ReadingEvent, ReadingState, Step, Written } from '../src/types.ts'
 import { appendThinking } from '../src/lib/trail.ts'
@@ -186,7 +187,11 @@ export class Readings {
     res.write(frame(snapshot))
     if (!run) { res.end(); return true }
     run.listeners.add(res)
-    res.on('close', () => run.listeners.delete(res))
+    // A ping the page can see (src/lib/live.ts): the model can be quiet for a
+    // long while (reading a long prompt), and without it the page would take
+    // the silence for a dead stream.
+    const ping = setInterval(() => { try { res.write(PING_FRAME) } catch { /* gone */ } }, LIVE.heartbeatMs)
+    res.on('close', () => { clearInterval(ping); run.listeners.delete(res) })
     return true
   }
 

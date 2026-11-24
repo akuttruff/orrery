@@ -15,6 +15,7 @@ class FakeSource {
   readyState = FakeSource.OPEN
   closed = false
   constructor(public url: string) { FakeSource.opened.push(this) }
+  addEventListener(): void { /* named events (ping): not needed here */ }
   close(): void { this.closed = true; this.readyState = FakeSource.CLOSED }
   emit(event: ReadingEvent): void { this.onmessage?.({ data: JSON.stringify(event) } as MessageEvent<string>) }
   /** A dropped connection the browser will retry, or (`final`) one the server refused, which it will not. */
@@ -81,19 +82,33 @@ describe('useReading', () => {
     expect(FakeSource.opened).toHaveLength(1)
   })
 
-  it('rides out a dropped connection, but stops writing when the server refuses the stream', () => {
+  it('rides out a dropped connection, saying so only if it lasts', () => {
+    const settled = vi.fn()
+    const { result } = renderHook(() => useReading(casting({}), settled))
+    act(() => last().emit({ type: 'snapshot', reading: 'So far', state: 'writing', error: null, written: NOT_WRITTEN, status: 'Thinking' }))
+    act(() => last().fail(false))
+    expect(result.current).toMatchObject({ state: 'writing', status: 'Thinking' })
+    expect(last().closed).toBe(false)
+    expect(settled).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(100) })
+    expect(result.current).toMatchObject({ text: 'So far', state: 'writing' })
+    expect(result.current.status).toMatch(/Reconnecting/)
+  })
+
+  it('never calls a dropped stream a failure: it looks at the record and opens the stream again', () => {
     const settled = vi.fn()
     const { result } = renderHook(() => useReading(casting({}), settled))
     act(() => last().emit({ type: 'snapshot', reading: 'So far', state: 'writing', error: null, written: NOT_WRITTEN }))
-    act(() => last().fail(false))
-    expect(result.current.state).toBe('writing')
-    expect(last().closed).toBe(false)
-    expect(settled).not.toHaveBeenCalled()
-    // Deleted mid-stream: the server answers 404, and EventSource gives up.
+    // The browser gives up on the stream (a phone asleep, or the server refusing it).
     act(() => last().fail(true))
-    expect(result.current).toMatchObject({ text: 'So far', state: 'failed' })
-    expect(result.current.error).toMatch(/Lost the stream/)
+    expect(result.current).toMatchObject({ text: 'So far', state: 'writing', error: null })
+    // The record is looked at: if the text was finished, or the casting deleted, meanwhile, it says so.
     expect(settled).toHaveBeenCalledWith('c1')
+    act(() => { vi.advanceTimersByTime(50) })
+    expect(FakeSource.opened).toHaveLength(2)
+    // The new stream starts with everything so far.
+    act(() => last().emit({ type: 'snapshot', reading: 'So far, and more', state: 'writing', error: null, written: NOT_WRITTEN }))
+    expect(result.current).toMatchObject({ text: 'So far, and more', state: 'writing' })
   })
 
   it('reports a failure, and a snapshot of a run already over', () => {
